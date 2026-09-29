@@ -1,6 +1,7 @@
 import type { ProficiencyId } from '../rpg/proficiencies';
 import type { ProgressProfile } from '../rpg/profile';
 export type ClassId = 'squire' | 'knight' | 'monk' | 'paladin' | 'necromancer' | 'druid';
+export type CharacterRow = 'front' | 'back';
 export type Slot = 'helmet' | 'armor' | 'legs' | 'boots' | 'weapon' | 'offhand' | 'amulet' | 'ring';
 export type Rarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
 export type HuntStatus = 'idle' | 'running' | 'paused' | 'transition' | 'recovering';
@@ -11,6 +12,8 @@ export interface SpellCondition { hpBelow?: number; minEnemies?: number; allyInj
 export interface HelperConfig { hpPotionAt: number; manaPotionAt: number; healAllies: boolean; autoSupplies: boolean; defensiveAmuletAt: number; emergencyAt: number; outOfSupplies: 'continue' | 'end'; }
 export interface Character {
   id: string; name: string; classId: ClassId; profile: ProgressProfile; talentPoints: number;
+  /** Linha de combate e tanque (no máximo um por grupo): definem a posição no mapa e quem apanha. */
+  row: CharacterRow; isTank: boolean;
   hp: number; mana: number; equipment: Partial<Record<Slot, string>>;
   spellSlots: string[]; spellConditions: Record<string, SpellCondition>; talents: Record<string, number>;
   cooldowns: Record<string, number>; effects: ActiveEffect[]; helper: HelperConfig;

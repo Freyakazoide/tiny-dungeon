@@ -4,6 +4,10 @@ export const SLOT_IDS:Slot[]=['helmet','armor','legs','boots','weapon','offhand'
 export const slotNames:Record<Slot,string>={helmet:'Capacete',armor:'Armadura',legs:'Calças',boots:'Botas',weapon:'Arma',offhand:'Mão secundária',amulet:'Amuleto',ring:'Anel'};
 export const statNames:Record<keyof Stats,string>={maxHp:'HP máximo',maxMana:'Mana máxima',attack:'Ataque',defense:'Defesa',attackSpeed:'Velocidade',crit:'Crítico',resistance:'Resistência',magicPower:'Poder mágico'};
 
+const percentStats = new Set<keyof Stats>(['crit', 'resistance']);
+export const statValue = (key: keyof Stats, value: number) => percentStats.has(key) ? `${Math.round(value * 1000) / 10}%` : key === 'attackSpeed' ? `${value.toFixed(2)}/s` : String(value);
+export const statLine = (stats: Partial<Stats> = {}) => Object.entries(stats).map(([key, value]) => `${statNames[key as keyof Stats]} +${statValue(key as keyof Stats, value as number)}`).join(' · ');
+
 export const pct=(value:number,total:number)=>Math.max(0,Math.min(100,total>0?value/total*100:0));
 export const compact=(value:number)=>new Intl.NumberFormat('pt-BR',{maximumFractionDigits:value<10?1:0,notation:value>=10_000?'compact':'standard'}).format(value);
 export const duration=(seconds:number)=>{const total=Math.max(0,Math.floor(seconds));const hours=Math.floor(total/3600);const minutes=Math.floor(total%3600/60);const secs=total%60;return hours?`${hours}h ${String(minutes).padStart(2,'0')}m`:`${minutes}m ${String(secs).padStart(2,'0')}s`;};

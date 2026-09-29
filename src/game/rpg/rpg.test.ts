@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { CLASS_NODES, CLASS_BY_ID, childrenOf } from './classTree';
-import { baseTries, etaSeconds, formatEta, hoursToReach, remainingTries, xpForLevel } from './curves';
+import { baseTries, etaSeconds, formatEta, hoursToReach, remainingTries, triesForNextLevel, xpForLevel } from './curves';
 import { checkRequirements, evolutionOptions, evolveClass } from './evolution';
 import { OFFLINE_CAP_S, SESSION_GAP_S, applyOfflineTraining, sessionGapSeconds } from './offline';
-import { PROFICIENCY_IDS, START_LEVEL } from './proficiencies';
+import { PROFICIENCIES, PROFICIENCY_IDS, START_LEVEL } from './proficiencies';
 import { addCounter, createProfile, gainExperience, gainTries } from './profile';
 
 const ready = (skills: Partial<Record<(typeof PROFICIENCY_IDS)[number], number>>, level = 30) => {
@@ -28,13 +28,13 @@ describe('ritmo (5,5 dias até a skill 25, 24 h/dia)', () => {
     const h = hoursToReach(id, START_LEVEL, 25);
     expect(h).toBeGreaterThan(130); expect(h).toBeLessThan(134);
   });
-  it('elemental 35 e 40 ficam perto de 19,7 e 35,6 dias', () => {
-    expect(hoursToReach('fire', 10, 35) / 24).toBeCloseTo(19.7, 0);
-    expect(hoursToReach('fire', 10, 40) / 24).toBeCloseTo(35.6, 0);
+  it('elemental 35 e 40 ficam perto de 24,5 e 41,9 dias', () => {
+    expect(hoursToReach('fire', 10, 35) / 24).toBeCloseTo(24.5, 0);
+    expect(hoursToReach('fire', 10, 40) / 24).toBeCloseTo(41.9, 0);
   });
   it('híbrida (35+35) custa quase o mesmo que pura (40)', () => {
     const hybrid = 2 * hoursToReach('fire', 10, 35), pure = hoursToReach('fire', 10, 40);
-    expect(hybrid / pure).toBeGreaterThan(0.95); expect(hybrid / pure).toBeLessThan(1.15);
+    expect(hybrid / pure).toBeGreaterThan(0.95); expect(hybrid / pure).toBeLessThan(1.2);
   });
 });
 
@@ -90,9 +90,9 @@ describe('exclusividade e evolução', () => {
   });
   it('o progresso feito antes da classe é preservado', () => {
     const p = ready({ melee: 25 }, 10);
-    gainTries(p, 'fire', 1234);
+    gainTries(p, 'fire', 100);
     evolveClass(p, 'guerreiro');
-    expect(p.proficiencies.fire.tries).toBe(1234);
+    expect(p.proficiencies.fire.tries).toBe(100);
     expect(p.proficiencies.melee.level).toBe(25);
   });
   it('híbrida exige as duas proficiências em 35 e nível 25', () => {
@@ -141,7 +141,7 @@ describe('treino offline', () => {
     const p = createProfile(); p.offlineTarget = 'holy';
     const r = applyOfflineTraining(p, 3600)!;
     expect(r.tries).toBe(1800); expect(r.target).toBe('holy');
-    expect(p.proficiencies.holy.level).toBe(10); // 1.800 tries ainda não completam o nível 10 -> 11
+    expect(p.proficiencies.holy.level).toBe(12); // 1.800 tries: 192 + 766 + 1.725 ainda faltam para o 13
     expect(p.xp).toBe(0); expect(p.level).toBe(1); expect(p.counters).toEqual({});
     expect(p.proficiencies.melee).toEqual({ level: 10, tries: 0 });
   });
@@ -170,10 +170,25 @@ describe('ETA e portas novas', () => {
     const h = etaSeconds(id, 10, 0, 25) / 3600;
     expect(h).toBeGreaterThan(132 * 0.99); expect(h).toBeLessThan(132 * 1.01);
   });
-  it('primeiro nível ≈ 4 h em combate e < 4 h em magia e elementos', () => {
-    expect(etaSeconds('melee', 10, 0, 11) / 3600).toBeCloseTo(4.2, 0);
-    expect(etaSeconds('magic', 10, 0, 11) / 3600).toBeCloseTo(2.8, 0);
-    expect(etaSeconds('fire', 10, 0, 11) / 3600).toBeCloseTo(3.5, 0);
+  it('curva de potência: 192 tries no 10 -> 11 e ~43 mil no 24 -> 25', () => {
+    expect(triesForNextLevel('melee', 10)).toBe(192);
+    expect(Math.abs(triesForNextLevel('fire', 24) - 43113)).toBeLessThanOrEqual(1);
+    expect(triesForNextLevel('fire', 11)).toBe(766);
+  });
+  it('o primeiro nível sai em 5 a 8 minutos para todas as proficiências', () => {
+    for (const id of PROFICIENCY_IDS) { const minutes = triesForNextLevel(id, 10) * 2 / 60; expect(minutes).toBeGreaterThan(5); expect(minutes).toBeLessThan(8); }
+  });
+  it('todas as 13 proficiências chegam à porta 25 em ~132 h, à 35 em ~24,5 d e à 40 em ~42 d', () => {
+    for (const id of PROFICIENCY_IDS) {
+      expect(hoursToReach(id, 10, 25)).toBeGreaterThan(132 * 0.99); expect(hoursToReach(id, 10, 25)).toBeLessThan(132 * 1.01);
+      expect(hoursToReach(id, 10, 35) / 24).toBeCloseTo(24.5, 0); expect(hoursToReach(id, 10, 40) / 24).toBeCloseTo(41.9, 0);
+      expect(2 * hoursToReach(id, 10, 35) / 24).toBeCloseTo(49, 0);
+    }
+  });
+  it('effort torna uma proficiência mais pesada sem mudar a forma da curva', () => {
+    PROFICIENCIES.magic.effort = 1.5;
+    try { expect(triesForNextLevel('magic', 10) / triesForNextLevel('melee', 10)).toBeCloseTo(1.5, 1); }
+    finally { PROFICIENCIES.magic.effort = 1; }
   });
   it('remainingTries desconta o que já foi treinado e zera ao atingir o alvo', () => {
     expect(remainingTries('melee', 25, 0, 25)).toBe(0);

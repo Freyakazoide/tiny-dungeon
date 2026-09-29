@@ -3,15 +3,17 @@ import { MONSTERS, WAVES } from '../data/monsters';
 import { SPELLS, spellById } from '../data/spells';
 import { itemById } from '../data/items';
 import { CHARMS } from '../data/charms';
-import type { Character, ClassId, GameState, HelperConfig, InventoryStack, SpellCondition } from './types';
+import type { Character, CharacterRow, ClassId, GameState, HelperConfig, InventoryStack, SpellCondition } from './types';
 import { evolveClass } from '../rpg/evolution';
 import { applyOfflineTraining } from '../rpg/offline';
 import { addCounter, COUNTER_IDS, createProfile, type CounterId } from '../rpg/profile';
 import { TRIES_PER_SECOND } from '../rpg/curves';
+import { defaultRow, STARTER_ELEMENTS, STARTER_OFFHAND, STARTER_WEAPONS, type CharacterSpec } from '../data/starter';
+import { MELEE_BACK_ROW_DAMAGE } from '../data/balance';
 import { runtime } from '../rpg/runtime';
 import { MAX_PROFICIENCY_LEVEL, PROFICIENCIES, type ProficiencyId } from '../rpg/proficiencies';
 import { characterStats, gainExperience, investTalent, spentTalentPoints, talentBonus, talentRespecCost, elementFocus, trainByTime, trainProficiency } from '../systems/progression';
-import { conditionMet, healAmount, livingMonsters, livingTeam, magicDamage, monsterHit, physicalDamage } from '../systems/combat';
+import { conditionMet, healAmount, livingMonsters, livingTeam, magicDamage, meleeInBackRow, monsterHit, physicalDamage, pickMonsterTarget } from '../systems/combat';
 import { addItem, randomInt, removeItem, rollLoot } from '../systems/loot';
 import { createAnalyzer, hasAnalyzerActivity } from '../systems/analyzer';
 
@@ -20,16 +22,17 @@ const helper=():HelperConfig=>({hpPotionAt:35,manaPotionAt:25,healAllies:true,au
 const defaultCondition=(s:NonNullable<ReturnType<typeof spellById>>):SpellCondition=>s.kind==='heal'||s.kind==='regen'?{allyInjured:true,manaAbove:10}:s.target==='allEnemies'?{minEnemies:2,manaAbove:15}:s.kind==='shield'?{hpBelow:65,manaAbove:10}:{manaAbove:10};
 export const SPELL_SLOTS=4;
 let idCounter=0;
-export function createCharacter(classId:ClassId,name=CLASSES[classId].name):Character{
+export function createCharacter(classId:ClassId,name=CLASSES[classId].name,kit?:{weaponId?:string;row?:CharacterRow;element?:ProficiencyId}):Character{
   const base=CLASSES[classId].base;
   const slots=SPELLS.filter(s=>s.classId===classId&&!s.universal).slice(0,4).map(s=>s.id);
   const spellConditions:Record<string,SpellCondition>={};
+  if(kit?.element){slots[0]=`basic_${kit.element}`;}
   for(const id of slots)spellConditions[id]=defaultCondition(spellById(id)!);
-  return {id:`hero-${Date.now()}-${idCounter++}`,name,classId,profile:createProfile(),talentPoints:0,hp:base.maxHp,mana:base.maxMana,equipment:classId==='squire'?{weapon:'rusty_sword'}:{},spellSlots:slots,spellConditions,talents:{},cooldowns:{basic:0},effects:[],helper:helper()};
+  return {id:`hero-${Date.now()}-${idCounter++}`,name,classId,profile:createProfile(),talentPoints:0,hp:base.maxHp,mana:base.maxMana,equipment:classId==='squire'?{weapon:kit?.weaponId??'rusty_sword',offhand:STARTER_OFFHAND}:{},row:kit?.row??defaultRow(kit?.weaponId??(classId==='squire'?'rusty_sword':undefined),itemById(kit?.weaponId??'')?.trains),isTank:false,spellSlots:slots,spellConditions,talents:{},cooldowns:{basic:0},effects:[],helper:helper()};
 }
 /** Estado inicial: sem personagens. A tela de criação monta o grupo de 3 Squires. */
 export function initialState():GameState{
-  return {version:1,status:'idle',autoAdvance:true,wave:0,cycle:0,transitionMs:0,characters:[],team:[],monsters:[],inventory:{bp:[{itemId:'oak_bow',quantity:1},{itemId:'knuckle_wraps',quantity:1},{itemId:'apprentice_staff',quantity:1},{itemId:'wooden_shield',quantity:1}],loot:[],supply:[{itemId:'health_potion',quantity:8},{itemId:'mana_potion',quantity:8}],capacity:{bp:40,loot:60,supply:30}},gold:0,charmPoints:0,charmSlots:1,equippedCharms:[],unlockedCharms:[],codex:{},analyzer:createAnalyzer(),history:[],message:'Crie seus 3 personagens para começar.',lastSavedAt:Date.now()};
+  return {version:1,status:'idle',autoAdvance:true,wave:0,cycle:0,transitionMs:0,characters:[],team:[],monsters:[],inventory:{bp:[],loot:[],supply:[{itemId:'health_potion',quantity:8},{itemId:'mana_potion',quantity:8}],capacity:{bp:40,loot:60,supply:30}},gold:0,charmPoints:0,charmSlots:1,equippedCharms:[],unlockedCharms:[],codex:{},analyzer:createAnalyzer(),history:[],message:'Crie seus 3 personagens para começar.',lastSavedAt:Date.now()};
 }
 export const PARTY_SIZE=3,ROSTER_LIMIT=5,NAME_LIMIT=18;
 export class GameEngine {
@@ -40,7 +43,7 @@ export class GameEngine {
   subscribe=(fn:()=>void)=>{this.listeners.add(fn);return()=>this.listeners.delete(fn);};
   onFx=(fn:(fx:GameFx)=>void)=>{this.fxListeners.add(fn);return()=>this.fxListeners.delete(fn);};
   private emit(fx?:GameFx){this.state={...this.state};this.listeners.forEach(fn=>fn());if(fx)this.fxListeners.forEach(fn=>fn(fx));}
-  private spawnWave(){this.state.monsters=WAVES[this.state.wave].monsters.map((defId,i)=>({uid:`${this.state.cycle}-${this.state.wave}-${i}-${Date.now()}`,defId,hp:MONSTERS[defId].hp,maxHp:MONSTERS[defId].hp,cooldown:1/Math.max(.1,MONSTERS[defId].speed),alive:true}));this.state.message=WAVES[this.state.wave].name;this.emit({type:'wave',text:this.state.message});}
+  private spawnWave(){this.state.monsters=WAVES[this.state.wave].monsters.map((defId,i)=>({uid:`${this.state.cycle}-${this.state.wave}-${i}-${Date.now()}`,defId,hp:Math.round(MONSTERS[defId].hp*runtime.monsterHp),maxHp:Math.round(MONSTERS[defId].hp*runtime.monsterHp),cooldown:1/Math.max(.1,MONSTERS[defId].speed),alive:true}));this.state.message=WAVES[this.state.wave].name;this.emit({type:'wave',text:this.state.message});}
   start(){if(this.state.status!=='idle'||!this.state.team.length)return;if(!livingTeam(this.state).length)for(const id of this.state.team){const c=this.state.characters.find(x=>x.id===id);if(c){const stats=characterStats(c,this.state);c.hp=stats.maxHp;c.mana=stats.maxMana;c.effects=[];}}if(!this.state.monsters.length||!livingMonsters(this.state).length)this.spawnWave();this.state.status='running';if(!this.state.analyzer.activeMs)this.state.analyzer.startedAt=Date.now();this.state.message='Hunt iniciada.';this.emit();}
   pause(){if(this.state.status==='idle'||this.state.status==='paused')return;this.pausedFrom=this.state.status;this.state.status='paused';this.state.message='Hunt pausada — cooldowns congelados.';this.emit();}
   resume(){if(this.state.status!=='paused')return;this.state.status=this.pausedFrom;this.state.message='Hunt retomada.';this.emit();}
@@ -53,7 +56,7 @@ export class GameEngine {
     if(this.state.status==='transition'||this.state.status==='recovering'){this.state.transitionMs-=ms;if(this.state.transitionMs<=0)this.finishTransition();this.emit();return;}
     this.state.analyzer.activeMs+=ms;
     for(const c of livingTeam(this.state)){this.updateCharacter(c,dt);if(this.state.status!=='running')break;}
-    if(this.state.status==='running')for(const m of livingMonsters(this.state)){m.cooldown-=dt;if(m.cooldown<=0){const targets=livingTeam(this.state);if(!targets.length){this.defeat();break;}const knight=targets.find(c=>c.classId==='knight');const target=knight&&Math.random()<.65?knight:targets[randomInt(0,targets.length-1)];const dealt=monsterHit(m,target,this.state);this.emit({type:'damage',source:m.uid,target:target.id,value:dealt});m.cooldown+=1/MONSTERS[m.defId].speed;if(!livingTeam(this.state).length){this.defeat();break;}}}
+    if(this.state.status==='running')for(const m of livingMonsters(this.state)){m.cooldown-=dt;if(m.cooldown<=0){const targets=livingTeam(this.state);if(!targets.length){this.defeat();break;}const target=pickMonsterTarget(targets)!;const dealt=monsterHit(m,target,this.state);this.emit({type:'damage',source:m.uid,target:target.id,value:dealt});m.cooldown+=1/MONSTERS[m.defId].speed;if(!livingTeam(this.state).length){this.defeat();break;}}}
     this.emit();
   }
   private updateCharacter(c:Character,dt:number){
@@ -65,7 +68,7 @@ export class GameEngine {
     if(spell){this.cast(c,spell);c.cooldowns[spell.id]=spell.cooldown*(1-this.cooldownTalent(c));c.cooldowns.basic=.35;} else this.basicAttack(c);
   }
   private cooldownTalent(c:Character){return Math.min(.5,talentBonus(c,'cooldown'));}
-  private basicAttack(c:Character){const target=livingMonsters(this.state)[0];if(!target)return;const stats=characterStats(c,this.state);const crit=Math.random()<stats.crit;const weapon=itemById(c.equipment.weapon??'');const skill=weapon?.trains??CLASSES[c.classId].weaponSkill;const skillBonus=1+c.profile.proficiencies[skill].level*.012;const damage=physicalDamage(stats.attack*skillBonus,MONSTERS[target.defId].defense,crit);c.profile.trainingFocus=skill;this.hit(c,target,damage,crit);c.cooldowns.basic=1/Math.max(.2,stats.attackSpeed);this.emit({type:'attack',source:c.id,target:target.uid,value:damage,text:crit?'CRÍTICO':''});}
+  private basicAttack(c:Character){const target=livingMonsters(this.state)[0];if(!target)return;const stats=characterStats(c,this.state);const crit=Math.random()<stats.crit;const weapon=itemById(c.equipment.weapon??'');const skill=weapon?.trains??CLASSES[c.classId].weaponSkill;const skillBonus=1+c.profile.proficiencies[skill].level*.012;const raw=physicalDamage(stats.attack*skillBonus,MONSTERS[target.defId].defense,crit);const damage=meleeInBackRow(c)?Math.max(1,Math.round(raw*MELEE_BACK_ROW_DAMAGE)):raw;c.profile.trainingFocus=skill;this.hit(c,target,damage,crit);c.cooldowns.basic=1/Math.max(.2,stats.attackSpeed);this.emit({type:'attack',source:c.id,target:target.uid,value:damage,text:crit?'CRÍTICO':''});}
   private cast(c:Character,s:NonNullable<ReturnType<typeof spellById>>){c.mana-=s.mana;this.trainCast(c,s);const stats=characterStats(c,this.state);if(s.kind==='damage'){const targets=s.target==='allEnemies'?livingMonsters(this.state):livingMonsters(this.state).slice(0,1);for(const target of targets){const base=magicDamage(stats.magicPower+stats.attack*.45,s.power,MONSTERS[target.defId].defense);this.hit(c,target,Math.round(base*(1+talentBonus(c,'magicDamage'))));}this.emit({type:'attack',source:c.id,text:s.name});return;}const allies=s.target==='allAllies'?livingTeam(this.state):s.target==='ally'?[livingTeam(this.state).sort((a,b)=>a.hp/characterStats(a,this.state).maxHp-b.hp/characterStats(b,this.state).maxHp)[0]]:[c];const healingMultiplier=1+talentBonus(c,'healing');for(const ally of allies.filter(Boolean)){if(s.kind==='heal'){const before=ally.hp;ally.hp=Math.min(characterStats(ally,this.state).maxHp,ally.hp+Math.round(healAmount(stats.magicPower,s.power)*healingMultiplier));const amount=ally.hp-before;this.state.analyzer.healing+=amount;addCounter(c.profile,'healingDone',amount);this.emit({type:'heal',source:c.id,target:ally.id,value:amount,text:s.name});}else{addCounter(c.profile,'buffsApplied');ally.effects.push({id:`${s.id}-${Date.now()}`,type:s.kind==='regen'?'regen':s.kind==='shield'?'shield':s.power>.25?'buffAttack':'buffDefense',value:s.kind==='regen'?Math.round(healAmount(stats.magicPower,s.power)*healingMultiplier):s.kind==='shield'?s.power:s.power,remaining:s.duration??5,source:c.id});}}}
   /** Magia elemental treina o elemento e Magia por cast, só se for o elemento em foco. As demais só definem o foco de tempo (o try vem de trainByTime). */
   private trainCast(c:Character,s:NonNullable<ReturnType<typeof spellById>>){
@@ -81,13 +84,25 @@ export class GameEngine {
   private finishTransition(force=false){if(this.state.status==='recovering'){for(const id of this.state.team){const c=this.state.characters.find(x=>x.id===id);if(c){const s=characterStats(c,this.state);c.hp=s.maxHp;c.mana=s.maxMana;c.effects=[];}}this.state.wave=0;this.spawnWave();this.state.status='running';return;}if(!this.state.autoAdvance&&!force){this.state.transitionMs=0;return;}this.state.wave=(this.state.wave+1)%WAVES.length;for(const c of this.state.characters){const s=characterStats(c,this.state);c.hp=Math.min(s.maxHp,c.hp+s.maxHp*.12);c.mana=Math.min(s.maxMana,c.mana+s.maxMana*.18);}this.spawnWave();this.state.status='running';}
   private defeat(){this.state.analyzer.defeats++;this.state.status='recovering';this.state.transitionMs=5000;this.state.message='Equipe derrotada. Recuperação em 5 segundos.';this.emit({type:'recovery',text:this.state.message});}
   private autoSupply(c:Character,maxHp:number,maxMana:number){if(!c.helper.autoSupplies)return;const use=(supply:'health'|'mana')=>{const stack=this.state.inventory.supply.find(x=>itemById(x.itemId)?.supply===supply);if(!stack)return false;const item=itemById(stack.itemId)!;removeItem(this.state.inventory.supply,item.id);if(supply==='health')c.hp=Math.min(maxHp,c.hp+(item.amount??0));else c.mana=Math.min(maxMana,c.mana+(item.amount??0));this.trackSupply(item.id,item.value,c);return true;};if(c.hp/maxHp*100<=c.helper.hpPotionAt)use('health');if(c.mana/maxMana*100<=c.helper.manaPotionAt)use('mana');}
-  /** Cria o grupo inicial: exatamente 3 Squires nomeados, todos escalados para a equipe. */
-  createParty(names:string[]){
-    const clean=names.map(n=>n.trim().slice(0,NAME_LIMIT));
-    if(this.state.characters.length||clean.length!==PARTY_SIZE||clean.some(n=>!n)||new Set(clean.map(n=>n.toLowerCase())).size!==clean.length)return false;
-    const party=clean.map(name=>createCharacter('squire',name));
+  /**
+   * Cria o grupo inicial: 3 Squires com nome, arma inicial (Espada, Arco, Faixas ou Cajado), linha e elemento inicial.
+   * O escudo de madeira vem equipado; o primeiro da frente vira tanque. Falha sem alterar o estado se algo for inválido.
+   */
+  createParty(specs:CharacterSpec[]){
+    if(this.state.characters.length||!Array.isArray(specs)||specs.length!==PARTY_SIZE)return false;
+    const clean=specs.map(spec=>({...spec,name:(spec.name??'').trim().slice(0,NAME_LIMIT)}));
+    if(clean.some(spec=>!spec.name||!STARTER_WEAPONS.some(w=>w.id===spec.weaponId)||(spec.row!==undefined&&spec.row!=='front'&&spec.row!=='back')||!spec.element||!STARTER_ELEMENTS.includes(spec.element)))return false;
+    if(new Set(clean.map(spec=>spec.name.toLowerCase())).size!==clean.length)return false;
+    const party=clean.map(spec=>createCharacter('squire',spec.name,{weaponId:spec.weaponId,row:spec.row,element:spec.element}));
+    for(const c of party)c.profile.offlineTarget=clean[party.indexOf(c)].element;
+    const tank=party.find(c=>c.row==='front');if(tank)tank.isTank=true;
     this.state.characters=party;this.state.team=party.map(c=>c.id);this.state.message='Grupo criado. Inicie a hunt quando estiver pronto.';this.emit();return true;
   }
+  setRow(id:string,row:CharacterRow){const c=this.state.characters.find(x=>x.id===id);if(!c||(row!=='front'&&row!=='back'))return false;c.row=row;if(row==='back')c.isTank=false;this.emit();return true;}
+  /** Marca (ou desmarca) o tanque: só um por grupo e só na linha da frente. */
+  setTank(id:string,on=true){const c=this.state.characters.find(x=>x.id===id);if(!c||(on&&c.row!=='front'))return false;for(const other of this.state.characters)other.isTank=false;c.isTank=on;this.emit();return true;}
+  /** Vende todo o loot da bolsa de uma vez e devolve o valor recebido. */
+  sellAllLoot(){let total=0;for(const stack of this.state.inventory.loot)total+=(itemById(stack.itemId)?.value??0)*stack.quantity;if(!total)return 0;this.state.inventory.loot=[];this.state.gold+=total;this.state.message=`Loot vendido por ${total} ouro.`;this.emit();return total;}
   recruit(name:string){const clean=name.trim().slice(0,NAME_LIMIT);if(!clean||this.state.characters.length>=ROSTER_LIMIT||this.state.characters.some(c=>c.name.toLowerCase()===clean.toLowerCase()))return false;this.state.characters.push(createCharacter('squire',clean));this.emit();return true;}
   setOfflineTarget(id:string,target:ProficiencyId|undefined){const c=this.state.characters.find(x=>x.id===id);if(!c||(target&&!(target in PROFICIENCIES)))return;c.profile.offlineTarget=target;this.emit();}
   evolve(id:string,targetId:string,opts:{force?:boolean}={}){const c=this.state.characters.find(x=>x.id===id);if(!c)return false;const result=evolveClass(c.profile,targetId,opts);this.state.message=result.ok?`${c.name} evoluiu para ${result.node.name}.`:result.reason;this.emit();return result.ok;}

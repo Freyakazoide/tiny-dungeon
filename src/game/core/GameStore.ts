@@ -1,4 +1,4 @@
-import { GameEngine } from './GameEngine';
+import { GameEngine, initialState } from './GameEngine';
 import { persistence } from '../persistence/repository';
 import { importBackup } from '../persistence/backup';
 import { sessionGapSeconds } from '../rpg/offline';
@@ -18,6 +18,8 @@ export async function initializeGameStore(){
   window.addEventListener('pagehide',()=>void flush());
 }
 export async function importGameBackup(json:string){const state=importBackup(json);await persistence.replace(state);gameStore.hydrate(state);dirty=false;return state;}
+/** Apaga o save e volta ao estado inicial (tela de criação). */
+export async function resetGame(){await persistence.clear();gameStore.hydrate(initialState());dirty=false;}
 export async function saveNow(){dirty=true;await flush();}
 export function stopAutosaveForTests(){if(saveTimer!==undefined)window.clearInterval(saveTimer);saveTimer=undefined;}
 

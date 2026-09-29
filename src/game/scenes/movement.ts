@@ -1,9 +1,7 @@
-import type { Character, ClassId } from '../core/types';
+import type { Character } from '../core/types';
 import type { CharacterDirection } from '../assets';
 
 export interface ArenaPoint { x:number; y:number; }
-
-export const isRangedClass=(classId:ClassId)=>classId==='paladin'||classId==='druid'||classId==='necromancer';
 
 export function dominantDirection(from:ArenaPoint,to:ArenaPoint,fallback:CharacterDirection='up'):CharacterDirection{
   const dx=to.x-from.x,dy=to.y-from.y;
@@ -15,9 +13,9 @@ function rowPositions(count:number,y:number,spacing:number):ArenaPoint[]{
   return Array.from({length:count},(_,index)=>({x:512+(index-(count-1)/2)*spacing,y}));
 }
 
-export function combatFormation(team:Pick<Character,'id'|'classId'>[]):Map<string,ArenaPoint>{
-  const melee=team.filter(character=>!isRangedClass(character.classId));
-  const ranged=team.filter(character=>isRangedClass(character.classId));
+export function combatFormation(team:Pick<Character,'id'|'row'>[]):Map<string,ArenaPoint>{
+  const melee=team.filter(character=>character.row==='front');
+  const ranged=team.filter(character=>character.row==='back');
   const result=new Map<string,ArenaPoint>();
   rowPositions(melee.length,365,118).forEach((point,index)=>result.set(melee[index].id,point));
   rowPositions(ranged.length,468,118).forEach((point,index)=>result.set(ranged[index].id,point));

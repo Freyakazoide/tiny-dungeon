@@ -35,6 +35,9 @@ export function elementFocus(character: Character): ProficiencyId | undefined {
   for (const id of character.spellSlots) { const element = spellById(id)?.element; if (element) return element; }
   return undefined;
 }
+/** A proficiência está sendo treinada agora (foco de tempo, ou elemento em foco/Magia com magia dele equipada)? */
+export const trainingNow = (character: Character, id: ProficiencyId) =>
+  character.profile.trainingFocus === id || (focusSpellEquipped(character) && (id === elementFocus(character) || id === 'magic'));
 /** O elemento em foco tem uma magia dele equipada? */
 export const focusSpellEquipped = (character: Character) => {
   const focus = elementFocus(character);

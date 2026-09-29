@@ -23,6 +23,7 @@ export function createDevTools(engine: GameEngine, hooks: DevHooks) {
     },
     timeScale(n: number) { return run(`timeScale(${n})`, () => { if (!(n > 0)) throw new Error('Use um número > 0.'); runtime.trainScale = n; engine.devScaleChanged(); }); },
     xpScale(n: number) { return run(`xpScale(${n})`, () => { if (!(n > 0)) throw new Error('Use um número > 0.'); runtime.xpScale = n; engine.devScaleChanged(); }); },
+    monsterScale(hpMult: number, atkMult: number) { return run(`monsterScale(${hpMult}, ${atkMult})`, () => { if (!(hpMult > 0) || !(atkMult > 0)) throw new Error('Use números > 0.'); runtime.monsterHp = hpMult; runtime.monsterAtk = atkMult; engine.devScaleChanged(); }); },
     setLevel(id: string, n: number) { return run(`setLevel(${id}, ${n})`, () => engine.devSetLevel(id, n)); },
     giveXp(id: string, n: number) { return run(`giveXp(${id}, ${n})`, () => engine.devGiveXp(id, n)); },
     setProf(id: string, prof: string, n: number) { return run(`setProf(${id}, ${prof}, ${n})`, () => engine.devSetProf(id, prof, n)); },

@@ -10,9 +10,10 @@ describe('movimentação visual da arena',()=>{
     expect(dominantDirection({x:0,y:0},{x:4,y:-10})).toBe('up');
   });
 
-  it('mantém corpo a corpo à frente e personagens à distância recuados',()=>{
-    const formation=combatFormation([{id:'knight',classId:'knight'},{id:'monk',classId:'monk'},{id:'paladin',classId:'paladin'},{id:'necro',classId:'necromancer'}]);
-    expect(formation.get('knight')?.y).toBeLessThan(formation.get('paladin')!.y);
-    expect(formation.get('monk')?.y).toBeLessThan(formation.get('necro')!.y);
+  it('posiciona por linha: frente em y 365 e trás em y 468',()=>{
+    const formation=combatFormation([{id:'a',row:'front'},{id:'b',row:'front'},{id:'c',row:'back'},{id:'d',row:'back'}]);
+    expect(formation.get('a')?.y).toBe(365);expect(formation.get('b')?.y).toBe(365);
+    expect(formation.get('c')?.y).toBe(468);expect(formation.get('d')?.y).toBe(468);
+    expect(formation.get('a')!.y).toBeLessThan(formation.get('c')!.y);
   });
 });

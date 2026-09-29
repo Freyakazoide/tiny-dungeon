@@ -16,6 +16,16 @@ const record=(value:unknown):value is Record<string,unknown>=>!!value&&typeof va
 export function migrateGameState(value:unknown):unknown{
   const migrated=structuredClone(value);
   if(!record(migrated))return migrated;
+  // Fase 3: personagens antigos ganham linha (trás para arco/cajado/classes à distância) e o primeiro da frente vira tanque.
+  const characters=Array.isArray(migrated.characters)?migrated.characters.filter(record):[];
+  if(characters.some(c=>c.row===undefined||typeof c.isTank!=='boolean')){
+    for(const c of characters){
+      if(c.row===undefined){const weapon=ITEMS.find(i=>i.id===(record(c.equipment)?c.equipment.weapon:undefined));c.row=weapon?.trains==='ranged'||['paladin','druid','necromancer'].includes(String(c.classId))?'back':'front';}
+      if(typeof c.isTank!=='boolean')c.isTank=false;
+    }
+    const team=Array.isArray(migrated.team)?migrated.team:[];
+    if(!characters.some(c=>c.isTank)){const tank=team.map(id=>characters.find(c=>c.id===id)).find(c=>c?.row==='front');if(tank)tank.isTank=true;}
+  }
   const analyzers=[migrated.analyzer,...(Array.isArray(migrated.history)?migrated.history:[])];
   for(const raw of analyzers)if(record(raw)&&!record(raw.suppliesUsed))raw.suppliesUsed={};
   return migrated;
@@ -39,7 +49,7 @@ export function validateGameState(value:unknown):value is GameState{
   if(!finite(value.wave)||Number(value.wave)<0||Number(value.wave)>=WAVES.length||!finite(value.cycle)||!finite(value.gold))return false;
   const characters=value.characters as unknown[];if(characters.length>5)return false;
   const ids=new Set<string>();
-  for(const raw of characters){if(!record(raw)||typeof raw.id!=='string'||typeof raw.name!=='string'||typeof raw.classId!=='string'||!(raw.classId in CLASSES)||!validProfile(raw.profile)||!finite(raw.talentPoints)||Number(raw.talentPoints)<0||!record(raw.talents)||!record(raw.equipment)||!Array.isArray(raw.spellSlots)||!record(raw.spellConditions)||!record(raw.cooldowns)||!Array.isArray(raw.effects)||!record(raw.helper))return false;if(ids.has(raw.id))return false;ids.add(raw.id);if((raw.spellSlots as unknown[]).some(id=>typeof id!=='string'||!SPELLS.some(s=>s.id===id)))return false;for(const [talentId,rank] of Object.entries(raw.talents)){const talent=talentById(talentId);if(!talent||talent.classId!==raw.classId||!finite(rank)||Number(rank)<0||!Number.isInteger(rank))return false;}}
+  for(const raw of characters){if(!record(raw)||typeof raw.id!=='string'||typeof raw.name!=='string'||typeof raw.classId!=='string'||!(raw.classId in CLASSES)||!validProfile(raw.profile)||(raw.row!=='front'&&raw.row!=='back')||typeof raw.isTank!=='boolean'||!finite(raw.talentPoints)||Number(raw.talentPoints)<0||!record(raw.talents)||!record(raw.equipment)||!Array.isArray(raw.spellSlots)||!record(raw.spellConditions)||!record(raw.cooldowns)||!Array.isArray(raw.effects)||!record(raw.helper))return false;if(ids.has(raw.id))return false;ids.add(raw.id);if((raw.spellSlots as unknown[]).some(id=>typeof id!=='string'||!SPELLS.some(s=>s.id===id)))return false;for(const [talentId,rank] of Object.entries(raw.talents)){const talent=talentById(talentId);if(!talent||talent.classId!==raw.classId||!finite(rank)||Number(rank)<0||!Number.isInteger(rank))return false;}}
   if((value.team as unknown[]).some(id=>typeof id!=='string'||!ids.has(id))||(value.team as unknown[]).length>4)return false;
   for(const raw of value.monsters as unknown[]){if(!record(raw)||typeof raw.uid!=='string'||typeof raw.defId!=='string'||!MONSTERS[raw.defId]||!finite(raw.hp)||!finite(raw.maxHp)||!finite(raw.cooldown)||typeof raw.alive!=='boolean')return false;}
   const inventory=value.inventory as Record<string,unknown>;if(!record(inventory.capacity))return false;

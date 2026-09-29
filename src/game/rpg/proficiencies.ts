@@ -9,12 +9,13 @@ export const PROFICIENCY_IDS = [
 export type ProficiencyId = (typeof PROFICIENCY_IDS)[number];
 export type ProficiencyGroup = 'combat' | 'magic' | 'elemental';
 
-export interface ProficiencyDef { id: ProficiencyId; name: string; group: ProficiencyGroup; base: number; mult: number; }
+/** `base`/`mult` são a planilha antiga (só `baseTries` os usa). O ritmo real vem de `effort` em rpg/curves.ts: 1 = padrão, maior = proficiência mais pesada. */
+export interface ProficiencyDef { id: ProficiencyId; name: string; group: ProficiencyGroup; base: number; mult: number; effort: number; }
 
 export const START_LEVEL = 10;
 export const MAX_PROFICIENCY_LEVEL = 100;
 
-const def = (id: ProficiencyId, name: string, group: ProficiencyGroup, base: number, mult: number): ProficiencyDef => ({ id, name, group, base, mult });
+const def = (id: ProficiencyId, name: string, group: ProficiencyGroup, base: number, mult: number): ProficiencyDef => ({ id, name, group, base, mult, effort: 1 });
 
 export const PROFICIENCIES: Record<ProficiencyId, ProficiencyDef> = {
   melee:    def('melee', 'Melee', 'combat', 10, 1.1),

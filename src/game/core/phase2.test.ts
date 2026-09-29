@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { GameEngine } from './GameEngine';
+import { createCharacter, GameEngine } from './GameEngine';
 import { createDevTools } from './devTools';
 import { partyState } from './testing';
 import { monsterHit } from '../systems/combat';
@@ -30,11 +30,14 @@ describe('A — armas e foco de treino', () => {
     expect(total(c, 'ranged')).toBeGreaterThan(270); expect(total(c, 'ranged')).toBeLessThan(330);
     expect(total(c, 'melee')).toBe(0);
   });
-  it('a mochila inicial tem as armas novas e o Squire pode equipá-las', () => {
-    const e = new GameEngine(partyState()); const c = e.getSnapshot().characters[0];
-    expect(e.getSnapshot().inventory.bp.map(s => s.itemId).sort()).toEqual(['apprentice_staff', 'knuckle_wraps', 'oak_bow', 'wooden_shield']);
-    for (const id of ['oak_bow', 'knuckle_wraps', 'apprentice_staff', 'wooden_shield']) expect(e.equip(c.id, id)).toBe(true);
-    expect(c.equipment.offhand).toBe('wooden_shield');
+  it('o kit inicial vem equipado (arma, escudo, magia e foco), a mochila começa vazia e dá para trocar de arma', () => {
+    const e = new GameEngine(partyState()); const [a, b, c] = e.getSnapshot().characters;
+    expect(e.getSnapshot().inventory.bp).toHaveLength(0);
+    expect([a, b, c].map(x => x.equipment.weapon)).toEqual(['rusty_sword', 'oak_bow', 'apprentice_staff']);
+    for (const x of [a, b, c]) expect(x.equipment.offhand).toBe('wooden_shield');
+    e.getSnapshot().inventory.bp.push({ itemId: 'knuckle_wraps', quantity: 1 });
+    expect(e.equip(a.id, 'knuckle_wraps')).toBe(true);
+    expect(a.equipment.weapon).toBe('knuckle_wraps'); expect(e.getSnapshot().inventory.bp.find(s => s.itemId === 'rusty_sword')?.quantity).toBe(1);
   });
   it('cast do elemento em foco rende 2 tries no elemento e em Magia; outro elemento rende 0', () => {
     const e = new GameEngine(partyState()); const c = e.getSnapshot().characters[0];
@@ -47,11 +50,12 @@ describe('A — armas e foco de treino', () => {
     expect(c.profile.trainingFocus).toBeUndefined(); // magia elemental não muda o foco da arma
   });
   it('sem foco elemental (nem magia elemental equipada), nenhum elemento treina', () => {
-    const e = endlessCombat(() => {});
-    for (const c of e.getSnapshot().characters) for (const id of PROFICIENCY_IDS.filter(i => !['melee', 'defense'].includes(i))) expect(total(c, id)).toBe(0);
+    const e = endlessCombat(engine => { for (const c of engine.getSnapshot().characters) { engine.setOfflineTarget(c.id, undefined); c.spellSlots.forEach((id, slot) => { if (id.startsWith('basic_')) engine.equipSpell(c.id, slot, 'squire_guard'); }); } });
+    for (const c of e.getSnapshot().characters) for (const id of PROFICIENCY_IDS.filter(i => !['melee', 'ranged', 'defense'].includes(i))) expect(total(c, id)).toBe(0);
   });
   it('sem alvo definido, o foco é o elemento da primeira magia elemental equipada', () => {
     const e = new GameEngine(partyState()); const c = e.getSnapshot().characters[0];
+    e.setOfflineTarget(c.id, undefined); e.equipSpell(c.id, 0, 'squire_guard');
     e.equipSpell(c.id, 2, 'basic_ice'); e.equipSpell(c.id, 3, 'basic_fire');
     cast(e, c, 'basic_fire'); expect(c.profile.proficiencies.fire.tries).toBe(0);
     cast(e, c, 'basic_ice'); expect(c.profile.proficiencies.ice.tries).toBe(2);
@@ -72,14 +76,15 @@ describe('A — armas e foco de treino', () => {
     expect(e.equipSpell(c.id, 0, 'squire_sweep')).toBe(false);
     expect(e.equipSpell(c.id, 0, 'nao_existe')).toBe(false);
     expect(e.equipSpell('outro', 0, 'basic_fire')).toBe(false);
-    expect(e.equipSpell(c.id, 1, 'basic_fire')).toBe(true);
-    expect(c.spellSlots).toHaveLength(4); expect(c.spellSlots[1]).toBe('basic_fire');
-    expect(c.spellConditions.basic_fire).toEqual({ manaAbove: 10 }); expect(c.spellConditions.squire_sweep).toBeUndefined();
+    expect(e.equipSpell(c.id, 1, 'basic_fire')).toBe(false); // já equipada no slot 1
+    expect(e.equipSpell(c.id, 1, 'basic_ice')).toBe(true);
+    expect(c.spellSlots).toHaveLength(4); expect(c.spellSlots[1]).toBe('basic_ice');
+    expect(c.spellConditions.basic_ice).toEqual({ manaAbove: 10 }); expect(c.spellConditions.squire_sweep).toBeUndefined();
     expect(e.unequipSpell(c.id, 1)).toBe(true); expect(c.spellSlots).toHaveLength(3);
-    expect(e.equipSpell(c.id, 3, 'basic_fire')).toBe(true); expect(c.spellSlots).toHaveLength(4);
+    expect(e.equipSpell(c.id, 3, 'basic_ice')).toBe(true); expect(c.spellSlots).toHaveLength(4);
   });
   it('as magias básicas não entram automaticamente no kit de um personagem novo', () => {
-    const c = new GameEngine(partyState()).getSnapshot().characters[0];
+    const c = createCharacter('squire', 'Novo');
     expect(c.spellSlots.every(id => !spellById(id)!.universal)).toBe(true);
   });
   it('depois de 2 h offline a caçada volta a idle e o relatório existe', () => {

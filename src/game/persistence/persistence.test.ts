@@ -40,7 +40,7 @@ describe('persistência',()=>{
   it('retoma uma transição salva sem duplicar XP, ouro ou monstros',()=>{
     const state=partyState();state.status='transition';state.transitionMs=300;state.wave=0;state.analyzer.xp=100;state.analyzer.gold=9;state.gold=9;state.monsters=[{uid:'dead-skeleton',defId:'skeleton',hp:0,maxHp:100,cooldown:.5,alive:false}];
     const engine=new GameEngine(importBackup(exportBackup(state)));for(let i=0;i<4;i++)engine.tick(100);const restored=engine.getSnapshot();
-    expect(restored.status).toBe('running');expect(restored.wave).toBe(1);expect(restored.analyzer.xp).toBe(100);expect(restored.gold).toBe(9);expect(restored.monsters).toHaveLength(2);
+    expect(restored.status).toBe('running');expect(restored.wave).toBe(1);expect(restored.analyzer.xp).toBe(100);expect(restored.gold).toBe(9);expect(restored.monsters).toHaveLength(4);
   });
 
   it('preserva o perfil RPG: proficiências, contadores, classe e alvo offline',async()=>{
