@@ -24,6 +24,18 @@ describe('persistência',()=>{
     expect(restored.status).toBe('paused');expect(restored.autoAdvance).toBe(false);expect(restored.monsters).toEqual(state.monsters);expect(restored.characters[0].cooldowns.basic).toBe(.37);
   });
 
+  it('migra Analyzer antigo adicionando o controle de supplies consumidos',()=>{
+    const legacy=initialState() as unknown as {analyzer:Record<string,unknown>;history:Array<Record<string,unknown>>};delete legacy.analyzer.suppliesUsed;legacy.history=[structuredClone(legacy.analyzer)];
+    const restored=cloneValidatedState(legacy);expect(restored.analyzer.suppliesUsed).toEqual({});expect(restored.history[0].suppliesUsed).toEqual({});
+  });
+
+  it('preserva pontos disponíveis e ranks de talentos de saves anteriores',()=>{
+    const state=initialState();const knight=state.characters.find(character=>character.classId==='knight')!;
+    knight.talentPoints=4;knight.talents={knight_talent_0:2,knight_talent_5:1};
+    const restored=importBackup(exportBackup(state));const saved=restored.characters.find(character=>character.classId==='knight')!;
+    expect(saved.talentPoints).toBe(4);expect(saved.talents).toEqual({knight_talent_0:2,knight_talent_5:1});
+  });
+
   it('retoma uma transição salva sem duplicar XP, ouro ou monstros',()=>{
     const state=initialState();state.status='transition';state.transitionMs=300;state.wave=0;state.analyzer.xp=100;state.analyzer.gold=9;state.gold=9;state.monsters=[{uid:'dead-skeleton',defId:'skeleton',hp:0,maxHp:100,cooldown:.5,alive:false}];
     const engine=new GameEngine(importBackup(exportBackup(state)));for(let i=0;i<4;i++)engine.tick(100);const restored=engine.getSnapshot();

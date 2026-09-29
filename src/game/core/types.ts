@@ -24,10 +24,12 @@ export interface ItemDef { id: string; name: string; kind: ItemKind; rarity: Rar
 export interface LootEntry { itemId: string; chance: number; min: number; max: number; }
 export interface InventoryStack { itemId: string; quantity: number; }
 export interface InventoryState { bp: InventoryStack[]; loot: InventoryStack[]; supply: InventoryStack[]; capacity: { bp: number; loot: number; supply: number }; }
-export interface Analyzer { startedAt: number; activeMs: number; xp: number; gold: number; damage: number; damageTaken: number; healing: number; byCharacter: Record<string, number>; byMonster: Record<string, number>; kills: Record<string, number>; bosses: number; loot: Record<string, number>; lootValue: number; suppliesValue: number; cycles: number; defeats: number; }
+export interface Analyzer { startedAt: number; activeMs: number; xp: number; gold: number; damage: number; damageTaken: number; healing: number; byCharacter: Record<string, number>; byMonster: Record<string, number>; kills: Record<string, number>; bosses: number; loot: Record<string, number>; lootValue: number; suppliesValue: number; suppliesUsed: Record<string, number>; cycles: number; defeats: number; }
 export interface CodexEntry { kills: number; discoveredLoot: string[]; claimed: number[]; }
 export interface CharmDef { id: string; name: string; cost: number; milestone: number; effect: 'damage' | 'resistance' | 'recovery' | 'experience'; value: number; }
-export interface TalentDef { id: string; classId: ClassId; name: string; description: string; max: number; requires?: string; effect: 'attack' | 'defense' | 'hp' | 'mana' | 'crit' | 'cooldown'; value: number; }
+export type TalentEffect = 'maxHp' | 'maxMana' | 'attack' | 'defense' | 'attackSpeed' | 'crit' | 'resistance' | 'magicPower' | 'cooldown' | 'healing' | 'magicDamage';
+export interface TalentRequirement { talentId: string; rank: number; }
+export interface TalentDef { id: string; classId: ClassId; name: string; description: string; icon: string; tier: 1 | 2 | 3; column: 0 | 1; max: number; requiredLevel: number; requires?: TalentRequirement[]; effect: TalentEffect; value: number; }
 export interface GameState {
   version: 1; status: HuntStatus; autoAdvance: boolean; wave: number; cycle: number; transitionMs: number;
   characters: Character[]; team: string[]; monsters: MonsterRuntime[]; inventory: InventoryState;
