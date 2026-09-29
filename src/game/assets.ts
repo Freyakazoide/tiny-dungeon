@@ -1,5 +1,6 @@
 export const ASSETS = {
   background: { key:'dungeon-bg', path:'assets/bg.png' },
+  arena: { key:'catacumbas', path:'maps/catacumbas.png' },
   // Registro central: substitua os paths por PNGs autorais sem tocar nas cenas.
   characters: { knight:'shape:rect', monk:'shape:rect', paladin:'shape:rect', sorcerer:'shape:rect', druid:'shape:rect' },
   monsters: { skeleton:'shape:circle', ghoul:'shape:circle', bone_king:'shape:circle' },

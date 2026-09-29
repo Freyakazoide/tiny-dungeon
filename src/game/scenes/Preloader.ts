@@ -1,4 +1,5 @@
 import { Scene } from 'phaser';
+import { ASSETS } from '../assets';
 
 export class Preloader extends Scene
 {
@@ -34,6 +35,7 @@ export class Preloader extends Scene
 
         this.load.image('logo', 'logo.png');
         this.load.image('star', 'star.png');
+        this.load.image(ASSETS.arena.key, ASSETS.arena.path);
     }
 
     create ()

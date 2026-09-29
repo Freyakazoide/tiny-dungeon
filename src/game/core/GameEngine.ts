@@ -29,6 +29,7 @@ export class GameEngine {
   private state:GameState; private listeners=new Set<()=>void>(); private fxListeners=new Set<(fx:GameFx)=>void>(); private pausedFrom:GameState['status']='running';
   constructor(state=initialState()){this.state=state;}
   getSnapshot=()=>this.state;
+  hydrate(next:GameState){this.state=next;this.pausedFrom=next.status==='paused'?'running':next.status;this.emit();}
   subscribe=(fn:()=>void)=>{this.listeners.add(fn);return()=>this.listeners.delete(fn);};
   onFx=(fn:(fx:GameFx)=>void)=>{this.fxListeners.add(fn);return()=>this.fxListeners.delete(fn);};
   private emit(fx?:GameFx){this.state={...this.state};this.listeners.forEach(fn=>fn());if(fx)this.fxListeners.forEach(fn=>fn(fx));}
