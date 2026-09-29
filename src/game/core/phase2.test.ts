@@ -93,7 +93,19 @@ describe('A — armas e foco de treino', () => {
     e.returnFromOffline(7200);
     const s = e.getSnapshot();
     expect(s.status).toBe('idle'); expect(s.monsters).toHaveLength(0); expect(s.wave).toBe(0);
-    expect(s.offlineReport?.seconds).toBe(7200); expect(s.offlineReport?.entries[0].tries).toBe(3600);
+    expect(s.offlineReport?.seconds).toBe(7200); expect(s.offlineReport?.huntEnded).toBe(true); expect(s.offlineReport?.entries[0].tries).toBe(3600);
+  });
+});
+
+describe('Bloco 7 — offline e sessão', () => {
+  it('gap offline sem alvo de treino ainda encerra a caçada e informa no relatório', () => {
+    const e = new GameEngine(partyState()); e.getSnapshot().characters.forEach(c => { c.profile.offlineTarget = undefined; c.profile.lastTrained = undefined; });
+    e.start(); e.returnFromOffline(7200);
+    expect(e.getSnapshot().status).toBe('idle'); expect(e.getSnapshot().offlineReport).toMatchObject({ huntEnded: true, entries: [] });
+  });
+  it('sem caçada ativa e sem treino, não há relatório', () => {
+    const e = new GameEngine(partyState()); e.getSnapshot().characters.forEach(c => { c.profile.offlineTarget = undefined; });
+    e.returnFromOffline(7200); expect(e.getSnapshot().offlineReport).toBeUndefined();
   });
 });
 

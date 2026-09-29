@@ -1,5 +1,6 @@
 import { Scene, Textures } from 'phaser';
-import { ASSETS, CHARACTER_ANIMATION_FPS, CHARACTER_DIRECTIONS, CHARACTER_SPRITES, characterAnimationKey, characterFramePath } from '../assets';
+import { HUNTS, type HuntDef } from '../data/hunts';
+import { CHARACTER_ANIMATION_FPS, mapKey, mapPath, CHARACTER_DIRECTIONS, CHARACTER_SPRITES, characterAnimationKey, characterFramePath } from '../assets';
 import type { ClassId } from '../core/types';
 
 export class Preloader extends Scene
@@ -36,7 +37,8 @@ export class Preloader extends Scene
 
         this.load.image('logo', 'logo.png');
         this.load.image('star', 'star.png');
-        this.load.image(ASSETS.arena.key, ASSETS.arena.path);
+        for(const hunt of HUNTS)this.load.image(mapKey(hunt.id), mapPath(hunt.map));
+        this.load.on('loaderror',(file:Phaser.Loader.File)=>console.warn(`Mapa ausente ou inválido (${file.key}): esperado public/assets/${file.src??file.url} — 1448×1086 PNG. Usando placeholder.`));
         for(const [classId, asset] of Object.entries(CHARACTER_SPRITES) as [ClassId, NonNullable<(typeof CHARACTER_SPRITES)[ClassId]>][]){
             for(const direction of CHARACTER_DIRECTIONS){
                 asset.frames[direction].forEach((key,index)=>this.load.image(key,characterFramePath(classId,direction,(index+1) as 1|2)));
@@ -46,6 +48,7 @@ export class Preloader extends Scene
 
     create ()
     {
+        for(const hunt of HUNTS)if(!this.textures.exists(mapKey(hunt.id)))this.makePlaceholder(hunt);
         for(const [classId, asset] of Object.entries(CHARACTER_SPRITES) as [ClassId, NonNullable<(typeof CHARACTER_SPRITES)[ClassId]>][]){
             for(const direction of CHARACTER_DIRECTIONS){
                 for(const key of asset.frames[direction])this.textures.get(key).setFilter(Textures.FilterMode.NEAREST);
@@ -56,5 +59,22 @@ export class Preloader extends Scene
 
         //  Move to the MainMenu. You could also swap this for a Scene Transition, such as a camera fade.
         this.scene.start('Game');
+    }
+
+    /** Arena provisória (1448×1086, mesma proporção dos mapas): cor da hunt, moldura e o nome. Permite jogar antes de existir arte. */
+    private makePlaceholder(hunt: HuntDef)
+    {
+        const texture=this.textures.createCanvas(mapKey(hunt.id),1448,1086);
+        if(!texture)return;
+        const ctx=texture.getContext();
+        const css=`#${hunt.color.toString(16).padStart(6,'0')}`;
+        ctx.fillStyle='#0a1120';ctx.fillRect(0,0,1448,1086);
+        ctx.fillStyle=css;ctx.fillRect(150,170,1148,746);
+        ctx.strokeStyle='#d1ad58';ctx.lineWidth=10;ctx.strokeRect(150,170,1148,746);
+        ctx.fillStyle='rgba(0,0,0,0.25)';ctx.fillRect(150,170,1148,746);
+        ctx.fillStyle='#f0d79a';ctx.font='bold 64px Georgia, serif';ctx.textAlign='center';
+        ctx.fillText(hunt.name.toUpperCase(),724,560);
+        ctx.font='28px Georgia, serif';ctx.fillStyle='#c9bfa8';ctx.fillText('placeholder — falta public/assets/maps/'+hunt.map+'.png',724,615);
+        texture.refresh();
     }
 }

@@ -1,6 +1,6 @@
 import type { ProficiencyId } from '../rpg/proficiencies';
 import type { ProgressProfile } from '../rpg/profile';
-export type ClassId = 'squire' | 'knight' | 'monk' | 'paladin' | 'necromancer' | 'druid';
+export type ClassId = 'squire' | 'hunter' | 'mage' | 'knight' | 'monk' | 'paladin' | 'necromancer' | 'druid';
 export type CharacterRow = 'front' | 'back';
 export type Slot = 'helmet' | 'armor' | 'legs' | 'boots' | 'weapon' | 'offhand' | 'amulet' | 'ring';
 export type Rarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
@@ -19,11 +19,19 @@ export interface Character {
   cooldowns: Record<string, number>; effects: ActiveEffect[]; helper: HelperConfig;
 }
 export interface ActiveEffect { id: string; type: 'regen' | 'shield' | 'buffAttack' | 'buffDefense'; value: number; remaining: number; tick?: number; source?: string; }
-export interface MonsterDef { id: string; name: string; hp: number; attack: number; defense: number; speed: number; xp: number; gold: [number, number]; color: number; boss?: boolean; loot: LootEntry[]; location: string; }
-export interface MonsterRuntime { uid: string; defId: string; hp: number; maxHp: number; cooldown: number; alive: boolean; }
+export interface MonsterDef { id: string; name: string; hp: number; attack: number; defense: number; speed: number; xp: number; gold: [number, number]; color: number; boss?: boolean; loot: LootEntry[]; location: string;
+  /** Afinidade elemental (bloco 8): dano de magia do elemento ×1,30 se fraco, ×0,70 se resiste. */
+  element?: ProficiencyId; weak?: ProficiencyId[]; resist?: ProficiencyId[]; hunt?: string; }
+/** Status ativos (segundos restantes); Combustão empilha até 5 e guarda quem aplicou, para creditar o dano contínuo. */
+export interface MonsterStatuses { burn?: { stacks: number; remaining: number; power: number; source: string; acc: number }; frozen?: number; stunned?: number; }
+export interface MonsterRuntime { uid: string; defId: string; hp: number; maxHp: number; cooldown: number; alive: boolean; statuses?: MonsterStatuses; }
 export interface WaveDef { name: string; monsters: string[]; }
-export interface SpellDef { id: string; classId: ClassId; name: string; level: number; mana: number; cooldown: number; target: 'enemy' | 'allEnemies' | 'self' | 'ally' | 'allAllies'; power: number; kind: 'damage' | 'heal' | 'regen' | 'shield' | 'buff'; duration?: number; description: string; element?: ProficiencyId; universal?: boolean; }
-export interface ItemDef { id: string; name: string; kind: ItemKind; rarity: Rarity; value: number; slot?: Slot; classIds?: ClassId[]; level?: number; stats?: Partial<Stats>; trains?: 'melee' | 'ranged'; supply?: 'health' | 'mana'; amount?: number; }
+export interface SpellDef { id: string; classId: ClassId; name: string; level: number; mana: number; cooldown: number; target: 'enemy' | 'allEnemies' | 'self' | 'ally' | 'allAllies'; power: number; kind: 'damage' | 'heal' | 'regen' | 'shield' | 'buff'; duration?: number; description: string; element?: ProficiencyId; universal?: boolean;
+  /** Combustão aplicada por acerto, e segundos de congelamento/atordoamento. */
+  burnStacks?: number; freeze?: number; stun?: number;
+  /** Magia de subclasse: só disponível se o nó estiver no caminho da classe. */
+  node?: string; }
+export interface ItemDef { id: string; name: string; kind: ItemKind; rarity: Rarity; value: number; /** preço de compra no Ferreiro (a venda vale `value`) */ price?: number; slot?: Slot; classIds?: ClassId[]; level?: number; stats?: Partial<Stats>; trains?: 'melee' | 'ranged'; supply?: 'health' | 'mana'; amount?: number; }
 export interface LootEntry { itemId: string; chance: number; min: number; max: number; }
 export interface InventoryStack { itemId: string; quantity: number; }
 export interface InventoryState { bp: InventoryStack[]; loot: InventoryStack[]; supply: InventoryStack[]; capacity: { bp: number; loot: number; supply: number }; }
@@ -33,11 +41,13 @@ export interface CharmDef { id: string; name: string; cost: number; milestone: n
 export type TalentEffect = 'maxHp' | 'maxMana' | 'attack' | 'defense' | 'attackSpeed' | 'crit' | 'resistance' | 'magicPower' | 'cooldown' | 'healing' | 'magicDamage';
 export interface TalentRequirement { talentId: string; rank: number; }
 export interface TalentDef { id: string; classId: ClassId; name: string; description: string; icon: string; tier: 1 | 2 | 3; column: 0 | 1; max: number; requiredLevel: number; requires?: TalentRequirement[]; effect: TalentEffect; value: number; }
-export interface OfflineReport { seconds: number; entries: { name: string; target: ProficiencyId; seconds: number; tries: number; levelsGained: number }[]; }
+export interface OfflineReport { seconds: number; /** a caçada que estava salva foi encerrada ao voltar */ huntEnded?: boolean; entries: { name: string; target: ProficiencyId; seconds: number; tries: number; levelsGained: number }[]; }
 export interface GameState {
   version: 1; status: HuntStatus; autoAdvance: boolean; wave: number; cycle: number; transitionMs: number;
   characters: Character[]; team: string[]; monsters: MonsterRuntime[]; inventory: InventoryState;
   gold: number; charmPoints: number; charmSlots: number; equippedCharms: string[]; unlockedCharms: string[];
   codex: Record<string, CodexEntry>; analyzer: Analyzer; history: Analyzer[]; message: string; lastSavedAt: number;
+  /** Hunt atual (padrão 'catacumbas'). */
+  huntId: string;
   offlineReport?: OfflineReport;
 }

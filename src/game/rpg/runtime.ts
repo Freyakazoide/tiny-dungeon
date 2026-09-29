@@ -4,4 +4,5 @@
  */
 import { MONSTER_SCALE } from '../data/balance';
 
-export const runtime = { trainScale: 1, xpScale: 1, monsterHp: MONSTER_SCALE.hp, monsterAtk: MONSTER_SCALE.atk };
+/** `huntSpeed` acelera a caçada inteira (combate, XP, loot, treino); só o SpeedControl de desenvolvimento o altera. */
+export const runtime = { huntSpeed: 1, trainScale: 1, xpScale: 1, monsterHp: MONSTER_SCALE.hp, monsterAtk: MONSTER_SCALE.atk };

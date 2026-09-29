@@ -77,12 +77,12 @@ describe('B — tanque, linha e penalidade', () => {
     expect(hitFor('oak_bow', 'back')).toBe(hitFor('oak_bow', 'front'));
   });
   it('monstros e waves novos', () => {
-    expect([MONSTERS.skeleton, MONSTERS.ghoul, MONSTERS.bone_king].map(m => [m.hp, m.attack, m.defense])).toEqual([[180, 15, 3], [325, 24, 5], [540, 33, 8]]);
+    expect([MONSTERS.skeleton, MONSTERS.ghoul, MONSTERS.bone_king].map(m => [m.hp, m.attack, m.defense])).toEqual([[540, 11, 3], [975, 17, 5], [2700, 23, 8]]);
     expect(WAVES.map(w => w.monsters)).toEqual([['skeleton', 'skeleton', 'skeleton'], ['skeleton', 'skeleton', 'ghoul', 'ghoul'], ['bone_king', 'skeleton', 'skeleton']]);
   });
   it('monsterScale multiplica o HP dos monstros que nascem', () => {
     runtime.monsterHp = 2; const e = new GameEngine(partyState()); e.start();
-    expect(e.getSnapshot().monsters[0].maxHp).toBe(360);
+    expect(e.getSnapshot().monsters[0].maxHp).toBe(1080);
   });
   it('saves antigos ganham linha e tanque na migração', () => {
     const state = partyState(); const legacy = structuredClone(state) as unknown as { characters: Record<string, unknown>[] };
@@ -174,12 +174,12 @@ describe('D — itens, loja e guia de classes', () => {
     const { active, discarded } = treeSplit(c);
     expect(active.map(n => n.id)).toEqual(['ladino']); expect(discarded).toHaveLength(14); expect(discarded.some(n => n.id === 'ladino')).toBe(false);
   });
-  it('contadores ainda não contabilizados não mostram progresso falso', () => {
-    expect([...UNTRACKED_COUNTERS].sort()).toEqual(['controlSpells', 'dotDamage']);
-    const c = createCharacter('squire', 'X'); c.profile.counters.dotDamage = 999999; c.profile.counters.controlSpells = 999999;
+  it('todos os contadores são alimentados pelo combate: nenhum requisito fica em "em breve" nem mostra progresso falso', () => {
+    expect([...UNTRACKED_COUNTERS]).toEqual([]);
+    const c = createCharacter('squire', 'X'); c.profile.counters.dotDamage = 1234; c.profile.counters.controlSpells = 77;
     const dot = requirementRows(c, CLASS_BY_ID.epidemiologista).find(r => r.key === 'dotDamage')!;
     const control = requirementRows(c, CLASS_BY_ID.hipnotizador).find(r => r.key === 'controlSpells')!;
-    for (const row of [dot, control]) { expect(row.untracked).toBe(true); expect(row.have).toBeNull(); expect(row.met).toBe(false); expect(row.howTo).toMatch(/em breve/); }
+    expect(dot).toMatchObject({ untracked: false, have: 1234, met: false }); expect(control).toMatchObject({ untracked: false, have: 77, met: false });
     const crits = requirementRows(c, CLASS_BY_ID.gladiador).find(r => r.key === 'crits')!;
     expect(crits.untracked).toBe(false); expect(crits.have).toBe(0);
   });

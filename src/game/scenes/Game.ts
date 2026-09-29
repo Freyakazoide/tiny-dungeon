@@ -1,11 +1,13 @@
 import { Math as PhaserMath, Scene } from 'phaser';
 import { EventBus } from '../EventBus';
-import { ASSETS, CHARACTER_SPRITES, characterAnimationKey, type CharacterDirection } from '../assets';
+import { CHARACTER_SPRITES, mapKey, characterAnimationKey, type CharacterDirection } from '../assets';
 import { gameStore } from '../core/GameStore';
+import { runtime } from '../rpg/runtime';
 import type { GameFx } from '../core/GameEngine';
 import type { Character, HuntStatus } from '../core/types';
 import { CLASSES } from '../data/classes';
-import { MONSTERS, WAVES } from '../data/monsters';
+import { MONSTERS } from '../data/monsters';
+import { bossIdOf, huntWaves } from '../data/hunts';
 import { characterStats } from '../systems/progression';
 import { combatFormation, dominantDirection, entranceFormation, stairFormation, type ArenaPoint } from './movement';
 
@@ -28,6 +30,12 @@ export class Game extends Scene {
   private previousWave=-1;
   private previousCycle=-1;
   private visualPaused=false;
+  private arena!:Phaser.GameObjects.Image;
+  private arenaHunt='';
+
+  /** Janela de 900×500: escala 900/largura e corte central de 500 px de altura (mesma conta para todos os mapas). */
+  private fitArena(){const a=this.arena;const scale=900/a.width;const crop=500/scale;a.setCrop(0,(a.height-crop)/2,a.width,crop).setScale(scale);}
+  private applyArena(huntId:string){if(huntId===this.arenaHunt)return;this.arenaHunt=huntId;this.arena.setTexture(mapKey(huntId));this.arena.setCrop();this.fitArena();}
 
   constructor(){super('Game');}
 
@@ -35,9 +43,7 @@ export class Game extends Scene {
     const {width,height}=this.scale;
     this.cameras.main.setBackgroundColor('#090d13');
 
-    const arena=this.add.image(width/2,345,ASSETS.arena.key);
-    const arenaScale=900/arena.width;const cropHeight=500/arenaScale;
-    arena.setCrop(0,(arena.height-cropHeight)/2,arena.width,cropHeight).setScale(arenaScale);
+    this.arena=this.add.image(width/2,345,mapKey(gameStore.getSnapshot().huntId));this.arenaHunt=gameStore.getSnapshot().huntId;this.fitArena();
     this.add.rectangle(width/2,345,900,500,0x000000,0).setStrokeStyle(3,0x766543).setDepth(2);
     this.add.rectangle(width/2,345,900,500,0x07101a,.14).setDepth(1);
 
@@ -63,10 +69,12 @@ export class Game extends Scene {
     EventBus.emit('current-scene-ready',this);
   }
 
-  update(_time:number,delta:number){gameStore.tick(delta);}
+  update(_time:number,delta:number){gameStore.advance(delta,runtime.huntSpeed);}
 
   private renderState(){
     const state=gameStore.getSnapshot();
+    this.applyArena(state.huntId);
+    const WAVES=huntWaves(state.huntId);
     const team=state.team.map(id=>state.characters.find(c=>c.id===id)).filter(Boolean) as Character[];
     const previousStatus=this.previousStatus;
     const waveChanged=state.wave!==this.previousWave||state.cycle!==this.previousCycle;
@@ -76,7 +84,7 @@ export class Game extends Scene {
     const transitioning=state.status==='transition'||state.status==='recovering';
     this.transitionBanner.setVisible(transitioning);
     if(state.status==='recovering')this.transitionText.setText(`EQUIPE DERROTADA\nRecuperação: ${Math.max(0,Math.ceil(state.transitionMs/1000))}s`);
-    else if(state.status==='transition')this.transitionText.setText(state.wave===WAVES.length-1?'REI DOS OSSOS DERROTADO\nRecompensas coletadas':'WAVE CONCLUÍDA\nA escada foi aberta');
+    else if(state.status==='transition')this.transitionText.setText(state.wave===WAVES.length-1?`${MONSTERS[bossIdOf(state.huntId)].name.toUpperCase()} DERROTADO\nRecompensas coletadas`:'WAVE CONCLUÍDA\nA escada foi aberta');
 
     for(const [id,v] of this.heroes)if(!team.some(c=>c.id===id)){this.destroyHero(v);this.heroes.delete(id);}
     const created:string[]=[];
@@ -95,7 +103,7 @@ export class Game extends Scene {
     state.monsters.forEach((m,i)=>{
       const x=512+(i-(state.monsters.length-1)/2)*150,y=222;const def=MONSTERS[m.defId];let v=this.enemies.get(m.uid);
       if(!v){const hpBg=this.add.rectangle(x-50,y-54,100,9,0x35171b,.95).setOrigin(0,.5).setDepth(5);v={body:this.add.circle(x,y,def.boss?38:29,def.color).setStrokeStyle(2,0xf0e3cd).setDepth(5),name:this.add.text(x,y+45,def.name,{fontSize:'12px',color:'#fff',stroke:'#090b0e',strokeThickness:4}).setOrigin(.5).setDepth(6),hpBg,hp:this.add.rectangle(x-50,y-54,100,7,0xd45a5f).setOrigin(0,.5).setDepth(6)};this.enemies.set(m.uid,v);}
-      v.hp.displayWidth=100*Math.max(0,m.hp/m.maxHp);v.body.setVisible(m.alive);v.hp.setVisible(m.alive);v.hpBg.setVisible(m.alive);v.name.setAlpha(m.alive?1:.3);
+      v.hp.displayWidth=100*Math.max(0,m.hp/m.maxHp);v.body.setVisible(m.alive);v.name.setText(`${def.name}${(m.statuses?.burn?` 🔥×${m.statuses.burn.stacks}`:'')}${(m.statuses?.frozen?' ❄':'')}${(m.statuses?.stunned?' ✦':'')}`);v.body.setStrokeStyle(2,m.statuses?.frozen?0x8fd8ff:m.statuses?.burn?0xff8c3a:0xf0e3cd);v.hp.setVisible(m.alive);v.hpBg.setVisible(m.alive);v.name.setAlpha(m.alive?1:.3);
     });
 
     if(state.status==='paused'&&!this.visualPaused){this.tweens.pauseAll();this.anims.pauseAll();this.visualPaused=true;}
@@ -142,6 +150,7 @@ export class Game extends Scene {
 
   private moveHero(view:HeroView,target:ArenaPoint,duration:number,onComplete?:()=>void){
     this.stopHero(view);
+    if(runtime.huntSpeed>5){view.container.setPosition(target.x,target.y).setDepth(6+target.y/1000);onComplete?.();return;}
     const direction=dominantDirection({x:view.container.x,y:view.container.y},target,view.direction);
     const distance=PhaserMath.Distance.Between(view.container.x,view.container.y,target.x,target.y);
     if(distance<1){this.setDirection(view,direction,false);onComplete?.();return;}

@@ -21,6 +21,8 @@ export function createDevTools(engine: GameEngine, hooks: DevHooks) {
       console.table(info.characters); console.info('[dev] nós:', info.nodes.join(', ')); console.info('[dev] proficiências:', info.proficiencies.join(', '));
       return info;
     },
+    selectHunt(id: string) { const ok = engine.selectHunt(id, { ignoreLock: true }); console.info(`[dev] selectHunt(${id}):`, ok ? 'ok' : engine.getSnapshot().status !== 'idle' ? 'encerre a caçada antes' : 'hunt desconhecida'); return ok; },
+    huntSpeed(n: number) { return run(`huntSpeed(${n})`, () => { if (!Number.isFinite(n)) throw new Error('Use um número.'); runtime.huntSpeed = Math.min(100, Math.max(1, n)); engine.devScaleChanged(); }); },
     timeScale(n: number) { return run(`timeScale(${n})`, () => { if (!(n > 0)) throw new Error('Use um número > 0.'); runtime.trainScale = n; engine.devScaleChanged(); }); },
     xpScale(n: number) { return run(`xpScale(${n})`, () => { if (!(n > 0)) throw new Error('Use um número > 0.'); runtime.xpScale = n; engine.devScaleChanged(); }); },
     monsterScale(hpMult: number, atkMult: number) { return run(`monsterScale(${hpMult}, ${atkMult})`, () => { if (!(hpMult > 0) || !(atkMult > 0)) throw new Error('Use números > 0.'); runtime.monsterHp = hpMult; runtime.monsterAtk = atkMult; engine.devScaleChanged(); }); },

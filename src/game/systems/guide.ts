@@ -13,8 +13,8 @@ export const COUNTER_NAMES: Record<CounterId, string> = {
   bossKills: 'Chefes abatidos', goldEarned: 'Ouro acumulado', controlSpells: 'Feitiços de controle',
 };
 
-/** Contadores que o combate atual ainda não alimenta (não existe magia de DoT nem de controle): sem progresso falso. */
-export const UNTRACKED_COUNTERS: readonly CounterId[] = ['dotDamage', 'controlSpells'];
+/** Contadores que o combate ainda não alimenta: mostram "em breve" e nunca progresso falso. Combustão alimenta dotDamage e os controles alimentam controlSpells. */
+export const UNTRACKED_COUNTERS: readonly CounterId[] = [];
 
 const ELEMENT_HOW = 'equipe a magia do elemento e coloque-o como foco de treino';
 export const HOW_TO_PROFICIENCY: Record<ProficiencyId, string> = {

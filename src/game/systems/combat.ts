@@ -1,6 +1,7 @@
 import type { Character, GameState, MonsterRuntime, SpellDef } from '../core/types';
 import { MONSTERS } from '../data/monsters';
-import { AGGRO } from '../data/balance';
+import { AFFINITY, AGGRO } from '../data/balance';
+import type { ProficiencyId } from '../rpg/proficiencies';
 import { CLASSES } from '../data/classes';
 import { itemById } from '../data/items';
 import { addCounter } from '../rpg/profile';
@@ -13,6 +14,12 @@ export const healAmount=(magic:number,multiplier:number)=>Math.max(1,Math.round(
 export function livingMonsters(s:GameState){return s.monsters.filter(m=>m.alive);}
 export function livingTeam(s:GameState){return s.team.map(id=>s.characters.find(c=>c.id===id)!).filter(c=>c&&c.hp>0);}
 export function conditionMet(c:Character,spell:SpellDef,s:GameState){ const cond=c.spellConditions[spell.id]??{};const stats=characterStats(c,s);if(cond.hpBelow!==undefined&&c.hp/stats.maxHp*100>=cond.hpBelow)return false;if(cond.minEnemies&&livingMonsters(s).length<cond.minEnemies)return false;if(cond.allyInjured&&!livingTeam(s).some(a=>a.hp<characterStats(a,s).maxHp*.82))return false;if(cond.manaAbove!==undefined&&c.mana/stats.maxMana*100<cond.manaAbove)return false;return true; }
+/** Multiplicador de dano de uma magia elemental contra um monstro (1 se neutro ou sem elemento). */
+export const elementAffinity = (defId: string, element?: ProficiencyId) => {
+  if (!element) return 1;
+  const def = MONSTERS[defId];
+  return def.weak?.includes(element) ? AFFINITY.weak : def.resist?.includes(element) ? AFFINITY.resist : 1;
+};
 /** Sorteia o alvo de um golpe: tanque na frente, demais da frente e trás, com pesos renormalizados sem os grupos vazios. */
 export function pickMonsterTarget(team: Character[], rnd = Math.random): Character | undefined {
   const alive = team.filter(c => c.hp > 0);

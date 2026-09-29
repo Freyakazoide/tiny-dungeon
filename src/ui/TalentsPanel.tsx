@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import type { Character, GameState, Stats, TalentDef } from '../game/core/types';
 import { gameStore } from '../game/core/GameStore';
-import { CLASSES } from '../game/data/classes';
+import { CLASSES, kitsOfPath } from '../game/data/classes';
 import { TALENT_EFFECT_NAMES, talentById, talentsForClass } from '../game/data/talents';
 import { characterStats, classLabel, spentTalentPoints, talentAvailability, talentBonus, talentBonusText, talentRespecCost } from '../game/systems/progression';
 import { colorHex, statNames } from './format';
@@ -34,12 +34,14 @@ function TalentNode({character,talent,selected,onSelect}:{character:Character;ta
 
 export function TalentsPanel({state,selected,setSelected}:{state:GameState;selected:string;setSelected:(id:string)=>void}){
   const character=state.characters.find(entry=>entry.id===selected)??state.characters[0];
-  const talents=talentsForClass(character.classId);
+  const kits=kitsOfPath(character.profile.classPath);const [kitPick,setKitPick]=useState(character.classId);const kit=kits.includes(kitPick)?kitPick:character.classId;
+  const talents=talentsForClass(kit);
   const [selectedTalentId,setSelectedTalentId]=useState(talents[0].id);
   const [confirmation,setConfirmation]=useState<Confirmation>(null);
-  useEffect(()=>{setSelectedTalentId(talentsForClass(character.classId)[0].id);setConfirmation(null);},[character.id,character.classId]);
+  useEffect(()=>{setKitPick(character.classId);},[character.id,character.classId]);
+  useEffect(()=>{setSelectedTalentId(talentsForClass(kit)[0].id);setConfirmation(null);},[character.id,kit]);
   const selectedCandidate=talentById(selectedTalentId);
-  const selectedTalent=selectedCandidate?.classId===character.classId?selectedCandidate:talents[0];
+  const selectedTalent=selectedCandidate?.classId===kit?selectedCandidate:talents[0];
   const availability=talentAvailability(character,selectedTalent);
   const rank=character.talents[selectedTalent.id]??0;
   const spent=spentTalentPoints(character),respecCost=talentRespecCost(character);
@@ -48,11 +50,12 @@ export function TalentsPanel({state,selected,setSelected}:{state:GameState;selec
   const changedStats=(Object.keys(currentStats) as (keyof Stats)[]).filter(key=>Math.abs(nextStats[key]-currentStats[key])>.0001);
   const currentEffect=talentBonus(character,selectedTalent.effect);
   const nextEffect=currentEffect+selectedTalent.value;
-  const classDef=CLASSES[character.classId];
+  const classDef=CLASSES[kit];
   const requirements=selectedTalent.requires??[];
   return <section className="talents-panel" style={{'--class-color':colorHex(classDef.color)} as CSSProperties}>
     <div className="section-heading"><div><span className="eyebrow">Especialização</span><h2>Árvore de talentos</h2></div><div className="talent-currency"><span>Pontos disponíveis</span><b>✦ {character.talentPoints}</b></div></div>
     <div className="talent-character-tabs" role="list" aria-label="Personagens">{state.characters.map(entry=><button key={entry.id} className={entry.id===character.id?'active':''} onClick={()=>setSelected(entry.id)}><span style={{background:colorHex(CLASSES[entry.classId].color)}}>{entry.name.slice(0,1)}</span><b>{entry.name}</b><small>{classLabel(entry)} · Nv. {entry.profile.level}</small><em>✦ {entry.talentPoints}</em></button>)}</div>
+    {kits.length>1&&<div className="kit-chips" role="tablist" aria-label="Talentos por classe do caminho">{kits.map(k=><button key={k} role="tab" aria-selected={k===kit} className={k===kit?'active':''} onClick={()=>setKitPick(k)}>{CLASSES[k].name}</button>)}</div>}
     <div className="talent-workspace">
       <div className="talent-tree-card">
         <div className="talent-tree-heading"><div><span className="class-label">{classLabel(character)}</span><h3>Caminhos de especialização</h3></div><small>Escolha um caminho; não é necessário adquirir todos os talentos.</small></div>

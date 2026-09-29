@@ -3,6 +3,8 @@ import type { GameState } from '../game/core/types';
 import { gameStore } from '../game/core/GameStore';
 import { NAME_LIMIT } from '../game/core/GameEngine';
 import { CLASSES } from '../game/data/classes';
+import { CLASS_BY_ID } from '../game/rpg/classTree';
+import { NODE_PASSIVES } from '../game/rpg/passives';
 import { characterStats, classLabel, xpForLevel } from '../game/systems/progression';
 import { colorHex, compact, pct } from './format';
 import { CHARACTER_TABS, type CharacterTab } from './navigation';
@@ -33,6 +35,8 @@ export function CharacterPanel({ state, selected, setSelected }: { state: GameSt
         <span><small>Velocidade</small><b>{stats.attackSpeed.toFixed(2)}/s</b></span><span><small>Crítico</small><b>{Math.round(stats.crit * 100)}%</b></span>
         <span><small>Resistência</small><b>{Math.round(stats.resistance * 100)}%</b></span><span><small>Poder mágico</small><b>{Math.round(stats.magicPower)}</b></span>
       </div>
+      <div className="subsection-heading"><h3>Passivas</h3></div>
+      <ul className="passive-list">{character.profile.classPath.filter(id => NODE_PASSIVES[id]).map(id => <li key={id}><b>{NODE_PASSIVES[id].name}</b><small>{CLASS_BY_ID[id].name}: {NODE_PASSIVES[id].description}</small></li>)}{!character.profile.classPath.some(id => NODE_PASSIVES[id]) && <li><small>Nenhuma ainda: evolua de classe para ganhar passivas.</small></li>}</ul>
       <CounterList character={character} />
     </div>}
     {inner === 'Proficiências' && <ProficiencyGrid character={character} />}

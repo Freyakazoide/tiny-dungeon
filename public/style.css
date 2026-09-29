@@ -89,3 +89,21 @@
 .muted-tree{opacity:.5}.tree-node.muted summary{cursor:default}
 .system-block{padding:14px;margin-bottom:12px;background:#10171f;border:1px solid #303944;display:flex;flex-direction:column;gap:8px}
 .system-actions{display:flex;gap:8px;flex-wrap:wrap}.system-block code{color:#e0bc78}
+
+.speed-control{display:inline-flex}.speed-control button{padding:4px 8px;border-radius:0;font-size:11px}.speed-control button.active{border-color:var(--bronze-light);background:linear-gradient(#70562f,#49391f)}
+.speed-badge{border-style:solid;color:#ffb27a;border-color:#c0703a}
+
+.hunt-selector{display:flex;gap:8px;overflow-x:auto;margin:10px 0}
+.hunt-card{flex:0 0 210px;display:flex;flex-direction:column;gap:6px;padding:8px;background:#10171f;border:1px solid #303944;border-top:3px solid var(--hunt-color,#555)}
+.hunt-card.current{border-color:var(--bronze-light);box-shadow:inset 0 0 0 1px var(--bronze)}.hunt-card.locked{opacity:.6}
+.hunt-thumb{width:100%;aspect-ratio:4/3;object-fit:cover;background:#0a1017;image-rendering:pixelated}.hunt-thumb-fallback{opacity:.7}
+.hunt-copy{display:flex;flex-direction:column;gap:2px;flex:1;font-size:12px}
+.hunt-monsters ul{list-style:none;margin:4px 0 0;padding:0;display:flex;flex-direction:column;gap:4px}.hunt-monsters li{display:flex;flex-direction:column}.hunt-monsters em{font-style:normal;color:#e8ce98;margin-left:6px;font-size:10px}
+
+.shop-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;margin-bottom:12px}
+.shop-row{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:6px 8px;border-bottom:1px solid #292f37}.shop-row>span:first-child{display:flex;flex-direction:column}.shop-row.locked{opacity:.5}
+.shop-buttons{display:flex;gap:4px}.shop-buttons button{padding:4px 8px}
+
+.soon-seal{margin-left:8px;font:normal 9px sans-serif;text-transform:uppercase;color:#e0a05c;border:1px solid #7a5a30;padding:2px 5px}
+.kit-chips{display:flex;gap:6px;margin:8px 0}.kit-chips button.active{border-color:var(--bronze-light);background:linear-gradient(#70562f,#49391f)}
+.passive-list{list-style:none;margin:0 0 12px;padding:0;display:flex;flex-direction:column;gap:6px}.passive-list li{display:flex;flex-direction:column;padding:8px;background:#10171f;border:1px solid #303944}

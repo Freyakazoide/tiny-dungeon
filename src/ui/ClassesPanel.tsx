@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import type { Character } from '../game/core/types';
 import { gameStore } from '../game/core/GameStore';
-import { CLASS_BY_ID, childrenOf, type ClassNode } from '../game/rpg/classTree';
+import { CLASS_BY_ID, childrenOf, isPlayable, type ClassNode } from '../game/rpg/classTree';
+import { NODE_PASSIVES } from '../game/rpg/passives';
 import { formatEta } from '../game/rpg/curves';
 import { nextSteps, pathNames, requirementRows, treeSplit, type RequirementRow } from '../game/systems/guide';
 import { compact } from './format';
@@ -19,10 +20,12 @@ function RequirementLine({ row }: { row: RequirementRow }) {
 
 function StepCard({ character, node, rows, ready }: { character: Character; node: ClassNode; rows: RequirementRow[]; ready: boolean }) {
   const [confirming, setConfirming] = useState(false);
+  const playable = isPlayable(node.id);
   return <article className={`evolution-card ${ready ? 'ready' : ''}`}>
-    <div><strong>{node.name}</strong>{node.specialty && <small>{node.specialty}</small>}</div>
+    <div><strong>{node.name}{!playable && <em className="soon-seal">Em breve</em>}</strong>{node.specialty && <small>{node.specialty}</small>}{NODE_PASSIVES[node.id] && <small>Passiva — {NODE_PASSIVES[node.id].name}: {NODE_PASSIVES[node.id].description}</small>}</div>
     <ul className="req-list">{rows.map(row => <RequirementLine key={row.key} row={row} />)}</ul>
-    {ready && (confirming
+    {!playable && <small className="how-to">Sem kit pronto: a evolução fica bloqueada para ninguém ficar preso numa classe vazia.</small>}
+    {ready && playable && (confirming
       ? <div className="talent-confirm"><p>Evoluir {character.name} para <b>{node.name}</b>? Não há volta.</p><div><button onClick={() => setConfirming(false)}>Cancelar</button><button className="primary" onClick={() => { gameStore.evolve(character.id, node.id); setConfirming(false); }}>Confirmar</button></div></div>
       : <button className="primary" onClick={() => setConfirming(true)}>Evoluir</button>)}
   </article>;
@@ -31,7 +34,7 @@ function StepCard({ character, node, rows, ready }: { character: Character; node
 function TreeNode({ character, node, muted }: { character: Character; node: ClassNode; muted?: boolean }) {
   const kids = childrenOf(node.id), taken = character.profile.classPath.includes(node.id);
   return <details className={`tree-node ${muted ? 'muted' : ''} ${taken ? 'taken' : ''}`}>
-    <summary><b>{node.name}</b>{node.specialty && <small> · {node.specialty}</small>}{taken && <em>seu caminho</em>}</summary>
+    <summary><b>{node.name}</b>{!isPlayable(node.id) && <em className="soon-seal">Em breve</em>}{node.specialty && <small> · {node.specialty}</small>}{taken && <em>seu caminho</em>}</summary>
     <ul className="tree-kids">{node.tier === 1 && requirementRows(character, node).map(row => <li key={row.key}><small>{row.label} {row.need}</small></li>)}
       {kids.map(kid => <li key={kid.id} className={character.profile.classPath.includes(kid.id) ? 'taken' : ''}><b>{kid.name}</b>
         <small>{requirementRows(character, kid).map(r => `${r.label} ${r.kind === 'counter' ? compact(r.need) : r.need}${r.untracked ? ' (em breve)' : ''}`).join(' · ')}</small></li>)}</ul>

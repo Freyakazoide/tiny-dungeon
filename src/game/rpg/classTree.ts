@@ -105,5 +105,12 @@ export const CLASS_NODES: ClassNode[] = [
   hybrid('exotraje', 'Exotraje', 'artilheiro', 'ranged', 'defense'),
 ];
 
+/**
+ * Só os nós com kit pronto são jogáveis; o resto aparece como "Em breve" e não deixa evoluir (a evolução é
+ * irreversível: ninguém deve ficar preso numa classe vazia). Para liberar, cadastre o kit e inclua o id aqui.
+ */
+export const PLAYABLE_NODES: ReadonlySet<string> = new Set(['aprendiz', 'guerreiro', 'cacador', 'mago', 'piromante', 'criomante', 'arcanista_de_plasma']);
+export const isPlayable = (id: string) => PLAYABLE_NODES.has(id);
+
 export const CLASS_BY_ID: Record<string, ClassNode> = Object.fromEntries(CLASS_NODES.map(n => [n.id, n]));
 export const childrenOf = (id: string) => CLASS_NODES.filter(n => n.parent === id);

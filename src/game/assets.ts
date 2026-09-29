@@ -27,12 +27,15 @@ export const characterFramePath = (classId: ClassId, direction: CharacterDirecti
 export const characterAnimationKey = (classId: ClassId, direction: CharacterDirection) =>
   `character-${classId}-walk-${direction}`;
 
+/** Textura do mapa de uma hunt; se o PNG não existir o Preloader gera um placeholder com a mesma chave. */
+export const mapKey = (huntId: string) => `map-${huntId}`;
+export const mapPath = (map: string) => `maps/${map}.png`;
+
 export const ASSETS = {
   background: { key:'dungeon-bg', path:'assets/bg.png' },
-  arena: { key:'catacumbas', path:'maps/catacumbas.png' },
   characters: {
     knight:null, monk:null, paladin:null, necromancer:CHARACTER_SPRITES.necromancer, druid:null
   },
-  monsters: { skeleton:'shape:circle', ghoul:'shape:circle', bone_king:'shape:circle' },
+  monsters: 'shape:circle' as const, // todos os monstros usam um círculo com a cor da definição
   effects: { hit:'shape:flash', heal:'shape:text', drop:'shape:text', stairs:'shape:lines' }
 } as const;

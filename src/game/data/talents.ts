@@ -7,6 +7,22 @@ const req=(classId:ClassId,index:number,rank=1)=>[{talentId:`${classId}_talent_$
 const talent=(classId:ClassId,index:number,seed:TalentSeed):TalentDef=>({id:`${classId}_talent_${index}`,classId,...seed});
 
 const trees:Record<ClassId,TalentDef[]>={
+  hunter:[
+    talent('hunter',0,{name:'Precisão',description:'Aprimora o dano dos disparos à distância.',icon:'◎',tier:1,column:0,max:3,requiredLevel:2,effect:'attack',value:.07}),
+    talent('hunter',1,{name:'Reserva de Flechas',description:'Expande a reserva de mana usada nas habilidades.',icon:'✧',tier:1,column:1,max:3,requiredLevel:2,effect:'maxMana',value:.09}),
+    talent('hunter',2,{name:'Mira Mortal',description:'Eleva a chance de acertos críticos com ataques e disparos.',icon:'⌖',tier:2,column:0,max:3,requiredLevel:5,requires:req('hunter',0),effect:'crit',value:.025}),
+    talent('hunter',3,{name:'Sobrevivência',description:'Aumenta a vida para aguentar os golpes que escapam do tanque.',icon:'♥',tier:2,column:1,max:3,requiredLevel:5,requires:req('hunter',1),effect:'maxHp',value:.07}),
+    talent('hunter',4,{name:'Aljava',description:'Permite ataques à distância mais rápidos e constantes.',icon:'➶',tier:3,column:0,max:3,requiredLevel:9,requires:req('hunter',2,2),effect:'attackSpeed',value:.05}),
+    talent('hunter',5,{name:'Foco do Caçador',description:'Reduz a recarga das habilidades.',icon:'⚖',tier:3,column:1,max:1,requiredLevel:9,requires:req('hunter',3,2),effect:'cooldown',value:.12})
+  ],
+  mage:[
+    talent('mage',0,{name:'Conhecimento Arcano',description:'Amplifica o poder utilizado por todas as magias.',icon:'✦',tier:1,column:0,max:3,requiredLevel:2,effect:'magicPower',value:.08}),
+    talent('mage',1,{name:'Reserva Arcana',description:'Expande a mana disponível para rituais prolongados.',icon:'◆',tier:1,column:1,max:3,requiredLevel:2,effect:'maxMana',value:.1}),
+    talent('mage',2,{name:'Canalização',description:'Reduz o intervalo necessário entre conjurações.',icon:'◌',tier:2,column:0,max:3,requiredLevel:5,requires:req('mage',0),effect:'cooldown',value:.05}),
+    talent('mage',3,{name:'Impacto Arcano',description:'Aumenta diretamente o dano causado por magias.',icon:'✹',tier:2,column:1,max:3,requiredLevel:5,requires:req('mage',1),effect:'magicDamage',value:.08}),
+    talent('mage',4,{name:'Véu Arcano',description:'Fortalece a resistência contra ataques recebidos.',icon:'▰',tier:3,column:0,max:3,requiredLevel:9,requires:req('mage',2,2),effect:'resistance',value:.025}),
+    talent('mage',5,{name:'Mestre Arcano',description:'Concentra poder mágico extremo nas conjurações.',icon:'♛',tier:3,column:1,max:1,requiredLevel:9,requires:req('mage',3,2),effect:'magicPower',value:.15})
+  ],
   squire:[
     talent('squire',0,{name:'Resistência',description:'Treino de campo que aumenta a vida para aguentar mais golpes.',icon:'♥',tier:1,column:0,max:3,requiredLevel:2,effect:'maxHp',value:.07}),
     talent('squire',1,{name:'Guarda Firme',description:'Melhora a postura defensiva e a defesa contra golpes.',icon:'⬟',tier:1,column:1,max:3,requiredLevel:2,effect:'defense',value:.06}),

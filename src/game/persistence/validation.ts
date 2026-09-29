@@ -1,7 +1,8 @@
 import type { GameState, HuntStatus } from '../core/types';
-import { CLASSES } from '../data/classes';
+import { CLASSES, kitOfNode, kitsOfPath } from '../data/classes';
 import { ITEMS } from '../data/items';
-import { MONSTERS, WAVES } from '../data/monsters';
+import { MONSTERS } from '../data/monsters';
+import { DEFAULT_HUNT, HUNT_BY_ID } from '../data/hunts';
 import { SPELLS } from '../data/spells';
 import { talentById } from '../data/talents';
 import { CLASS_BY_ID } from '../rpg/classTree';
@@ -26,6 +27,10 @@ export function migrateGameState(value:unknown):unknown{
     const team=Array.isArray(migrated.team)?migrated.team:[];
     if(!characters.some(c=>c.isTank)){const tank=team.map(id=>characters.find(c=>c.id===id)).find(c=>c?.row==='front');if(tank)tank.isTank=true;}
   }
+  // Fase 4: o kit acompanha a classe (saves de teste evoluídos ainda estavam com o kit do Squire).
+  for(const c of characters)if(record(c.profile)&&typeof c.profile.classId==='string'&&c.profile.classId in CLASS_BY_ID)c.classId=kitOfNode(c.profile.classId);
+  if(migrated.huntId===undefined)migrated.huntId=DEFAULT_HUNT;
+  if(record(migrated.inventory)&&record(migrated.inventory.capacity)&&finite(migrated.inventory.capacity.supply)&&Number(migrated.inventory.capacity.supply)<200)migrated.inventory.capacity.supply=200;
   const analyzers=[migrated.analyzer,...(Array.isArray(migrated.history)?migrated.history:[])];
   for(const raw of analyzers)if(record(raw)&&!record(raw.suppliesUsed))raw.suppliesUsed={};
   return migrated;
@@ -46,10 +51,10 @@ function validProfile(value:unknown){
 export function validateGameState(value:unknown):value is GameState{
   if(!record(value)||value.version!==1||!statuses.includes(value.status as HuntStatus))return false;
   if(!Array.isArray(value.characters)||!Array.isArray(value.team)||!Array.isArray(value.monsters)||!record(value.inventory))return false;
-  if(!finite(value.wave)||Number(value.wave)<0||Number(value.wave)>=WAVES.length||!finite(value.cycle)||!finite(value.gold))return false;
+  if(!finite(value.wave)||Number(value.wave)<0||typeof value.huntId!=='string'||!HUNT_BY_ID[value.huntId]||Number(value.wave)>=HUNT_BY_ID[value.huntId].waves.length||!finite(value.cycle)||!finite(value.gold))return false;
   const characters=value.characters as unknown[];if(characters.length>5)return false;
   const ids=new Set<string>();
-  for(const raw of characters){if(!record(raw)||typeof raw.id!=='string'||typeof raw.name!=='string'||typeof raw.classId!=='string'||!(raw.classId in CLASSES)||!validProfile(raw.profile)||(raw.row!=='front'&&raw.row!=='back')||typeof raw.isTank!=='boolean'||!finite(raw.talentPoints)||Number(raw.talentPoints)<0||!record(raw.talents)||!record(raw.equipment)||!Array.isArray(raw.spellSlots)||!record(raw.spellConditions)||!record(raw.cooldowns)||!Array.isArray(raw.effects)||!record(raw.helper))return false;if(ids.has(raw.id))return false;ids.add(raw.id);if((raw.spellSlots as unknown[]).some(id=>typeof id!=='string'||!SPELLS.some(s=>s.id===id)))return false;for(const [talentId,rank] of Object.entries(raw.talents)){const talent=talentById(talentId);if(!talent||talent.classId!==raw.classId||!finite(rank)||Number(rank)<0||!Number.isInteger(rank))return false;}}
+  for(const raw of characters){if(!record(raw)||typeof raw.id!=='string'||typeof raw.name!=='string'||typeof raw.classId!=='string'||!(raw.classId in CLASSES)||!validProfile(raw.profile)||raw.classId!==kitOfNode((raw.profile as {classId:string}).classId)||(raw.row!=='front'&&raw.row!=='back')||typeof raw.isTank!=='boolean'||!finite(raw.talentPoints)||Number(raw.talentPoints)<0||!record(raw.talents)||!record(raw.equipment)||!Array.isArray(raw.spellSlots)||!record(raw.spellConditions)||!record(raw.cooldowns)||!Array.isArray(raw.effects)||!record(raw.helper))return false;if(ids.has(raw.id))return false;ids.add(raw.id);if((raw.spellSlots as unknown[]).some(id=>typeof id!=='string'||!SPELLS.some(s=>s.id===id)))return false;for(const [talentId,rank] of Object.entries(raw.talents)){const talent=talentById(talentId);if(!talent||!kitsOfPath(((raw.profile as Record<string,unknown>).classPath as string[])).includes(talent.classId)||!finite(rank)||Number(rank)<0||!Number.isInteger(rank))return false;}}
   if((value.team as unknown[]).some(id=>typeof id!=='string'||!ids.has(id))||(value.team as unknown[]).length>4)return false;
   for(const raw of value.monsters as unknown[]){if(!record(raw)||typeof raw.uid!=='string'||typeof raw.defId!=='string'||!MONSTERS[raw.defId]||!finite(raw.hp)||!finite(raw.maxHp)||!finite(raw.cooldown)||typeof raw.alive!=='boolean')return false;}
   const inventory=value.inventory as Record<string,unknown>;if(!record(inventory.capacity))return false;

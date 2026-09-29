@@ -11,6 +11,7 @@ import { ClassesPanel } from './ui/ClassesPanel';
 import { CreationScreen } from './ui/CreationScreen';
 import { duration } from './ui/format';
 import { GroupPanel } from './ui/GroupPanel';
+import { HuntSelector } from './ui/HuntSelector';
 import { Header } from './ui/Header';
 import { ItemsPanel } from './ui/ItemsPanel';
 import { TABS, TABS_WITH_CHARACTER, type Tab } from './ui/navigation';
@@ -30,14 +31,14 @@ function App(){
   const character=state.characters.find(c=>c.id===selected)??state.characters[0];
   const report=state.offlineReport;
   return <div id="app"><Header state={state}/>
-    {report&&<aside className="offline-report stone-panel"><div><b>Bem-vindo de volta!</b> Seus personagens treinaram por {duration(report.seconds)} enquanto você esteve fora e a caçada foi encerrada.<ul>{report.entries.map(entry=><li key={entry.name}>{entry.name}: +{entry.tries.toLocaleString('pt-BR')} tries em {PROFICIENCIES[entry.target].name}{entry.levelsGained>0&&` (+${entry.levelsGained} ${entry.levelsGained===1?'nível':'níveis'})`}</li>)}</ul></div><button onClick={()=>gameStore.dismissOfflineReport()}>Ok</button></aside>}
+    {report&&<aside className="offline-report stone-panel"><div><b>Bem-vindo de volta!</b> Seus personagens treinaram por {duration(report.seconds)} enquanto você esteve fora.{report.huntEnded&&' A caçada foi encerrada.'}<ul>{report.huntEnded&&<li>Hunt encerrada: inicie de novo quando quiser.</li>}{report.entries.map(entry=><li key={entry.name}>{entry.name}: +{entry.tries.toLocaleString('pt-BR')} tries em {PROFICIENCIES[entry.target].name}{entry.levelsGained>0&&` (+${entry.levelsGained} ${entry.levelsGained===1?'nível':'níveis'})`}</li>)}</ul></div><button onClick={()=>gameStore.dismissOfflineReport()}>Ok</button></aside>}
     <main className="app-shell"><div className="game-column">
       {/* O Phaser dirige o tick do combate: o mapa fica sempre montado e só é escondido fora da aba Caçada. */}
       <div className="map-frame" style={tab==='Caçada'?undefined:{display:'none'}}><PhaserGame/></div>
       <nav className="main-tabs" aria-label="Seções do jogo">{TABS.map(name=><button key={name} className={tab===name?'active':''} onClick={()=>setTab(name)}>{name}</button>)}</nav>
       {TABS_WITH_CHARACTER.includes(tab)&&<CharacterPicker state={state} selected={character.id} setSelected={setSelected}/>}
       <div className="tab-content stone-panel">
-        {tab==='Caçada'&&<AnalyzerPanel state={state}/>}
+        {tab==='Caçada'&&<><HuntSelector state={state}/><AnalyzerPanel state={state}/></>}
         {tab==='Grupo'&&<GroupPanel state={state}/>}
         {tab==='Personagem'&&<CharacterPanel state={state} selected={character.id} setSelected={setSelected}/>}
         {tab==='Itens'&&<ItemsPanel state={state} character={character}/>}

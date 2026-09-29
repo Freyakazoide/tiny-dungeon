@@ -1,10 +1,15 @@
 import type { ItemDef } from '../core/types';
+import { GEAR_ITEMS, MATERIAL_ITEMS } from './gear';
 
 export const ITEMS: ItemDef[] = [
   {id:'health_potion',name:'Poção de Vida',kind:'supply',rarity:'common',value:12,supply:'health',amount:90},
   {id:'mana_potion',name:'Poção de Mana',kind:'supply',rarity:'common',value:14,supply:'mana',amount:75},
   {id:'great_health_potion',name:'Grande Poção de Vida',kind:'supply',rarity:'uncommon',value:32,supply:'health',amount:190},
   {id:'great_mana_potion',name:'Grande Poção de Mana',kind:'supply',rarity:'uncommon',value:36,supply:'mana',amount:155},
+  {id:'strong_health_potion',name:'Poção Forte de Vida',kind:'supply',rarity:'rare',value:70,supply:'health',amount:420},
+  {id:'strong_mana_potion',name:'Poção Forte de Mana',kind:'supply',rarity:'rare',value:78,supply:'mana',amount:340},
+  {id:'supreme_health_potion',name:'Poção Suprema de Vida',kind:'supply',rarity:'epic',value:140,supply:'health',amount:800},
+  {id:'supreme_mana_potion',name:'Poção Suprema de Mana',kind:'supply',rarity:'epic',value:150,supply:'mana',amount:650},
   {id:'bone',name:'Osso Antigo',kind:'loot',rarity:'common',value:3}, {id:'ghoul_flesh',name:'Carne de Ghoul',kind:'loot',rarity:'common',value:7},
   {id:'grave_dust',name:'Pó de Tumba',kind:'loot',rarity:'uncommon',value:13}, {id:'royal_bone',name:'Osso Real',kind:'loot',rarity:'rare',value:55},
   {id:'rusty_sword',name:'Espada Enferrujada',kind:'equipment',rarity:'common',value:22,slot:'weapon',classIds:['squire','knight'],trains:'melee',stats:{attack:5}},
@@ -29,4 +34,6 @@ export const ITEMS: ItemDef[] = [
   {id:'wooden_shield',name:'Escudo de Madeira',kind:'equipment',rarity:'common',value:15,slot:'offhand',stats:{defense:4}},
   {id:'copper_ring',name:'Anel de Cobre',kind:'equipment',rarity:'common',value:30,slot:'ring',stats:{maxHp:10,maxMana:10}}
 ];
-export const itemById = (id: string) => ITEMS.find(i => i.id === id);
+ITEMS.push(...MATERIAL_ITEMS, ...GEAR_ITEMS);
+const ITEM_INDEX = new Map(ITEMS.map(item => [item.id, item]));
+export const itemById = (id: string) => ITEM_INDEX.get(id);

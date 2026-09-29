@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createCharacter } from '../core/GameEngine';
+import { createCharacter, GameEngine } from '../core/GameEngine';
 import { partyState } from '../core/testing';
 import { talentById } from '../data/talents';
 import { characterStats, investTalent, spentTalentPoints, talentAvailability, talentBonus } from './progression';
@@ -43,9 +43,21 @@ describe('talentos',()=>{
   });
 
   it('expõe efeitos de combate especializados sem gravá-los nos atributos-base',()=>{
-    const druid=createCharacter('druid');
-    druid.talents.druid_talent_2=2;
-    expect(talentBonus(druid,'healing')).toBeCloseTo(.2);
-    expect(talentBonus(druid,'magicDamage')).toBe(0);
+    const e=new GameEngine(partyState());const mage=e.getSnapshot().characters[0];
+    e.evolve(mage.id,'mago',{force:true});
+    mage.talents.mage_talent_3=2;
+    expect(talentBonus(mage,'magicDamage')).toBeCloseTo(.16);
+    expect(talentBonus(mage,'healing')).toBe(0);
+  });
+  it('talentos valem por histórico: o que o Squire investiu continua valendo depois de evoluir',()=>{
+    const e=new GameEngine(partyState());const c=e.getSnapshot().characters[0];
+    c.profile.level=10;c.talentPoints=3;investTalent(c,'squire_talent_0');investTalent(c,'squire_talent_0');
+    const before=characterStats(c,e.getSnapshot()).maxHp/(1+.14);
+    e.evolve(c.id,'guerreiro',{force:true});
+    expect(c.classId).toBe('knight');expect(c.talents.squire_talent_0).toBe(2);expect(talentBonus(c,'maxHp')).toBeCloseTo(.14);
+    expect(spentTalentPoints(c)).toBe(2);expect(before).toBeGreaterThan(0);
+    expect(talentAvailability(c,talentById('knight_talent_0')!).reason).not.toMatch(/outra classe/);
+    expect(talentAvailability(c,talentById('mage_talent_0')!).available).toBe(false);
+    expect(talentAvailability(c,talentById('mage_talent_0')!).reason).toMatch(/outra classe/);
   });
 });

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import type { Character, GameState, ItemDef, Rarity, Slot } from '../game/core/types';
 import { gameStore } from '../game/core/GameStore';
 import { itemById } from '../game/data/items';
+import { BUY_QUANTITIES, shopStock, type ShopEntry } from '../game/data/shop';
 import { equipBlockReason } from '../game/systems/equipment';
 import { itemIcon, SLOT_IDS, slotNames, statLine } from './format';
 
@@ -12,6 +13,14 @@ interface Entry { container: Container; itemId: string; quantity: number; item: 
 
 const FILTERS: [Filter, string][] = [['all', 'Todos'], ['equipment', 'Equipamento'], ['supply', 'Suprimentos'], ['loot', 'Loot']];
 const RARITY_ORDER: Rarity[] = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
+
+function ShopRow({ entry, gold, quantities, note }: { entry: ShopEntry; gold: number; quantities: readonly number[]; note?: string }) {
+  const item = itemById(entry.itemId)!;
+  return <div className={`shop-row ${entry.unlocked ? '' : 'locked'}`}>
+    <span><b className={`rarity-${item.rarity}`}>{item.name}</b><small>{item.kind === 'supply' ? `${item.amount} ${item.supply === 'health' ? 'vida' : 'mana'}` : `${item.slot ? slotNames[item.slot] : ''} · ${statLine(item.stats)}`} · {entry.price} ouro{note ? ` · ${note}` : ''}</small></span>
+    <span className="shop-buttons">{quantities.map(q => <button key={q} disabled={!entry.unlocked || gold < entry.price * q} onClick={() => gameStore.buy(entry.itemId, q)}>×{q}</button>)}</span>
+  </div>;
+}
 
 /** Aba Itens: equipamento do personagem, mochila com filtro/ordem e loja rápida, tudo na mesma tela. */
 export function ItemsPanel({ state, character }: { state: GameState; character: Character }) {
@@ -25,6 +34,7 @@ export function ItemsPanel({ state, character }: { state: GameState; character: 
       : sort === 'value' ? b.item.value - a.item.value || a.item.name.localeCompare(b.item.name)
       : RARITY_ORDER.indexOf(b.item.rarity) - RARITY_ORDER.indexOf(a.item.rarity) || a.item.name.localeCompare(b.item.name));
   }, [state.inventory, filter, sort]);
+  const best = Math.max(0, ...state.team.map(id => state.characters.find(c => c.id === id)?.profile.level ?? 0)), stock = shopStock(state.huntId, best);
   const lootStacks = state.inventory.loot, lootValue = lootStacks.reduce((sum, s) => sum + (itemById(s.itemId)?.value ?? 0) * s.quantity, 0);
   const lootCount = lootStacks.reduce((sum, s) => sum + s.quantity, 0);
   const swapOptions = (slot: Slot) => state.inventory.bp.map(s => itemById(s.itemId)).filter((item): item is ItemDef => !!item && item.slot === slot && !equipBlockReason(character, item));
@@ -67,6 +77,12 @@ export function ItemsPanel({ state, character }: { state: GameState; character: 
         </div>
       </article>;
     })}{!entries.length && <p className="empty-state">Nenhum item neste filtro.</p>}</div>
+
+    <div className="subsection-heading"><h3>Loja</h3><small>Ouro: {state.gold.toLocaleString('pt-BR')} · liberação de poções pelo maior nível da equipe ({best}).</small></div>
+    <div className="shop-grid">
+      <div><h4>Suprimentos</h4>{stock.potions.map(entry => <ShopRow key={entry.itemId} entry={entry} gold={state.gold} quantities={BUY_QUANTITIES} note={entry.unlocked ? undefined : `nível ${entry.unlockLevel}`} />)}</div>
+      <div><h4>Ferreiro</h4>{stock.smith.length ? stock.smith.map(entry => <ShopRow key={entry.itemId} entry={entry} gold={state.gold} quantities={[1]} />) : <p className="empty-state">O Ferreiro vende o conjunto da hunt anterior; esta hunt não tem uma anterior com conjunto.</p>}</div>
+    </div>
 
     <div className="subsection-heading"><h3>Loja rápida</h3></div>
     <div className="shop-box"><span>{lootCount} itens de loot · valor total <b>{lootValue.toLocaleString('pt-BR')} ouro</b></span>

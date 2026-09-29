@@ -1,6 +1,8 @@
 import type { SpellDef } from '../core/types';
 
 export const SPELLS: SpellDef[] = [
+  ['hunter_shot','hunter','Tiro Perfurante',1,9,4,'enemy',1.65,'damage',0,'Disparo perfurante'], ['hunter_volley','hunter','Chuva de Flechas',1,15,7,'allEnemies',1.15,'damage',0,'Chuva de flechas'], ['hunter_aim','hunter','Mira Verdadeira',1,22,10,'self',.32,'buff',7,'Aumenta ataque'], ['hunter_finisher','hunter','Tiro Fatal',1,24,9,'enemy',2.4,'damage',0,'Disparo devastador'],
+  ['mage_arc','mage','Raio Arcano',1,10,3.5,'enemy',1.75,'damage',0,'Raio de energia arcana'], ['mage_nova','mage','Nova Arcana',1,20,7,'allEnemies',1.3,'damage',0,'Explosão arcana em área'], ['mage_barrier','mage','Barreira Arcana',1,22,10,'self',36,'shield',6,'Escudo arcano'], ['mage_meteor','mage','Meteoro Arcano',1,34,12,'allEnemies',2.0,'damage',0,'Chuva de meteoros'],
   ['squire_guard','squire','Guard Up',1,8,8,'self',20,'shield',5,'Absorve dano'], ['squire_sweep','squire','Sweeping Strike',2,10,6,'allEnemies',1,'damage',0,'Golpe em área'], ['squire_rally','squire','Rally Cry',4,14,10,'self',.25,'buff',6,'Aumenta ataque'], ['squire_finisher','squire','Finishing Blow',7,18,7,'enemy',2.05,'damage',0,'Golpe pesado'],
   ['knight_guard','knight','Guard Stance',1,8,8,'self',22,'shield',5,'Absorve dano'], ['knight_cleave','knight','Cleave',2,10,5,'allEnemies',1.05,'damage',0,'Golpe em área'], ['knight_taunt','knight','Iron Will',4,14,10,'self',.3,'buff',6,'Aumenta defesa'], ['knight_strike','knight','Execution',7,18,7,'enemy',2.15,'damage',0,'Golpe pesado'],
   ['monk_flurry','monk','Flurry',1,8,4,'enemy',1.55,'damage',0,'Combo veloz'], ['monk_focus','monk','Focus',2,10,8,'self',.25,'buff',6,'Aumenta ataque'], ['monk_sweep','monk','Sweep',4,15,7,'allEnemies',1.1,'damage',0,'Varrida'], ['monk_palm','monk','Iron Palm',7,20,9,'enemy',2.5,'damage',0,'Golpe concentrado'],
@@ -8,6 +10,15 @@ export const SPELLS: SpellDef[] = [
   ['necro_bolt','necromancer','Grave Bolt',1,12,3.5,'enemy',1.7,'damage',0,'Raio sepulcral'], ['necro_nova','necromancer','Soul Nova',2,20,7,'allEnemies',1.25,'damage',0,'Explosão de almas'], ['necro_barrier','necromancer','Bone Barrier',4,22,10,'self',38,'shield',6,'Escudo de ossos'], ['necro_meteor','necromancer','Death Meteor',7,34,12,'allEnemies',2.05,'damage',0,'Chuva mortífera'],
   ['druid_mend','druid','Mend',1,11,4,'ally',1.55,'heal',0,'Cura rápida'], ['druid_regrowth','druid','Regrowth',2,17,8,'allAllies',.38,'regen',7,'Regeneração'], ['druid_thorns','druid','Thorns',4,18,9,'allAllies',.22,'buff',6,'Proteção natural'], ['druid_wrath','druid','Wrath',7,25,7,'allEnemies',1.45,'damage',0,'Fúria da natureza']
 ].map(([id,classId,name,level,mana,cooldown,target,power,kind,duration,description]) => ({ id, classId, name, level, mana, cooldown, target, power, kind, duration, description } as SpellDef));
+/** Magias das subclasses do Mago (Tier 2): entram no kit mage, mas só ficam disponíveis com o nó no caminho. */
+const NODE_SPELLS: SpellDef[] = [
+  { id: 'pyro_fireball', classId: 'mage', node: 'piromante', name: 'Bola de Fogo', level: 1, mana: 16, cooldown: 5, target: 'enemy', power: 1.9, kind: 'damage', element: 'fire', description: 'Bola de fogo de alto dano' },
+  { id: 'pyro_inferno', classId: 'mage', node: 'piromante', name: 'Inferno', level: 1, mana: 30, cooldown: 10, target: 'allEnemies', power: 1.2, kind: 'damage', element: 'fire', burnStacks: 2, description: 'Queima todos os inimigos (+2 stacks de Combustão)' },
+  { id: 'cryo_shard', classId: 'mage', node: 'criomante', name: 'Estilhaço de Gelo', level: 1, mana: 14, cooldown: 4, target: 'enemy', power: 1.7, kind: 'damage', element: 'ice', description: 'Estilhaço gélido; parte do dano vira barreira' },
+  { id: 'cryo_nova', classId: 'mage', node: 'criomante', name: 'Nova Glacial', level: 1, mana: 28, cooldown: 10, target: 'allEnemies', power: 1.0, kind: 'damage', element: 'ice', freeze: 2, description: 'Congela todos os inimigos por 2 s' },
+  { id: 'plasma_beam', classId: 'mage', node: 'arcanista_de_plasma', name: 'Raio de Plasma', level: 1, mana: 22, cooldown: 6, target: 'enemy', power: 2.2, kind: 'damage', element: 'energy', description: 'Feixe de plasma (crítico ×2,5, recarga −20%)' },
+];
+SPELLS.push(...NODE_SPELLS);
 /** Uma magia de dano por elemento, disponível a qualquer personagem: é o que treina o elemento em foco. */
 const BASIC_SPELLS: SpellDef[] = [
   ['fire', 'Faísca Ígnea'],
