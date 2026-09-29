@@ -1,0 +1,6 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "tiny-dungeon", "runtimeExecutable": "npx", "runtimeArgs": ["vite", "--config", "vite/config.dev.mjs"], "port": 8080 }
+  ]
+}

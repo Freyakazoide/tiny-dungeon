@@ -3,7 +3,7 @@ import type { Character, GameState, Stats, TalentDef } from '../game/core/types'
 import { gameStore } from '../game/core/GameStore';
 import { CLASSES } from '../game/data/classes';
 import { TALENT_EFFECT_NAMES, talentById, talentsForClass } from '../game/data/talents';
-import { characterStats, spentTalentPoints, talentAvailability, talentBonus, talentBonusText, talentRespecCost } from '../game/systems/progression';
+import { characterStats, classLabel, spentTalentPoints, talentAvailability, talentBonus, talentBonusText, talentRespecCost } from '../game/systems/progression';
 import { colorHex, statNames } from './format';
 
 type Confirmation='invest'|'respec'|null;
@@ -52,10 +52,10 @@ export function TalentsPanel({state,selected,setSelected}:{state:GameState;selec
   const requirements=selectedTalent.requires??[];
   return <section className="talents-panel" style={{'--class-color':colorHex(classDef.color)} as CSSProperties}>
     <div className="section-heading"><div><span className="eyebrow">Especialização</span><h2>Árvore de talentos</h2></div><div className="talent-currency"><span>Pontos disponíveis</span><b>✦ {character.talentPoints}</b></div></div>
-    <div className="talent-character-tabs" role="list" aria-label="Personagens">{state.characters.map(entry=><button key={entry.id} className={entry.id===character.id?'active':''} onClick={()=>setSelected(entry.id)}><span style={{background:colorHex(CLASSES[entry.classId].color)}}>{entry.name.slice(0,1)}</span><b>{entry.name}</b><small>{CLASSES[entry.classId].name} · Nv. {entry.level}</small><em>✦ {entry.talentPoints}</em></button>)}</div>
+    <div className="talent-character-tabs" role="list" aria-label="Personagens">{state.characters.map(entry=><button key={entry.id} className={entry.id===character.id?'active':''} onClick={()=>setSelected(entry.id)}><span style={{background:colorHex(CLASSES[entry.classId].color)}}>{entry.name.slice(0,1)}</span><b>{entry.name}</b><small>{classLabel(entry)} · Nv. {entry.profile.level}</small><em>✦ {entry.talentPoints}</em></button>)}</div>
     <div className="talent-workspace">
       <div className="talent-tree-card">
-        <div className="talent-tree-heading"><div><span className="class-label">{classDef.name}</span><h3>Caminhos de especialização</h3></div><small>Escolha um caminho; não é necessário adquirir todos os talentos.</small></div>
+        <div className="talent-tree-heading"><div><span className="class-label">{classLabel(character)}</span><h3>Caminhos de especialização</h3></div><small>Escolha um caminho; não é necessário adquirir todos os talentos.</small></div>
         <div className="talent-tree">{([1,2,3] as const).map(tier=><div className={`talent-tier tier-${tier}`} key={tier}><div className="tier-label"><b>Nível {tier}</b><small>{tier===1?'Fundamentos':tier===2?'Especialização':'Maestria'}</small></div><div className="tier-nodes">{talents.filter(talent=>talent.tier===tier).sort((a,b)=>a.column-b.column).map(talent=><TalentNode key={talent.id} character={character} talent={talent} selected={selectedTalent.id===talent.id} onSelect={()=>{setSelectedTalentId(talent.id);setConfirmation(null);}}/>)}</div></div>)}</div>
         <div className="talent-legend"><span><i className="available"/>Disponível</span><span><i className="acquired"/>Adquirido</span><span><i className="maxed"/>Completo</span><span><i className="locked"/>Bloqueado</span></div>
       </div>

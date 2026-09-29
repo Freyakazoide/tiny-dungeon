@@ -14,3 +14,28 @@
 @media(max-width:720px){.talent-character-tabs{display:flex;overflow-x:auto}.talent-character-tabs button{min-width:150px}.talent-tree-heading{display:block}.talent-tree-heading>small{display:block;text-align:left;margin-top:6px}.talent-tier{grid-template-columns:1fr}.tier-label{display:flex;align-items:center;gap:6px}.tier-label small{margin:0}.talent-tier:not(:last-child):after{left:50%;top:calc(100% + 2px)}.tier-nodes{gap:7px}.talent-node{display:flex;flex-direction:column;align-items:center;text-align:center;min-height:125px;padding:8px}.talent-node>b{position:absolute;right:6px;top:6px}.talent-node-copy small{font-size:8px}.talent-detail-card{display:block}.talent-comparison,.talent-status-note,.talent-invest,.talent-confirm,.respec-box{grid-column:auto}.talent-comparison{grid-row:auto}}
 @media(max-width:410px){.talent-tree-card{padding:11px}.tier-nodes{grid-template-columns:1fr}.tier-nodes:before{display:none}.talent-node{min-height:0;display:grid;grid-template-columns:40px 1fr auto;text-align:left}.talent-node .talent-icon{width:40px;height:40px}.talent-currency{width:100%;justify-content:space-between}}
 .talent-tier:not(:last-child):after,.tier-nodes:before{display:none}.tier-2 .talent-node:before,.tier-3 .talent-node:before{content:"";position:absolute;left:50%;bottom:calc(100% + 1px);width:1px;height:23px;background:linear-gradient(#51452f,var(--class-color));pointer-events:none}@media(max-width:720px){.tier-2 .talent-node:before,.tier-3 .talent-node:before{display:none}}
+
+/* Criação de personagens, camada RPG e relatório offline */
+.creation-screen{min-height:100vh;display:grid;place-items:center;padding:24px}
+.creation-card{width:min(520px,100%);padding:32px;display:flex;flex-direction:column;gap:14px;align-items:stretch;text-align:center}
+.creation-card .brand-mark{align-self:center}
+.creation-card h1{font-size:28px}
+.creation-slots{display:flex;flex-direction:column;gap:10px;text-align:left}
+.creation-slot{display:flex;align-items:center;gap:12px;padding:10px;background:#10171f;border:1px solid #303944}
+.creation-slot-copy{display:flex;flex-direction:column;gap:5px;flex:1}
+.creation-slot input{width:100%;padding:8px 10px;background:#0a1017;color:#ece3d1;border:1px solid #454d59;border-radius:4px}
+.creation-slot input:focus{outline:none;border-color:var(--bronze-light)}
+.creation-error{color:var(--danger);margin:0}
+.offline-target{display:flex;flex-direction:column;gap:5px;margin-top:10px;font-size:12px}
+.offline-target select,.recruit-form input{padding:8px 10px;background:#0a1017;color:#ece3d1;border:1px solid #454d59;border-radius:4px}
+.counter-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.counter-list span{display:flex;flex-direction:column;padding:8px;background:#10171f;border:1px solid #303944}
+.counter-list b{color:#fff}.counter-list em{font-style:normal;font-size:11px;color:var(--muted)}
+.evolution-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:8px}
+.evolution-card{padding:10px;background:#10171f;border:1px solid #303944;display:flex;flex-direction:column;gap:8px}
+.evolution-card.ready{border-color:var(--bronze)}
+.evolution-card>div:first-child{display:flex;flex-direction:column}
+.evolution-card ul{margin:0;padding-left:16px;font-size:12px;color:var(--muted)}
+.recruit-form{display:flex;gap:8px;padding:10px 12px;border-top:1px solid #292f37}.recruit-form input{flex:1}
+.offline-report{margin:12px 22px 0;padding:12px 16px;display:flex;justify-content:space-between;align-items:flex-start;gap:16px;border-color:var(--bronze)}
+.offline-report ul{margin:6px 0 0;padding-left:18px;color:#b8bec7;font-size:13px}

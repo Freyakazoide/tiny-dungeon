@@ -85,7 +85,7 @@ export class Game extends Scene {
       let v=this.heroes.get(c.id);
       if(!v){v=this.createHero(c,entrances.get(c.id)!);this.heroes.set(c.id,v);created.push(c.id);}
       const stats=characterStats(c,state);
-      v.name.setText(`${c.name} · Nv ${c.level}${c.hp<=0?'  ☠':''}`);
+      v.name.setText(`${c.name} · Nv ${c.profile.level}${c.hp<=0?'  ☠':''}`);
       v.hp.displayWidth=90*Math.max(0,c.hp/stats.maxHp);v.mana.displayWidth=90*Math.max(0,c.mana/stats.maxMana);
       v.effects.setText(c.effects.map(e=>e.type).join(' · '));v.body.setAlpha(c.hp>0?1:.25);
     });

@@ -1,10 +1,22 @@
 import type { ClassId, Stats } from '../core/types';
+import type { ProficiencyId } from '../rpg/proficiencies';
 
-export interface ClassDef { id: ClassId; name: string; color: number; base: Stats; growth: Partial<Stats>; weaponSkill: 'fist' | 'sword' | 'distance' | 'magic'; }
+export interface ClassDef { id: ClassId; name: string; color: number; base: Stats; growth: Partial<Stats>; weaponSkill: ProficiencyId; }
 export const CLASSES: Record<ClassId, ClassDef> = {
-  knight: { id: 'knight', name: 'Knight', color: 0x4b78a8, weaponSkill: 'sword', base: { maxHp: 260, maxMana: 45, attack: 21, defense: 18, attackSpeed: 0.85, crit: .06, resistance: .12, magicPower: 2 }, growth: { maxHp: 28, attack: 3, defense: 2.4 } },
-  monk: { id: 'monk', name: 'Monk', color: 0xb47b45, weaponSkill: 'fist', base: { maxHp: 205, maxMana: 70, attack: 18, defense: 11, attackSpeed: 1.45, crit: .1, resistance: .06, magicPower: 4 }, growth: { maxHp: 20, attack: 2.7, attackSpeed: .018 } },
-  paladin: { id: 'paladin', name: 'Paladin', color: 0xbaa74b, weaponSkill: 'distance', base: { maxHp: 190, maxMana: 85, attack: 23, defense: 9, attackSpeed: 1.05, crit: .17, resistance: .07, magicPower: 5 }, growth: { maxHp: 18, attack: 3.2, crit: .003 } },
+  squire: { id: 'squire', name: 'Squire', color: 0x8f9aa8, weaponSkill: 'melee', base: { maxHp: 230, maxMana: 55, attack: 19, defense: 14, attackSpeed: 0.95, crit: .06, resistance: .09, magicPower: 3 }, growth: { maxHp: 23, maxMana: 3, attack: 2.8, defense: 1.9 } },
+  knight: { id: 'knight', name: 'Knight', color: 0x4b78a8, weaponSkill: 'melee', base: { maxHp: 260, maxMana: 45, attack: 21, defense: 18, attackSpeed: 0.85, crit: .06, resistance: .12, magicPower: 2 }, growth: { maxHp: 28, attack: 3, defense: 2.4 } },
+  monk: { id: 'monk', name: 'Monk', color: 0xb47b45, weaponSkill: 'melee', base: { maxHp: 205, maxMana: 70, attack: 18, defense: 11, attackSpeed: 1.45, crit: .1, resistance: .06, magicPower: 4 }, growth: { maxHp: 20, attack: 2.7, attackSpeed: .018 } },
+  paladin: { id: 'paladin', name: 'Paladin', color: 0xbaa74b, weaponSkill: 'ranged', base: { maxHp: 190, maxMana: 85, attack: 23, defense: 9, attackSpeed: 1.05, crit: .17, resistance: .07, magicPower: 5 }, growth: { maxHp: 18, attack: 3.2, crit: .003 } },
   necromancer: { id: 'necromancer', name: 'Necromancer', color: 0x76519c, weaponSkill: 'magic', base: { maxHp: 145, maxMana: 210, attack: 11, defense: 6, attackSpeed: .8, crit: .09, resistance: .04, magicPower: 26 }, growth: { maxHp: 12, maxMana: 24, magicPower: 4 } },
   druid: { id: 'druid', name: 'Druid', color: 0x579b62, weaponSkill: 'magic', base: { maxHp: 165, maxMana: 190, attack: 10, defense: 8, attackSpeed: .85, crit: .07, resistance: .08, magicPower: 22 }, growth: { maxHp: 15, maxMana: 21, magicPower: 3.5 } }
+};
+
+/**
+ * Kit de combate (atributos, magias, talentos) de um nó da árvore de classes. Enquanto uma classe
+ * não tem kit próprio ela herda o do ancestral mais próximo que tenha; hoje todos herdam o do Squire.
+ */
+const KIT_BY_NODE: Record<string, ClassId> = { aprendiz: 'squire' };
+export const kitForNode = (nodeId: string, parentOf: (id: string) => string | null): ClassId => {
+  for (let id: string | null = nodeId; id; id = parentOf(id)) if (KIT_BY_NODE[id]) return KIT_BY_NODE[id];
+  return 'squire';
 };

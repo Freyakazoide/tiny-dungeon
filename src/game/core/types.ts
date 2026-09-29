@@ -1,17 +1,17 @@
-export type ClassId = 'knight' | 'monk' | 'paladin' | 'necromancer' | 'druid';
-export type SkillId = 'fist' | 'sword' | 'axe' | 'club' | 'distance' | 'shielding' | 'magic';
+import type { ProficiencyId } from '../rpg/proficiencies';
+import type { ProgressProfile } from '../rpg/profile';
+export type ClassId = 'squire' | 'knight' | 'monk' | 'paladin' | 'necromancer' | 'druid';
 export type Slot = 'helmet' | 'armor' | 'legs' | 'boots' | 'weapon' | 'offhand' | 'amulet' | 'ring';
 export type Rarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
 export type HuntStatus = 'idle' | 'running' | 'paused' | 'transition' | 'recovering';
 export type ItemKind = 'equipment' | 'loot' | 'supply';
 
 export interface Stats { maxHp: number; maxMana: number; attack: number; defense: number; attackSpeed: number; crit: number; resistance: number; magicPower: number; }
-export interface SkillProgress { level: number; xp: number; }
 export interface SpellCondition { hpBelow?: number; minEnemies?: number; allyInjured?: boolean; manaAbove?: number; }
 export interface HelperConfig { hpPotionAt: number; manaPotionAt: number; healAllies: boolean; autoSupplies: boolean; defensiveAmuletAt: number; emergencyAt: number; outOfSupplies: 'continue' | 'end'; }
 export interface Character {
-  id: string; name: string; classId: ClassId; level: number; xp: number; talentPoints: number;
-  hp: number; mana: number; skills: Record<SkillId, SkillProgress>; equipment: Partial<Record<Slot, string>>;
+  id: string; name: string; classId: ClassId; profile: ProgressProfile; talentPoints: number;
+  hp: number; mana: number; equipment: Partial<Record<Slot, string>>;
   spellSlots: string[]; spellConditions: Record<string, SpellCondition>; talents: Record<string, number>;
   cooldowns: Record<string, number>; effects: ActiveEffect[]; helper: HelperConfig;
 }
@@ -30,9 +30,11 @@ export interface CharmDef { id: string; name: string; cost: number; milestone: n
 export type TalentEffect = 'maxHp' | 'maxMana' | 'attack' | 'defense' | 'attackSpeed' | 'crit' | 'resistance' | 'magicPower' | 'cooldown' | 'healing' | 'magicDamage';
 export interface TalentRequirement { talentId: string; rank: number; }
 export interface TalentDef { id: string; classId: ClassId; name: string; description: string; icon: string; tier: 1 | 2 | 3; column: 0 | 1; max: number; requiredLevel: number; requires?: TalentRequirement[]; effect: TalentEffect; value: number; }
+export interface OfflineReport { seconds: number; entries: { name: string; target: ProficiencyId; seconds: number; tries: number; levelsGained: number }[]; }
 export interface GameState {
   version: 1; status: HuntStatus; autoAdvance: boolean; wave: number; cycle: number; transitionMs: number;
   characters: Character[]; team: string[]; monsters: MonsterRuntime[]; inventory: InventoryState;
   gold: number; charmPoints: number; charmSlots: number; equippedCharms: string[]; unlockedCharms: string[];
   codex: Record<string, CodexEntry>; analyzer: Analyzer; history: Analyzer[]; message: string; lastSavedAt: number;
+  offlineReport?: OfflineReport;
 }

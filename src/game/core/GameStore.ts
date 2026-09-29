@@ -1,6 +1,7 @@
 import { GameEngine } from './GameEngine';
 import { persistence } from '../persistence/repository';
 import { importBackup } from '../persistence/backup';
+import { sessionGapSeconds } from '../rpg/offline';
 
 export const gameStore=new GameEngine();
 let dirty=false;let initialized=false;let saveTimer:number|undefined;
@@ -9,9 +10,10 @@ async function flush(){if(!dirty)return;dirty=false;try{const state=gameStore.ge
 
 export async function initializeGameStore(){
   if(initialized)return;initialized=true;
-  try{const saved=await persistence.load();if(saved)gameStore.hydrate(saved);}catch(error){console.warn('Save ignorado por ser inválido ou inacessível.',error);}
+  try{const saved=await persistence.load();if(saved){gameStore.hydrate(saved);gameStore.applyOffline(sessionGapSeconds(saved.lastSavedAt,Date.now()));}}catch(error){console.warn('Save ignorado por ser inválido ou inacessível.',error);}
   gameStore.subscribe(()=>{dirty=true;});
-  saveTimer=window.setInterval(()=>void flush(),5000);
+  // Heartbeat: mesmo parado, o save marca "visto por último" a cada 5 s; é dele que sai o gap offline.
+  saveTimer=window.setInterval(()=>{dirty=true;void flush();},5000);
   window.addEventListener('pagehide',()=>void flush());
 }
 export async function importGameBackup(json:string){const state=importBackup(json);await persistence.replace(state);gameStore.hydrate(state);dirty=false;return state;}

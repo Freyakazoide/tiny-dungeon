@@ -1,42 +1,43 @@
 import { describe, expect, it } from 'vitest';
-import { createCharacter, initialState } from '../core/GameEngine';
+import { createCharacter } from '../core/GameEngine';
+import { partyState } from '../core/testing';
 import { talentById } from '../data/talents';
 import { characterStats, investTalent, spentTalentPoints, talentAvailability, talentBonus } from './progression';
 
 describe('talentos',()=>{
   it('exige nível e pré-requisitos sem obrigar o caminho paralelo',()=>{
-    const knight=createCharacter('knight');
-    expect(talentAvailability(knight,talentById('knight_talent_0')!).reason).toBe('Requer nível 2.');
-    knight.level=10;knight.talentPoints=8;
-    const blade=talentById('knight_talent_2')!;
-    expect(talentAvailability(knight,blade).reason).toMatch(/Vigor/);
-    expect(investTalent(knight,'knight_talent_1')).toBe(true);
+    const knight=createCharacter('squire');
+    expect(talentAvailability(knight,talentById('squire_talent_0')!).reason).toBe('Requer nível 2.');
+    knight.profile.level=10;knight.talentPoints=8;
+    const blade=talentById('squire_talent_2')!;
+    expect(talentAvailability(knight,blade).reason).toMatch(/Resistência/);
+    expect(investTalent(knight,'squire_talent_1')).toBe(true);
     expect(talentAvailability(knight,blade).available).toBe(false);
-    expect(investTalent(knight,'knight_talent_0')).toBe(true);
+    expect(investTalent(knight,'squire_talent_0')).toBe(true);
     expect(talentAvailability(knight,blade).available).toBe(true);
   });
 
   it('respeita o limite de níveis e consome um ponto por investimento',()=>{
-    const monk=createCharacter('monk');
-    monk.level=10;monk.talentPoints=4;
-    expect(investTalent(monk,'monk_talent_0')).toBe(true);
-    expect(investTalent(monk,'monk_talent_0')).toBe(true);
-    expect(investTalent(monk,'monk_talent_0')).toBe(true);
-    expect(investTalent(monk,'monk_talent_0')).toBe(false);
-    expect(monk.talents.monk_talent_0).toBe(3);
+    const monk=createCharacter('squire');
+    monk.profile.level=10;monk.talentPoints=4;
+    expect(investTalent(monk,'squire_talent_0')).toBe(true);
+    expect(investTalent(monk,'squire_talent_0')).toBe(true);
+    expect(investTalent(monk,'squire_talent_0')).toBe(true);
+    expect(investTalent(monk,'squire_talent_0')).toBe(false);
+    expect(monk.talents.squire_talent_0).toBe(3);
     expect(monk.talentPoints).toBe(1);
     expect(spentTalentPoints(monk)).toBe(3);
   });
 
   it('aplica bônus derivados uma única vez ao recalcular atributos',()=>{
-    const state=initialState();
-    const knight=state.characters.find(character=>character.classId==='knight')!;
-    knight.level=10;knight.talentPoints=3;
+    const state=partyState();
+    const knight=state.characters.find(character=>character.classId==='squire')!;
+    knight.profile.level=10;knight.talentPoints=3;
     const before=characterStats(knight,state);
-    investTalent(knight,'knight_talent_0');
-    investTalent(knight,'knight_talent_0');
+    investTalent(knight,'squire_talent_0');
+    investTalent(knight,'squire_talent_0');
     const first=characterStats(knight,state),second=characterStats(knight,state);
-    expect(first.maxHp).toBe(Math.round(before.maxHp*1.16));
+    expect(first.maxHp).toBe(Math.round(before.maxHp*1.14));
     expect(second).toEqual(first);
     expect(knight.hp).toBeLessThanOrEqual(first.maxHp);
   });

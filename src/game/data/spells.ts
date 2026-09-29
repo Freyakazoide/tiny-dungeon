@@ -1,6 +1,7 @@
 import type { SpellDef } from '../core/types';
 
 export const SPELLS: SpellDef[] = [
+  ['squire_guard','squire','Guard Up',1,8,8,'self',20,'shield',5,'Absorve dano'], ['squire_sweep','squire','Sweeping Strike',2,10,6,'allEnemies',1,'damage',0,'Golpe em área'], ['squire_rally','squire','Rally Cry',4,14,10,'self',.25,'buff',6,'Aumenta ataque'], ['squire_finisher','squire','Finishing Blow',7,18,7,'enemy',2.05,'damage',0,'Golpe pesado'],
   ['knight_guard','knight','Guard Stance',1,8,8,'self',22,'shield',5,'Absorve dano'], ['knight_cleave','knight','Cleave',2,10,5,'allEnemies',1.05,'damage',0,'Golpe em área'], ['knight_taunt','knight','Iron Will',4,14,10,'self',.3,'buff',6,'Aumenta defesa'], ['knight_strike','knight','Execution',7,18,7,'enemy',2.15,'damage',0,'Golpe pesado'],
   ['monk_flurry','monk','Flurry',1,8,4,'enemy',1.55,'damage',0,'Combo veloz'], ['monk_focus','monk','Focus',2,10,8,'self',.25,'buff',6,'Aumenta ataque'], ['monk_sweep','monk','Sweep',4,15,7,'allEnemies',1.1,'damage',0,'Varrida'], ['monk_palm','monk','Iron Palm',7,20,9,'enemy',2.5,'damage',0,'Golpe concentrado'],
   ['paladin_shot','paladin','Piercing Shot',1,9,4,'enemy',1.65,'damage',0,'Disparo perfurante'], ['paladin_volley','paladin','Volley',2,15,7,'allEnemies',1.15,'damage',0,'Chuva de flechas'], ['paladin_light','paladin','Holy Light',4,18,9,'ally',1.25,'heal',0,'Cura um aliado'], ['paladin_aim','paladin','True Aim',7,22,10,'self',.32,'buff',7,'Aumenta ataque'],

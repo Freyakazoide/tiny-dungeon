@@ -1,11 +1,8 @@
-import type { ClassId, ItemDef, SkillId, Slot, Stats } from '../game/core/types';
+import type { ItemDef, Slot, Stats } from '../game/core/types';
 
-export const SKILL_IDS:SkillId[]=['fist','sword','axe','club','distance','shielding','magic'];
 export const SLOT_IDS:Slot[]=['helmet','armor','legs','boots','weapon','offhand','amulet','ring'];
-export const skillNames:Record<SkillId,string>={fist:'Fist',sword:'Sword',axe:'Axe',club:'Club',distance:'Distance',shielding:'Shielding',magic:'Magic Level'};
 export const slotNames:Record<Slot,string>={helmet:'Capacete',armor:'Armadura',legs:'Calças',boots:'Botas',weapon:'Arma',offhand:'Mão secundária',amulet:'Amuleto',ring:'Anel'};
 export const statNames:Record<keyof Stats,string>={maxHp:'HP máximo',maxMana:'Mana máxima',attack:'Ataque',defense:'Defesa',attackSpeed:'Velocidade',crit:'Crítico',resistance:'Resistência',magicPower:'Poder mágico'};
-export const primarySkills:Record<ClassId,SkillId[]>={knight:['sword','shielding'],monk:['fist'],paladin:['distance','magic'],necromancer:['magic'],druid:['magic']};
 
 export const pct=(value:number,total:number)=>Math.max(0,Math.min(100,total>0?value/total*100:0));
 export const compact=(value:number)=>new Intl.NumberFormat('pt-BR',{maximumFractionDigits:value<10?1:0,notation:value>=10_000?'compact':'standard'}).format(value);

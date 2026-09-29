@@ -1,30 +1,38 @@
 import { CLASSES } from '../data/classes';
+import { TRIES_PER_SECOND } from '../rpg/curves';
+import { CLASS_BY_ID } from '../rpg/classTree';
+import { gainExperience as gainProfileExperience, gainTries } from '../rpg/profile';
+import type { ProficiencyId } from '../rpg/proficiencies';
 import { itemById } from '../data/items';
 import { CHARMS } from '../data/charms';
 import { TALENT_CONFIG, TALENT_EFFECT_NAMES, TALENTS, talentById } from '../data/talents';
-import type { Character, GameState, SkillId, Stats, TalentDef, TalentEffect } from '../core/types';
+import type { Character, GameState, Stats, TalentDef, TalentEffect } from '../core/types';
 
-export const xpForLevel = (level: number) => 100 + (level - 1) * 85;
-export const xpForSkillLevel = (level: number) => 20 + level * 8;
+export { xpForLevel } from '../rpg/curves';
+export const classLabel = (character: Character) => CLASS_BY_ID[character.profile.classId]?.name ?? CLASSES[character.classId].name;
+/** XP vai para o perfil RPG; cada nível ganho rende um ponto de talento. */
 export function gainExperience(character: Character, amount: number) {
-  character.xp += amount;
-  while (character.xp >= xpForLevel(character.level)) {
-    character.xp -= xpForLevel(character.level);
-    character.level++;
-    character.talentPoints++;
-  }
+  const before = character.profile.level;
+  gainProfileExperience(character.profile, amount);
+  character.talentPoints += character.profile.level - before;
 }
-export function gainSkill(character: Character, skill: SkillId, amount = 1) {
-  const progress = character.skills[skill];
-  progress.xp += amount;
-  while(progress.xp >= xpForSkillLevel(progress.level)){
-    progress.xp -= xpForSkillLevel(progress.level);
-    progress.level++;
-  }
+/** Soma tries de uma proficiência (sobe de nível sozinho) e devolve quantos níveis subiram. */
+export function trainProficiency(character: Character, id: ProficiencyId, tries = 1) {
+  const before = character.profile.proficiencies[id].level;
+  gainTries(character.profile, id, tries);
+  return character.profile.proficiencies[id].level - before;
+}
+/** Treino por tempo: 1 try a cada 1 / TRIES_PER_SECOND s de combate, na proficiência em foco. */
+export function trainByTime(character: Character, dt: number) {
+  const profile = character.profile, focus = profile.trainingFocus;
+  if (!focus) return;
+  profile.trainingAcc = (profile.trainingAcc ?? 0) + dt * TRIES_PER_SECOND;
+  const whole = Math.floor(profile.trainingAcc);
+  if (whole > 0) { profile.trainingAcc -= whole; trainProficiency(character, focus, whole); }
 }
 export function talentBonus(character:Character,effect:TalentEffect){return TALENTS.filter(talent=>talent.classId===character.classId&&talent.effect===effect).reduce((total,talent)=>total+(character.talents[talent.id]??0)*talent.value,0);}
 export function characterStats(c: Character, state?: GameState): Stats {
-  const def = CLASSES[c.classId]; const level = c.level - 1; const out = { ...def.base };
+  const def = CLASSES[c.classId]; const level = c.profile.level - 1; const out = { ...def.base };
   for (const key of Object.keys(out) as (keyof Stats)[]) out[key] += (def.growth[key] ?? 0) * level;
   for (const id of Object.values(c.equipment)) {
     const stats = id && itemById(id)?.stats; if (!stats) continue;
@@ -41,7 +49,7 @@ export function talentAvailability(c:Character,talent:TalentDef){
   const rank=c.talents[talent.id]??0;
   if(talent.classId!==c.classId)return {available:false,reason:'Talento de outra classe.'};
   if(rank>=talent.max)return {available:false,reason:'Talento completamente evoluído.'};
-  if(c.level<talent.requiredLevel)return {available:false,reason:`Requer nível ${talent.requiredLevel}.`};
+  if(c.profile.level<talent.requiredLevel)return {available:false,reason:`Requer nível ${talent.requiredLevel}.`};
   for(const requirement of talent.requires??[]){const current=c.talents[requirement.talentId]??0;if(current<requirement.rank){const required=talentById(requirement.talentId);return {available:false,reason:`Requer ${required?.name??requirement.talentId} ${current}/${requirement.rank}.`};}}
   if(c.talentPoints<1)return {available:false,reason:'Nenhum ponto de talento disponível.'};
   return {available:true,reason:'Disponível para investimento.'};

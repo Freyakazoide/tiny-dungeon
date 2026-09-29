@@ -7,6 +7,14 @@ const req=(classId:ClassId,index:number,rank=1)=>[{talentId:`${classId}_talent_$
 const talent=(classId:ClassId,index:number,seed:TalentSeed):TalentDef=>({id:`${classId}_talent_${index}`,classId,...seed});
 
 const trees:Record<ClassId,TalentDef[]>={
+  squire:[
+    talent('squire',0,{name:'Resistência',description:'Treino de campo que aumenta a vida para aguentar mais golpes.',icon:'♥',tier:1,column:0,max:3,requiredLevel:2,effect:'maxHp',value:.07}),
+    talent('squire',1,{name:'Guarda Firme',description:'Melhora a postura defensiva e a defesa contra golpes.',icon:'⬟',tier:1,column:1,max:3,requiredLevel:2,effect:'defense',value:.06}),
+    talent('squire',2,{name:'Golpe Treinado',description:'Refina a técnica e aumenta o dano físico.',icon:'⚔',tier:2,column:0,max:3,requiredLevel:5,requires:req('squire',0),effect:'attack',value:.06}),
+    talent('squire',3,{name:'Couraça',description:'Reduz o dano que atravessa a armadura.',icon:'▣',tier:2,column:1,max:3,requiredLevel:5,requires:req('squire',1),effect:'resistance',value:.02}),
+    talent('squire',4,{name:'Olho Aberto',description:'Aumenta a chance de acertos críticos.',icon:'✦',tier:3,column:0,max:3,requiredLevel:9,requires:req('squire',2,2),effect:'crit',value:.02}),
+    talent('squire',5,{name:'Fôlego',description:'Reduz a recarga das habilidades.',icon:'◌',tier:3,column:1,max:1,requiredLevel:9,requires:req('squire',3,2),effect:'cooldown',value:.1})
+  ],
   knight:[
     talent('knight',0,{name:'Vigor',description:'Fortalece o corpo para suportar mais dano nas linhas de frente.',icon:'♥',tier:1,column:0,max:3,requiredLevel:2,effect:'maxHp',value:.08}),
     talent('knight',1,{name:'Muralha',description:'Aprimora a proteção da armadura e a defesa contra golpes.',icon:'⬟',tier:1,column:1,max:3,requiredLevel:2,effect:'defense',value:.07}),
