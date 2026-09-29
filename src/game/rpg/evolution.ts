@@ -33,12 +33,12 @@ export function evolutionOptions(profile: ProgressProfile) {
 export type EvolveResult = { ok: true; node: ClassNode } | { ok: false; reason: string };
 
 /** Transição irreversível: valida pai e requisitos, troca a classe e registra no caminho. */
-export function evolveClass(profile: ProgressProfile, targetId: string): EvolveResult {
+export function evolveClass(profile: ProgressProfile, targetId: string, opts: { force?: boolean } = {}): EvolveResult {
   const node = CLASS_BY_ID[targetId];
   if (!node) return { ok: false, reason: 'Classe desconhecida.' };
   if (node.parent !== profile.classId) return { ok: false, reason: `${node.name} não faz parte do caminho de ${CLASS_BY_ID[profile.classId].name}.` };
   const check = checkRequirements(profile, node);
-  if (!check.met) return { ok: false, reason: `Requisitos pendentes: ${check.missing.join('; ')}.` };
+  if (!check.met && !opts.force) return { ok: false, reason: `Requisitos pendentes: ${check.missing.join('; ')}.` };
   profile.classId = node.id;
   profile.classPath.push(node.id);
   return { ok: true, node };

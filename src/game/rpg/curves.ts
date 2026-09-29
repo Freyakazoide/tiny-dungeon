@@ -4,11 +4,11 @@ import { MAX_PROFICIENCY_LEVEL, PROFICIENCIES, type ProficiencyGroup, type Profi
 export const TRIES_PER_SECOND = 0.5;
 
 /**
- * Multiplicador de ritmo por grupo, calibrado pra skill 15 levar ~132 h (5,5 dias com 24 h/dia
+ * Multiplicador de ritmo por grupo, calibrado pra skill 25 levar ~132 h (5,5 dias com 24 h/dia
  * contando o offline) partindo do nível 10. Se mudar TRIES_PER_SECOND, recalibre:
- * K = horas_alvo * TRIES_PER_SECOND * 3600 / soma(base * mult^L, L = 10..14)
+ * K = horas_alvo * TRIES_PER_SECOND * 3600 / soma(base * mult^L, L = 10..porta-1)
  */
-export const PACE_K: Record<ProficiencyGroup, number> = { combat: 1500, magic: 436, elemental: 803 };
+export const PACE_K: Record<ProficiencyGroup, number> = { combat: 288, magic: 62, elemental: 137 };
 
 /** XP para sair do nível L (planilha: 50 * L^2,8; L=1 -> 50, L=30 -> 683 769). */
 export const xpForLevel = (level: number) => Math.round(50 * level ** 2.8);
@@ -34,3 +34,16 @@ export const cumulativeTries = (id: ProficiencyId, from: number, to: number) => 
 
 export const hoursToReach = (id: ProficiencyId, from: number, to: number) =>
   cumulativeTries(id, from, to) / (TRIES_PER_SECOND * 3600);
+
+/** Tries que faltam para ir de (nível, tries) até o nível `target`. */
+export const remainingTries = (id: ProficiencyId, level: number, tries: number, target: number) =>
+  level >= target ? 0 : triesForNextLevel(id, level) - tries + cumulativeTries(id, level + 1, target);
+
+export const etaSeconds = (id: ProficiencyId, level: number, tries: number, target: number, perSecond = TRIES_PER_SECOND) =>
+  remainingTries(id, level, tries, target) / perSecond;
+
+export function formatEta(seconds: number) {
+  if (!Number.isFinite(seconds)) return '—';
+  const d = Math.floor(seconds / 86400), h = Math.floor((seconds % 86400) / 3600), m = Math.floor((seconds % 3600) / 60);
+  return d > 0 ? `${d}d ${h}h` : h > 0 ? `${h}h ${m}min` : `${Math.max(1, m)}min`;
+}

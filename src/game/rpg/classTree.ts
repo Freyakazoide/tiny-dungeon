@@ -21,17 +21,17 @@ const T1_LEVEL = 10;
 const T2_LEVEL = 25;
 
 const tier1 = (id: string, name: string, specialty: string, skill: ProficiencyId): ClassNode =>
-  ({ id, name, tier: 1, parent: 'aprendiz', specialty, requires: { level: T1_LEVEL, skills: { [skill]: 15 } } });
+  ({ id, name, tier: 1, parent: 'aprendiz', specialty, requires: { level: T1_LEVEL, skills: { [skill]: 25 } } });
 
 const pure = (id: string, name: string, parent: string, skill: ProficiencyId, counter?: CounterId): ClassNode =>
-  ({ id, name, tier: 2, parent, requires: { level: T2_LEVEL, skills: { [skill]: 30 }, ...(counter && { counters: { [counter]: COUNTER_TARGETS[counter] } }) } });
+  ({ id, name, tier: 2, parent, requires: { level: T2_LEVEL, skills: { [skill]: 40 }, ...(counter && { counters: { [counter]: COUNTER_TARGETS[counter] } }) } });
 
 const hybrid = (id: string, name: string, parent: string, a: ProficiencyId, b: ProficiencyId): ClassNode =>
-  ({ id, name, tier: 2, parent, requires: { level: T2_LEVEL, skills: { [a]: 25, [b]: 25 } } });
+  ({ id, name, tier: 2, parent, requires: { level: T2_LEVEL, skills: { [a]: 35, [b]: 35 } } });
 
 /** Subclasse com uma proficiência em 25 mais um contador vitalício. */
 const counted = (id: string, name: string, parent: string, skill: ProficiencyId, counter: CounterId): ClassNode =>
-  ({ id, name, tier: 2, parent, requires: { level: T2_LEVEL, skills: { [skill]: 25 }, counters: { [counter]: COUNTER_TARGETS[counter] } } });
+  ({ id, name, tier: 2, parent, requires: { level: T2_LEVEL, skills: { [skill]: 35 }, counters: { [counter]: COUNTER_TARGETS[counter] } } });
 
 export const CLASS_NODES: ClassNode[] = [
   { id: 'aprendiz', name: 'Squire', tier: 0, parent: null, requires: { level: 1 } },

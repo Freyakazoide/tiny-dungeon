@@ -1,8 +1,10 @@
 import { CLASSES } from '../data/classes';
 import { TRIES_PER_SECOND } from '../rpg/curves';
+import { runtime } from '../rpg/runtime';
+import { spellById } from '../data/spells';
 import { CLASS_BY_ID } from '../rpg/classTree';
 import { gainExperience as gainProfileExperience, gainTries } from '../rpg/profile';
-import type { ProficiencyId } from '../rpg/proficiencies';
+import { PROFICIENCIES, type ProficiencyId } from '../rpg/proficiencies';
 import { itemById } from '../data/items';
 import { CHARMS } from '../data/charms';
 import { TALENT_CONFIG, TALENT_EFFECT_NAMES, TALENTS, talentById } from '../data/talents';
@@ -22,11 +24,27 @@ export function trainProficiency(character: Character, id: ProficiencyId, tries 
   gainTries(character.profile, id, tries);
   return character.profile.proficiencies[id].level - before;
 }
+export const isElement = (id: ProficiencyId) => PROFICIENCIES[id].group === 'elemental';
+/**
+ * Elemento em foco: o alvo escolhido (`offlineTarget`) quando é um elemento; senão o elemento da primeira
+ * magia elemental equipada. Só ele treina por cast; sem magia dele equipada, nada treina.
+ */
+export function elementFocus(character: Character): ProficiencyId | undefined {
+  const target = character.profile.offlineTarget;
+  if (target && isElement(target)) return target;
+  for (const id of character.spellSlots) { const element = spellById(id)?.element; if (element) return element; }
+  return undefined;
+}
+/** O elemento em foco tem uma magia dele equipada? */
+export const focusSpellEquipped = (character: Character) => {
+  const focus = elementFocus(character);
+  return !!focus && character.spellSlots.some(id => spellById(id)?.element === focus);
+};
 /** Treino por tempo: 1 try a cada 1 / TRIES_PER_SECOND s de combate, na proficiência em foco. */
 export function trainByTime(character: Character, dt: number) {
   const profile = character.profile, focus = profile.trainingFocus;
   if (!focus) return;
-  profile.trainingAcc = (profile.trainingAcc ?? 0) + dt * TRIES_PER_SECOND;
+  profile.trainingAcc = (profile.trainingAcc ?? 0) + dt * TRIES_PER_SECOND * runtime.trainScale;
   const whole = Math.floor(profile.trainingAcc);
   if (whole > 0) { profile.trainingAcc -= whole; trainProficiency(character, focus, whole); }
 }

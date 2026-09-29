@@ -19,8 +19,8 @@ export interface ActiveEffect { id: string; type: 'regen' | 'shield' | 'buffAtta
 export interface MonsterDef { id: string; name: string; hp: number; attack: number; defense: number; speed: number; xp: number; gold: [number, number]; color: number; boss?: boolean; loot: LootEntry[]; location: string; }
 export interface MonsterRuntime { uid: string; defId: string; hp: number; maxHp: number; cooldown: number; alive: boolean; }
 export interface WaveDef { name: string; monsters: string[]; }
-export interface SpellDef { id: string; classId: ClassId; name: string; level: number; mana: number; cooldown: number; target: 'enemy' | 'allEnemies' | 'self' | 'ally' | 'allAllies'; power: number; kind: 'damage' | 'heal' | 'regen' | 'shield' | 'buff'; duration?: number; description: string; }
-export interface ItemDef { id: string; name: string; kind: ItemKind; rarity: Rarity; value: number; slot?: Slot; classIds?: ClassId[]; level?: number; stats?: Partial<Stats>; supply?: 'health' | 'mana'; amount?: number; }
+export interface SpellDef { id: string; classId: ClassId; name: string; level: number; mana: number; cooldown: number; target: 'enemy' | 'allEnemies' | 'self' | 'ally' | 'allAllies'; power: number; kind: 'damage' | 'heal' | 'regen' | 'shield' | 'buff'; duration?: number; description: string; element?: ProficiencyId; universal?: boolean; }
+export interface ItemDef { id: string; name: string; kind: ItemKind; rarity: Rarity; value: number; slot?: Slot; classIds?: ClassId[]; level?: number; stats?: Partial<Stats>; trains?: 'melee' | 'ranged'; supply?: 'health' | 'mana'; amount?: number; }
 export interface LootEntry { itemId: string; chance: number; min: number; max: number; }
 export interface InventoryStack { itemId: string; quantity: number; }
 export interface InventoryState { bp: InventoryStack[]; loot: InventoryStack[]; supply: InventoryStack[]; capacity: { bp: number; loot: number; supply: number }; }

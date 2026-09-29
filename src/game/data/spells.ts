@@ -8,4 +8,17 @@ export const SPELLS: SpellDef[] = [
   ['necro_bolt','necromancer','Grave Bolt',1,12,3.5,'enemy',1.7,'damage',0,'Raio sepulcral'], ['necro_nova','necromancer','Soul Nova',2,20,7,'allEnemies',1.25,'damage',0,'Explosão de almas'], ['necro_barrier','necromancer','Bone Barrier',4,22,10,'self',38,'shield',6,'Escudo de ossos'], ['necro_meteor','necromancer','Death Meteor',7,34,12,'allEnemies',2.05,'damage',0,'Chuva mortífera'],
   ['druid_mend','druid','Mend',1,11,4,'ally',1.55,'heal',0,'Cura rápida'], ['druid_regrowth','druid','Regrowth',2,17,8,'allAllies',.38,'regen',7,'Regeneração'], ['druid_thorns','druid','Thorns',4,18,9,'allAllies',.22,'buff',6,'Proteção natural'], ['druid_wrath','druid','Wrath',7,25,7,'allEnemies',1.45,'damage',0,'Fúria da natureza']
 ].map(([id,classId,name,level,mana,cooldown,target,power,kind,duration,description]) => ({ id, classId, name, level, mana, cooldown, target, power, kind, duration, description } as SpellDef));
+/** Uma magia de dano por elemento, disponível a qualquer personagem: é o que treina o elemento em foco. */
+const BASIC_SPELLS: SpellDef[] = [
+  ['fire', 'Faísca Ígnea'],
+  ['ice', 'Estilhaço Gélido'],
+  ['energy', 'Descarga Elétrica'],
+  ['earth', 'Pedrada'],
+  ['poison', 'Dardo Venenoso'],
+  ['holy', 'Raio Sagrado'],
+  ['death', 'Toque Sombrio'],
+  ['physical', 'Impacto Cinético'],
+  ['psychic', 'Pulso Mental']
+].map(([element, name]) => ({ id: `basic_${element}`, classId: 'squire', name, level: 1, mana: 9, cooldown: 4, target: 'enemy', power: 1.5, kind: 'damage', description: `Dano de ${name.toLowerCase()} · treina o elemento em foco`, element, universal: true } as SpellDef));
+SPELLS.push(...BASIC_SPELLS);
 export const spellById = (id: string) => SPELLS.find(s => s.id === id);

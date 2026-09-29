@@ -1,4 +1,5 @@
 import { TRIES_PER_SECOND } from './curves';
+import { runtime } from './runtime';
 import type { ProficiencyId } from './proficiencies';
 import { gainTries, type ProgressProfile } from './profile';
 
@@ -23,7 +24,7 @@ export function applyOfflineTraining(profile: ProgressProfile, gapSeconds: numbe
   const target = profile.offlineTarget ?? profile.lastTrained;
   if (!target) return null;
   const seconds = Math.min(gapSeconds, OFFLINE_CAP_S);
-  const tries = Math.floor(seconds * TRIES_PER_SECOND * OFFLINE_RATE);
+  const tries = Math.floor(seconds * TRIES_PER_SECOND * OFFLINE_RATE * runtime.trainScale);
   const before = profile.proficiencies[target].level;
   gainTries(profile, target, tries);
   return { target, seconds, tries, levelsGained: profile.proficiencies[target].level - before };

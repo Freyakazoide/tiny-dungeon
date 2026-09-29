@@ -1,0 +1,5 @@
+/**
+ * Multiplicadores de teste (só em memória; voltam a 1 ao recarregar). Só o `dev` de GameStore os altera,
+ * e ele só existe em `npm run dev`. Não aceleram o tick de combate, apenas o que se ganha por ele.
+ */
+export const runtime = { trainScale: 1, xpScale: 1 };
