@@ -1,0 +1,10 @@
+import { describe, expect, it, vi } from 'vitest';
+import { GameEngine, initialState } from './GameEngine';
+import { characterStats } from '../systems/progression';
+
+describe('GameEngine — hunt automática',()=>{
+  it('congela combate e cooldowns quando pausado',()=>{const e=new GameEngine();e.start();e.tick(100);const s=e.getSnapshot();const hp=s.monsters[0].hp;e.pause();for(let i=0;i<30;i++)e.tick(100);expect(e.getSnapshot().monsters[0].hp).toBe(hp);expect(e.getSnapshot().status).toBe('paused');e.resume();e.tick(1000);expect(e.getSnapshot().status).not.toBe('paused');});
+  it('mantém a escada aguardando quando avanço automático está desligado',()=>{const e=new GameEngine();e.start();e.setAutoAdvance(false);const s=e.getSnapshot();s.monsters.forEach(m=>{m.hp=1;});for(const c of s.characters)c.level=50;for(let i=0;i<100&&e.getSnapshot().status!=='transition';i++)e.tick(100);for(let i=0;i<20;i++)e.tick(100);expect(e.getSnapshot().status).toBe('transition');e.advance();expect(e.getSnapshot().wave).toBe(1);expect(e.getSnapshot().status).toBe('running');});
+  it('completa muitos ciclos sem multiplicar monstros ou timers',()=>{vi.spyOn(Math,'random').mockReturnValue(.99);const state=initialState();state.characters.forEach(c=>c.level=80);const e=new GameEngine(state);e.start();for(let i=0;i<30000&&e.getSnapshot().cycle<20;i++)e.tick(100);expect(e.getSnapshot().cycle).toBeGreaterThanOrEqual(20);expect(e.getSnapshot().monsters.length).toBeLessThanOrEqual(2);expect(e.getSnapshot().analyzer.cycles).toBe(e.getSnapshot().cycle);vi.restoreAllMocks();});
+  it('equipar e desequipar altera atributos e conserva o item',()=>{const e=new GameEngine();const s=e.getSnapshot();const knight=s.characters.find(c=>c.classId==='knight')!;const before=characterStats(knight,s).attack;expect(e.equip(knight.id,'rusty_sword')).toBe(true);expect(characterStats(knight,e.getSnapshot()).attack).toBeGreaterThan(before);expect(e.unequip(knight.id,'weapon')).toBe(true);expect(e.getSnapshot().inventory.bp.find(x=>x.itemId==='rusty_sword')?.quantity).toBe(1);});
+});

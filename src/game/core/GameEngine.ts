@@ -1,0 +1,78 @@
+import { CLASSES } from '../data/classes';
+import { MONSTERS, WAVES } from '../data/monsters';
+import { SPELLS, spellById } from '../data/spells';
+import { itemById } from '../data/items';
+import { CHARMS } from '../data/charms';
+import type { Analyzer, Character, ClassId, GameState, HelperConfig, InventoryStack, SkillId, SpellCondition } from './types';
+import { characterStats, gainExperience, gainSkill, investTalent } from '../systems/progression';
+import { conditionMet, healAmount, livingMonsters, livingTeam, magicDamage, monsterHit, physicalDamage } from '../systems/combat';
+import { addItem, randomInt, removeItem, rollLoot } from '../systems/loot';
+
+export type GameFx = { type:'attack'|'damage'|'heal'|'death'|'drop'|'stairs'|'wave'|'recovery'; source?:string; target?:string; value?:number; text?:string };
+const skills=():Character['skills']=>Object.fromEntries(['fist','sword','axe','club','distance','shielding','magic'].map(k=>[k,{level:10,xp:0}])) as Character['skills'];
+const helper=():HelperConfig=>({hpPotionAt:35,manaPotionAt:25,healAllies:true,autoSupplies:true,defensiveAmuletAt:25,emergencyAt:15,outOfSupplies:'continue'});
+const analyzer=():Analyzer=>({startedAt:Date.now(),activeMs:0,xp:0,gold:0,damage:0,damageTaken:0,healing:0,byCharacter:{},byMonster:{},kills:{},bosses:0,loot:{},lootValue:0,suppliesValue:0,cycles:0,defeats:0});
+let idCounter=0;
+export function createCharacter(classId:ClassId,name=CLASSES[classId].name):Character{
+  const base=CLASSES[classId].base;
+  const slots=SPELLS.filter(s=>s.classId===classId).slice(0,4).map(s=>s.id);
+  const spellConditions:Record<string,SpellCondition>={};
+  for(const id of slots){const s=spellById(id)!;spellConditions[id]=s.kind==='heal'||s.kind==='regen'?{allyInjured:true,manaAbove:10}:s.target==='allEnemies'?{minEnemies:2,manaAbove:15}:s.kind==='shield'?{hpBelow:65,manaAbove:10}:{manaAbove:10};}
+  return {id:`hero-${Date.now()}-${idCounter++}`,name,classId,level:1,xp:0,talentPoints:0,hp:base.maxHp,mana:base.maxMana,skills:skills(),equipment:{},spellSlots:slots,spellConditions,talents:{},cooldowns:{basic:0},effects:[],helper:helper()};
+}
+export function initialState():GameState{
+  const chars=[createCharacter('knight','Aldric'),createCharacter('monk','Kael'),createCharacter('paladin','Lyra'),createCharacter('druid','Eira'),createCharacter('sorcerer','Mira')];
+  return {version:1,status:'idle',autoAdvance:true,wave:0,cycle:0,transitionMs:0,characters:chars,team:chars.slice(0,4).map(c=>c.id),monsters:[],inventory:{bp:[{itemId:'rusty_sword',quantity:1},{itemId:'knuckle_wraps',quantity:1},{itemId:'oak_bow',quantity:1},{itemId:'apprentice_staff',quantity:1}],loot:[],supply:[{itemId:'health_potion',quantity:8},{itemId:'mana_potion',quantity:8}],capacity:{bp:40,loot:60,supply:30}},gold:0,charmPoints:0,charmSlots:1,equippedCharms:[],unlockedCharms:[],codex:{},analyzer:analyzer(),history:[],message:'Expedição pronta.',lastSavedAt:Date.now()};
+}
+
+export class GameEngine {
+  private state:GameState; private listeners=new Set<()=>void>(); private fxListeners=new Set<(fx:GameFx)=>void>(); private pausedFrom:GameState['status']='running';
+  constructor(state=initialState()){this.state=state;}
+  getSnapshot=()=>this.state;
+  subscribe=(fn:()=>void)=>{this.listeners.add(fn);return()=>this.listeners.delete(fn);};
+  onFx=(fn:(fx:GameFx)=>void)=>{this.fxListeners.add(fn);return()=>this.fxListeners.delete(fn);};
+  private emit(fx?:GameFx){this.state={...this.state};this.listeners.forEach(fn=>fn());if(fx)this.fxListeners.forEach(fn=>fn(fx));}
+  private spawnWave(){this.state.monsters=WAVES[this.state.wave].monsters.map((defId,i)=>({uid:`${this.state.cycle}-${this.state.wave}-${i}-${Date.now()}`,defId,hp:MONSTERS[defId].hp,maxHp:MONSTERS[defId].hp,cooldown:1/Math.max(.1,MONSTERS[defId].speed),alive:true}));this.state.message=WAVES[this.state.wave].name;this.emit({type:'wave',text:this.state.message});}
+  start(){if(this.state.status!=='idle')return;if(!livingTeam(this.state).length)for(const id of this.state.team){const c=this.state.characters.find(x=>x.id===id);if(c){const stats=characterStats(c,this.state);c.hp=stats.maxHp;c.mana=stats.maxMana;c.effects=[];}}if(!this.state.monsters.length||!livingMonsters(this.state).length)this.spawnWave();this.state.status='running';this.state.analyzer.startedAt=Date.now();this.state.message='Hunt iniciada.';this.emit();}
+  pause(){if(this.state.status==='idle'||this.state.status==='paused')return;this.pausedFrom=this.state.status;this.state.status='paused';this.state.message='Hunt pausada — cooldowns congelados.';this.emit();}
+  resume(){if(this.state.status!=='paused')return;this.state.status=this.pausedFrom;this.state.message='Hunt retomada.';this.emit();}
+  end(){if(this.state.status==='idle')return;this.state.status='idle';this.state.transitionMs=0;this.state.wave=0;this.state.monsters=[];this.state.message='Expedição encerrada. Recompensas preservadas.';this.emit();}
+  setAutoAdvance(value:boolean){this.state.autoAdvance=value;this.emit();}
+  advance(){if(this.state.status==='transition'&&!this.state.autoAdvance){this.state.transitionMs=0;this.finishTransition(true);}}
+  tick(ms:number){
+    if(this.state.status==='idle'||this.state.status==='paused')return;const dt=Math.min(ms,100)/1000;
+    if(this.state.status==='transition'||this.state.status==='recovering'){this.state.transitionMs-=ms;if(this.state.transitionMs<=0)this.finishTransition();this.emit();return;}
+    this.state.analyzer.activeMs+=ms;
+    for(const c of livingTeam(this.state)){this.updateCharacter(c,dt);if(this.state.status!=='running')break;}
+    if(this.state.status==='running')for(const m of livingMonsters(this.state)){m.cooldown-=dt;if(m.cooldown<=0){const targets=livingTeam(this.state);if(!targets.length){this.defeat();break;}const knight=targets.find(c=>c.classId==='knight');const target=knight&&Math.random()<.65?knight:targets[randomInt(0,targets.length-1)];const dealt=monsterHit(m,target,this.state);this.emit({type:'damage',source:m.uid,target:target.id,value:dealt});m.cooldown+=1/MONSTERS[m.defId].speed;if(!livingTeam(this.state).length){this.defeat();break;}}}
+    this.emit();
+  }
+  private updateCharacter(c:Character,dt:number){
+    const stats=characterStats(c,this.state);c.mana=Math.min(stats.maxMana,c.mana+dt*(1+stats.maxMana*.008));
+    for(const key of Object.keys(c.cooldowns))c.cooldowns[key]=Math.max(0,c.cooldowns[key]-dt);
+    for(const e of [...c.effects]){e.remaining-=dt;if(e.type==='regen'){e.tick=(e.tick??0)-dt;if(e.tick<=0){const amount=Math.round(e.value);c.hp=Math.min(stats.maxHp,c.hp+amount);this.state.analyzer.healing+=amount;e.tick=1;this.emit({type:'heal',target:c.id,value:amount});}}if(e.remaining<=0)c.effects.splice(c.effects.indexOf(e),1);}
+    this.autoSupply(c,stats.maxHp,stats.maxMana);if(c.cooldowns.basic>0)return;
+    const spell=c.spellSlots.map(spellById).find(s=>s&&s.level<=c.level&&c.mana>=s.mana&&(c.cooldowns[s.id]??0)<=0&&conditionMet(c,s,this.state));
+    if(spell){this.cast(c,spell);c.cooldowns[spell.id]=spell.cooldown*(1-this.cooldownTalent(c));c.cooldowns.basic=.35;} else this.basicAttack(c);
+  }
+  private cooldownTalent(c:Character){return (c.talents[`${c.classId}_talent_5`]??0)*.05;}
+  private basicAttack(c:Character){const target=livingMonsters(this.state)[0];if(!target)return;const stats=characterStats(c,this.state);const crit=Math.random()<stats.crit;const skill=CLASSES[c.classId].weaponSkill as SkillId;const skillBonus=1+c.skills[skill].level*.012;const damage=physicalDamage(stats.attack*skillBonus,MONSTERS[target.defId].defense,crit);this.hit(c,target,damage);gainSkill(c,skill,1);c.cooldowns.basic=1/Math.max(.2,stats.attackSpeed);this.emit({type:'attack',source:c.id,target:target.uid,value:damage,text:crit?'CRÍTICO':''});}
+  private cast(c:Character,s:NonNullable<ReturnType<typeof spellById>>){c.mana-=s.mana;const stats=characterStats(c,this.state);if(s.kind==='damage'){const targets=s.target==='allEnemies'?livingMonsters(this.state):livingMonsters(this.state).slice(0,1);for(const target of targets)this.hit(c,target,magicDamage(stats.magicPower+stats.attack*.45,s.power,MONSTERS[target.defId].defense));gainSkill(c,'magic',2);this.emit({type:'attack',source:c.id,text:s.name});return;}const allies=s.target==='allAllies'?livingTeam(this.state):s.target==='ally'?[livingTeam(this.state).sort((a,b)=>a.hp/characterStats(a,this.state).maxHp-b.hp/characterStats(b,this.state).maxHp)[0]]:[c];for(const ally of allies.filter(Boolean)){if(s.kind==='heal'){const before=ally.hp;ally.hp=Math.min(characterStats(ally,this.state).maxHp,ally.hp+healAmount(stats.magicPower,s.power));const amount=ally.hp-before;this.state.analyzer.healing+=amount;this.emit({type:'heal',source:c.id,target:ally.id,value:amount,text:s.name});}else ally.effects.push({id:`${s.id}-${Date.now()}`,type:s.kind==='regen'?'regen':s.kind==='shield'?'shield':s.power>.25?'buffAttack':'buffDefense',value:s.kind==='regen'?healAmount(stats.magicPower,s.power):s.kind==='shield'?s.power:s.power,remaining:s.duration??5,source:c.id});}gainSkill(c,'magic',2);}
+  private hit(c:Character,target:GameState['monsters'][number],damage:number){if(!target.alive)return;const fury=this.state.equippedCharms.includes('fury')?1.08:1;damage=Math.round(damage*fury);target.hp=Math.max(0,target.hp-damage);this.state.analyzer.damage+=damage;this.state.analyzer.byCharacter[c.id]=(this.state.analyzer.byCharacter[c.id]??0)+damage;this.state.analyzer.byMonster[target.defId]=(this.state.analyzer.byMonster[target.defId]??0)+damage;this.emit({type:'damage',source:c.id,target:target.uid,value:damage});if(target.hp<=0)this.kill(target);}
+  private kill(target:GameState['monsters'][number]){target.alive=false;const def=MONSTERS[target.defId];this.state.analyzer.kills[def.id]=(this.state.analyzer.kills[def.id]??0)+1;if(def.boss)this.state.analyzer.bosses++;const xpMult=this.state.equippedCharms.includes('wisdom')?1.12:1;const xp=Math.round(def.xp*xpMult);this.state.analyzer.xp+=xp;for(const c of this.state.team.map(id=>this.state.characters.find(x=>x.id===id)).filter(Boolean) as Character[])gainExperience(c,xp);const gold=randomInt(def.gold[0],def.gold[1]);this.state.gold+=gold;this.state.analyzer.gold+=gold;const drops=rollLoot(this.state,def);const entry=this.state.codex[def.id]??={kills:0,discoveredLoot:[],claimed:[]};entry.kills++;for(const d of drops)if(!entry.discoveredLoot.includes(d.itemId))entry.discoveredLoot.push(d.itemId);this.state.codex[def.id]=entry;this.checkMilestones(entry);this.emit({type:'death',target:target.uid,text:`+${xp} XP · ${gold} ouro`});if(drops.length)this.emit({type:'drop',text:drops.map(d=>`${d.quantity}× ${itemById(d.itemId)?.name}`).join(', ')});if(!livingMonsters(this.state).length)this.completeWave();}
+  private checkMilestones(entry:GameState['codex'][string]){for(const [i,n] of [10,50,200].entries())if(entry.kills>=n&&!entry.claimed.includes(n)){entry.claimed.push(n);this.state.charmPoints+=i+1;for(const charm of CHARMS)if(charm.milestone<=n&&!this.state.unlockedCharms.includes(charm.id))this.state.unlockedCharms.push(charm.id);}}
+  private completeWave(){const boss=this.state.wave===WAVES.length-1;this.state.status='transition';this.state.transitionMs=boss?2000:1000;this.state.message=boss?`Boss derrotado! ${this.state.analyzer.lootValue} de valor em loot.`:'Wave concluída — a escada surgiu.';if(boss){this.state.analyzer.cycles++;this.state.cycle++;}this.emit({type:'stairs',text:this.state.message});}
+  private finishTransition(force=false){if(this.state.status==='recovering'){for(const id of this.state.team){const c=this.state.characters.find(x=>x.id===id);if(c){const s=characterStats(c,this.state);c.hp=s.maxHp;c.mana=s.maxMana;c.effects=[];}}this.state.wave=0;this.spawnWave();this.state.status='running';return;}if(!this.state.autoAdvance&&!force){this.state.transitionMs=0;return;}this.state.wave=(this.state.wave+1)%WAVES.length;for(const c of this.state.characters){const s=characterStats(c,this.state);c.hp=Math.min(s.maxHp,c.hp+s.maxHp*.12);c.mana=Math.min(s.maxMana,c.mana+s.maxMana*.18);}this.spawnWave();this.state.status='running';}
+  private defeat(){this.state.analyzer.defeats++;this.state.status='recovering';this.state.transitionMs=5000;this.state.message='Equipe derrotada. Recuperação em 5 segundos.';this.emit({type:'recovery',text:this.state.message});}
+  private autoSupply(c:Character,maxHp:number,maxMana:number){if(!c.helper.autoSupplies)return;const use=(supply:'health'|'mana')=>{const stack=this.state.inventory.supply.find(x=>itemById(x.itemId)?.supply===supply);if(!stack)return false;const item=itemById(stack.itemId)!;removeItem(this.state.inventory.supply,item.id);if(supply==='health')c.hp=Math.min(maxHp,c.hp+(item.amount??0));else c.mana=Math.min(maxMana,c.mana+(item.amount??0));this.state.analyzer.suppliesValue+=item.value;return true;};if(c.hp/maxHp*100<=c.helper.hpPotionAt)use('health');if(c.mana/maxMana*100<=c.helper.manaPotionAt)use('mana');}
+  create(classId:ClassId,name:string){if(this.state.characters.some(c=>c.classId===classId))return false;this.state.characters.push(createCharacter(classId,name.trim()||CLASSES[classId].name));this.emit();return true;}
+  toggleTeam(id:string){const at=this.state.team.indexOf(id);if(at>=0)this.state.team.splice(at,1);else if(this.state.team.length<4)this.state.team.push(id);else return false;this.emit();return true;}
+  rename(id:string,name:string){const c=this.state.characters.find(x=>x.id===id);if(c&&name.trim()){c.name=name.trim();this.emit();}}
+  reorderSpell(id:string,from:number,to:number){const c=this.state.characters.find(x=>x.id===id);if(!c||to<0||to>=c.spellSlots.length)return;const [s]=c.spellSlots.splice(from,1);c.spellSlots.splice(to,0,s);this.emit();}
+  setSpellCondition(id:string,spellId:string,patch:Partial<SpellCondition>){const c=this.state.characters.find(x=>x.id===id);if(c){c.spellConditions[spellId]={...c.spellConditions[spellId],...patch};this.emit();}}
+  equip(characterId:string,itemId:string){const c=this.state.characters.find(x=>x.id===characterId);const item=itemById(itemId);if(!c||!item?.slot||item.kind!=='equipment'||(item.level??1)>c.level||(item.classIds&&!item.classIds.includes(c.classId)))return false;if(!removeItem(this.state.inventory.bp,itemId))return false;const old=c.equipment[item.slot];if(old)addItem(this.state,old,1);c.equipment[item.slot]=itemId;const stats=characterStats(c,this.state);c.hp=Math.min(c.hp,stats.maxHp);c.mana=Math.min(c.mana,stats.maxMana);this.emit();return true;}
+  unequip(characterId:string,slot:keyof Character['equipment']){const c=this.state.characters.find(x=>x.id===characterId);const old=c?.equipment[slot];if(!c||!old||!addItem(this.state,old,1))return false;delete c.equipment[slot];this.emit();return true;}
+  useSupply(characterId:string,itemId:string){const c=this.state.characters.find(x=>x.id===characterId);const item=itemById(itemId);if(!c||!item?.supply||!removeItem(this.state.inventory.supply,itemId))return false;const stats=characterStats(c,this.state);if(item.supply==='health')c.hp=Math.min(stats.maxHp,c.hp+(item.amount??0));else c.mana=Math.min(stats.maxMana,c.mana+(item.amount??0));this.state.analyzer.suppliesValue+=item.value;this.emit();return true;}
+  sell(container:'bp'|'loot'|'supply',itemId:string){const list=this.state.inventory[container] as InventoryStack[];const item=itemById(itemId);if(!item||!removeItem(list,itemId))return false;this.state.gold+=item.value;this.emit();return true;}
+  invest(characterId:string,talentId:string){const c=this.state.characters.find(x=>x.id===characterId);if(c&&investTalent(c,talentId)){this.emit();return true;}return false;}
+}
