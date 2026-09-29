@@ -31,12 +31,12 @@ export const spellAvailable = (character: Character, spell: SpellDef) =>
   (spell.classId === character.classId || !!spell.universal) && spell.level <= character.profile.level && (!spell.node || character.profile.classPath.includes(spell.node));
 export const isElement = (id: ProficiencyId) => PROFICIENCIES[id].group === 'elemental';
 /**
- * Elemento em foco: o alvo escolhido (`offlineTarget`) quando é um elemento; senão o elemento da primeira
- * magia elemental equipada. Só ele treina por cast; sem magia dele equipada, nada treina.
+ * Elemento em foco: o primeiro elemento entre as vagas de treino (`offlineTargets`); senão o elemento da
+ * primeira magia elemental equipada. Só ele treina por cast; sem magia dele equipada, nada treina.
  */
 export function elementFocus(character: Character): ProficiencyId | undefined {
-  const target = character.profile.offlineTarget;
-  if (target && isElement(target)) return target;
+  const target = character.profile.offlineTargets.find((id): id is ProficiencyId => !!id && isElement(id));
+  if (target) return target;
   for (const id of character.spellSlots) { const element = spellById(id)?.element; if (element) return element; }
   return undefined;
 }

@@ -42,7 +42,7 @@ describe('A — armas e foco de treino', () => {
   it('cast do elemento em foco rende 2 tries no elemento e em Magia; outro elemento rende 0', () => {
     const e = new GameEngine(partyState()); const c = e.getSnapshot().characters[0];
     expect(e.equipSpell(c.id, 0, 'basic_holy')).toBe(true); expect(e.equipSpell(c.id, 1, 'basic_fire')).toBe(true);
-    e.setOfflineTarget(c.id, 'holy');
+    e.setOfflineTarget(c.id, 0, 'holy');
     cast(e, c, 'basic_holy');
     expect(c.profile.proficiencies.holy.tries).toBe(2); expect(c.profile.proficiencies.magic.tries).toBe(2);
     cast(e, c, 'basic_fire');
@@ -50,12 +50,12 @@ describe('A — armas e foco de treino', () => {
     expect(c.profile.trainingFocus).toBeUndefined(); // magia elemental não muda o foco da arma
   });
   it('sem foco elemental (nem magia elemental equipada), nenhum elemento treina', () => {
-    const e = endlessCombat(engine => { for (const c of engine.getSnapshot().characters) { engine.setOfflineTarget(c.id, undefined); c.spellSlots.forEach((id, slot) => { if (id.startsWith('basic_')) engine.equipSpell(c.id, slot, 'squire_guard'); }); } });
+    const e = endlessCombat(engine => { for (const c of engine.getSnapshot().characters) { engine.setOfflineTarget(c.id, 0, undefined); c.spellSlots.forEach((id, slot) => { if (id.startsWith('basic_')) engine.equipSpell(c.id, slot, 'squire_guard'); }); } });
     for (const c of e.getSnapshot().characters) for (const id of PROFICIENCY_IDS.filter(i => !['melee', 'ranged', 'defense'].includes(i))) expect(total(c, id)).toBe(0);
   });
   it('sem alvo definido, o foco é o elemento da primeira magia elemental equipada', () => {
     const e = new GameEngine(partyState()); const c = e.getSnapshot().characters[0];
-    e.setOfflineTarget(c.id, undefined); e.equipSpell(c.id, 0, 'squire_guard');
+    e.setOfflineTarget(c.id, 0, undefined); e.equipSpell(c.id, 0, 'squire_guard');
     e.equipSpell(c.id, 2, 'basic_ice'); e.equipSpell(c.id, 3, 'basic_fire');
     cast(e, c, 'basic_fire'); expect(c.profile.proficiencies.fire.tries).toBe(0);
     cast(e, c, 'basic_ice'); expect(c.profile.proficiencies.ice.tries).toBe(2);
@@ -89,23 +89,24 @@ describe('A — armas e foco de treino', () => {
   });
   it('depois de 2 h offline a caçada volta a idle e o relatório existe', () => {
     const state = partyState(); const e = new GameEngine(state);
-    e.setOfflineTarget(state.characters[0].id, 'melee'); e.start(); expect(e.getSnapshot().status).toBe('running');
+    e.setOfflineTarget(state.characters[0].id, 0, 'melee'); e.start(); expect(e.getSnapshot().status).toBe('running');
     e.returnFromOffline(7200);
     const s = e.getSnapshot();
     expect(s.status).toBe('idle'); expect(s.monsters).toHaveLength(0); expect(s.wave).toBe(0);
-    expect(s.offlineReport?.seconds).toBe(7200); expect(s.offlineReport?.huntEnded).toBe(true); expect(s.offlineReport?.entries[0].tries).toBe(3600);
+    expect(s.offlineReport?.seconds).toBe(7200); expect(s.offlineReport?.huntEnded).toBe(true); expect(s.offlineReport?.entries[0].training[0].tries).toBe(3600);
   });
 });
 
 describe('Bloco 7 — offline e sessão', () => {
   it('gap offline sem alvo de treino ainda encerra a caçada e informa no relatório', () => {
-    const e = new GameEngine(partyState()); e.getSnapshot().characters.forEach(c => { c.profile.offlineTarget = undefined; c.profile.lastTrained = undefined; });
+    const e = new GameEngine(partyState()); e.getSnapshot().characters.forEach(c => { c.profile.offlineTargets = [null, null]; c.profile.offlineHistory = []; c.profile.lastTrained = undefined; c.profile.prevTrained = undefined; });
     e.start(); e.returnFromOffline(7200);
-    expect(e.getSnapshot().status).toBe('idle'); expect(e.getSnapshot().offlineReport).toMatchObject({ huntEnded: true, entries: [] });
+    expect(e.getSnapshot().status).toBe('idle'); expect(e.getSnapshot().offlineReport).toMatchObject({ huntEnded: true, hunt: 'Catacumbas' }); expect(e.getSnapshot().offlineReport!.entries.every(x => x.training.length === 0)).toBe(true);
   });
-  it('sem caçada ativa e sem treino, não há relatório', () => {
-    const e = new GameEngine(partyState()); e.getSnapshot().characters.forEach(c => { c.profile.offlineTarget = undefined; });
-    e.returnFromOffline(7200); expect(e.getSnapshot().offlineReport).toBeUndefined();
+  it('sem caçada ativa, sem treino e com a fração offline em 0, não há relatório', () => {
+    const e = new GameEngine(partyState()); e.getSnapshot().characters.forEach(c => { c.profile.offlineTargets = [null, null]; c.profile.offlineHistory = []; });
+    runtime.offlineShare = 0;
+    try { e.returnFromOffline(7200); expect(e.getSnapshot().offlineReport).toBeUndefined(); } finally { runtime.offlineShare = .25; }
   });
 });
 
@@ -139,9 +140,9 @@ describe('B — ferramentas de teste', () => {
     expect(tries).toBeGreaterThan(27000); expect(tries).toBeLessThan(33000);
   });
   it('fastForwardOffline(48) credita só 24 h e encerra a caçada', () => {
-    const { e, d, id } = dev(); e.setOfflineTarget(id, 'melee'); e.start();
+    const { e, d, id } = dev(); e.setOfflineTarget(id, 0, 'melee'); e.start();
     d.fastForwardOffline(48);
-    expect(e.getSnapshot().offlineReport?.entries[0].seconds).toBe(86400); expect(e.getSnapshot().status).toBe('idle');
+    expect(e.getSnapshot().offlineReport?.seconds).toBe(86400); expect(e.getSnapshot().status).toBe('idle');
     expect(total(e.getSnapshot().characters[0], 'melee')).toBe(43200);
   });
   it('xpScale multiplica o XP dos monstros', () => {

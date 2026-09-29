@@ -26,8 +26,8 @@ const equip = (e: GameEngine, c: Character, spellId: string) => { c.spellSlots[3
 describe('Bloco 8 — subclasses do Mago', () => {
   it('só as 3 subclasses do Mago são jogáveis no Tier 2, com os requisitos já na árvore', () => {
     expect(['piromante', 'criomante', 'arcanista_de_plasma', 'lich'].map(isPlayable)).toEqual([true, true, true, false]);
-    expect(CLASS_BY_ID.piromante.requires).toEqual({ level: 25, skills: { fire: 40 } });
-    expect(CLASS_BY_ID.criomante.requires).toEqual({ level: 25, skills: { ice: 40 } });
+    expect(CLASS_BY_ID.piromante.requires).toEqual({ level: 25, skills: { fire: 38 } });
+    expect(CLASS_BY_ID.criomante.requires).toEqual({ level: 25, skills: { ice: 38 } });
     expect(CLASS_BY_ID.arcanista_de_plasma.requires).toEqual({ level: 25, skills: { fire: 35, energy: 35 } });
   });
   it('evoluir soma as magias do nó nos slots livres; com os 4 slots cheios elas ficam disponíveis para equipar', () => {

@@ -8,6 +8,8 @@ export const COUNTER_IDS = [
 ] as const;
 export type CounterId = (typeof COUNTER_IDS)[number];
 
+export type OfflineSlots = [ProficiencyId | null, ProficiencyId | null];
+export const OFFLINE_HISTORY_MAX = 6;
 export interface ProficiencyProgress { level: number; tries: number; }
 
 /**
@@ -22,10 +24,13 @@ export interface ProgressProfile {
   classPath: string[];
   proficiencies: Record<ProficiencyId, ProficiencyProgress>;
   counters: Partial<Record<CounterId, number>>;
-  /** Alvo do treino offline escolhido pelo jogador. */
-  offlineTarget?: ProficiencyId;
-  /** Última proficiência treinada (alvo padrão do offline). */
+  /** Duas vagas de proficiência que treinam offline (null = não escolhida). */
+  offlineTargets: OfflineSlots;
+  /** Últimas escolhidas, mais recente primeiro (máx. 6, sem repetir): usadas quando o jogador não escolhe. */
+  offlineHistory: ProficiencyId[];
+  /** As duas últimas proficiências treinadas de fato (a atual e a anterior, diferentes). */
   lastTrained?: ProficiencyId;
+  prevTrained?: ProficiencyId;
   /** Proficiência usada na última ação de combate; recebe o treino por tempo (TRIES_PER_SECOND). */
   trainingFocus?: ProficiencyId;
   /** Fração de try acumulada entre ticks de combate. */
@@ -36,7 +41,7 @@ export function createProfile(): ProgressProfile {
   const proficiencies = Object.fromEntries(
     PROFICIENCY_IDS.map(id => [id, { level: START_LEVEL, tries: 0 }]),
   ) as Record<ProficiencyId, ProficiencyProgress>;
-  return { level: 1, xp: 0, classId: 'aprendiz', classPath: ['aprendiz'], proficiencies, counters: {} };
+  return { level: 1, xp: 0, classId: 'aprendiz', classPath: ['aprendiz'], proficiencies, counters: {}, offlineTargets: [null, null], offlineHistory: [] };
 }
 
 export function gainExperience(profile: ProgressProfile, amount: number) {
@@ -51,7 +56,7 @@ export function gainExperience(profile: ProgressProfile, amount: number) {
 export function gainTries(profile: ProgressProfile, id: ProficiencyId, amount: number) {
   const progress = profile.proficiencies[id];
   progress.tries += amount;
-  profile.lastTrained = id;
+  if (profile.lastTrained !== id) { profile.prevTrained = profile.lastTrained; profile.lastTrained = id; }
   while (progress.level < MAX_PROFICIENCY_LEVEL && progress.tries >= triesForNextLevel(id, progress.level)) {
     progress.tries -= triesForNextLevel(id, progress.level);
     progress.level++;

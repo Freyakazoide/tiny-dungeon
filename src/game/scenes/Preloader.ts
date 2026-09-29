@@ -1,7 +1,7 @@
 import { Scene, Textures } from 'phaser';
 import { HUNTS, type HuntDef } from '../data/hunts';
+import { spriteTexturesReady } from '../assets';
 import { CHARACTER_ANIMATION_FPS, mapKey, mapPath, CHARACTER_DIRECTIONS, CHARACTER_SPRITES, characterAnimationKey, characterFramePath } from '../assets';
-import type { ClassId } from '../core/types';
 
 export class Preloader extends Scene
 {
@@ -38,10 +38,10 @@ export class Preloader extends Scene
         this.load.image('logo', 'logo.png');
         this.load.image('star', 'star.png');
         for(const hunt of HUNTS)this.load.image(mapKey(hunt.id), mapPath(hunt.map));
-        this.load.on('loaderror',(file:Phaser.Loader.File)=>console.warn(`Mapa ausente ou inválido (${file.key}): esperado public/assets/${file.src??file.url} — 1448×1086 PNG. Usando placeholder.`));
-        for(const [classId, asset] of Object.entries(CHARACTER_SPRITES) as [ClassId, NonNullable<(typeof CHARACTER_SPRITES)[ClassId]>][]){
+        this.load.on('loaderror',(file:Phaser.Loader.File)=>{if(!file.key.startsWith('character-'))console.warn(`Mapa ausente ou inválido (${file.key}): esperado public/assets/${file.src??file.url} — 1448×1086 PNG. Usando placeholder.`);});
+        for(const [spriteId, asset] of Object.entries(CHARACTER_SPRITES)){
             for(const direction of CHARACTER_DIRECTIONS){
-                asset.frames[direction].forEach((key,index)=>this.load.image(key,characterFramePath(classId,direction,(index+1) as 1|2)));
+                asset.frames[direction].forEach((key,index)=>this.load.image(key,characterFramePath(spriteId,direction,(index+1) as 1|2)));
             }
         }
     }
@@ -49,10 +49,12 @@ export class Preloader extends Scene
     create ()
     {
         for(const hunt of HUNTS)if(!this.textures.exists(mapKey(hunt.id)))this.makePlaceholder(hunt);
-        for(const [classId, asset] of Object.entries(CHARACTER_SPRITES) as [ClassId, NonNullable<(typeof CHARACTER_SPRITES)[ClassId]>][]){
+        for(const [spriteId, asset] of Object.entries(CHARACTER_SPRITES)){
+            // Sprite com PNG ausente não anima nem quebra: o personagem cai no bloco colorido (Game.ts confere as texturas).
+            if(!spriteTexturesReady(this.textures,asset)){console.warn(`Sprite "${spriteId}" incompleto: esperado public/assets/characters/${spriteId}/{down,up,left,right}_{1,2}.png. Usando o bloco colorido.`);continue;}
             for(const direction of CHARACTER_DIRECTIONS){
                 for(const key of asset.frames[direction])this.textures.get(key).setFilter(Textures.FilterMode.NEAREST);
-                const key=characterAnimationKey(classId,direction);
+                const key=characterAnimationKey(spriteId,direction);
                 if(!this.anims.exists(key))this.anims.create({key,frames:asset.frames[direction].map(frameKey=>({key:frameKey})),frameRate:CHARACTER_ANIMATION_FPS,repeat:-1});
             }
         }

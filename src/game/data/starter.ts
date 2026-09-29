@@ -16,4 +16,4 @@ export const STARTER_OFFHAND = 'wooden_shield';
 export const defaultRow = (weaponId: string | undefined, trains?: 'melee' | 'ranged'): CharacterRow =>
   STARTER_WEAPONS.find(w => w.id === weaponId)?.row ?? (trains === 'ranged' ? 'back' : 'front');
 
-export interface CharacterSpec { name: string; weaponId: string; row?: CharacterRow; element?: ProficiencyId; }
+export interface CharacterSpec { name: string; weaponId: string; row?: CharacterRow; element?: ProficiencyId; spriteId?: string; }

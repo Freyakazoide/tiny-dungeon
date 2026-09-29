@@ -1,6 +1,6 @@
 import { Math as PhaserMath, Scene } from 'phaser';
 import { EventBus } from '../EventBus';
-import { CHARACTER_SPRITES, mapKey, characterAnimationKey, type CharacterDirection } from '../assets';
+import { CHARACTER_SPRITES, mapKey, characterAnimationKey, spriteTexturesReady, type CharacterDirection } from '../assets';
 import { gameStore } from '../core/GameStore';
 import { runtime } from '../rpg/runtime';
 import type { GameFx } from '../core/GameEngine';
@@ -12,7 +12,7 @@ import { characterStats } from '../systems/progression';
 import { combatFormation, dominantDirection, entranceFormation, stairFormation, type ArenaPoint } from './movement';
 
 type HeroBody=Phaser.GameObjects.Sprite|Phaser.GameObjects.Rectangle;
-type HeroView={container:Phaser.GameObjects.Container;body:HeroBody;sprite?:Phaser.GameObjects.Sprite;name:Phaser.GameObjects.Text;hpBg:Phaser.GameObjects.Rectangle;hp:Phaser.GameObjects.Rectangle;manaBg:Phaser.GameObjects.Rectangle;mana:Phaser.GameObjects.Rectangle;effects:Phaser.GameObjects.Text;direction:CharacterDirection;moveTween?:Phaser.Tweens.Tween;walking:boolean};
+type HeroView={container:Phaser.GameObjects.Container;spriteId:string;body:HeroBody;sprite?:Phaser.GameObjects.Sprite;name:Phaser.GameObjects.Text;hpBg:Phaser.GameObjects.Rectangle;hp:Phaser.GameObjects.Rectangle;manaBg:Phaser.GameObjects.Rectangle;mana:Phaser.GameObjects.Rectangle;effects:Phaser.GameObjects.Text;direction:CharacterDirection;moveTween?:Phaser.Tweens.Tween;walking:boolean};
 type MonsterView={body:Phaser.GameObjects.Arc;name:Phaser.GameObjects.Text;hpBg:Phaser.GameObjects.Rectangle;hp:Phaser.GameObjects.Rectangle};
 
 export class Game extends Scene {
@@ -92,6 +92,7 @@ export class Game extends Scene {
     team.forEach(c=>{
       let v=this.heroes.get(c.id);
       if(!v){v=this.createHero(c,entrances.get(c.id)!);this.heroes.set(c.id,v);created.push(c.id);}
+      if(v.spriteId!==c.spriteId)this.swapBody(v,c);
       const stats=characterStats(c,state);
       v.name.setText(`${c.name} · Nv ${c.profile.level}${c.hp<=0?'  ☠':''}`);
       v.hp.displayWidth=90*Math.max(0,c.hp/stats.maxHp);v.mana.displayWidth=90*Math.max(0,c.mana/stats.maxMana);
@@ -119,11 +120,22 @@ export class Game extends Scene {
     this.previousStatus=state.status;this.previousWave=state.wave;this.previousCycle=state.cycle;
   }
 
+  /** Sprite escolhido, só se os 8 PNGs carregaram; senão undefined e o herói é um bloco colorido. */
+  private spriteAsset(spriteId:string){const asset=CHARACTER_SPRITES[spriteId];return asset&&spriteTexturesReady(this.textures,asset)?asset:undefined;}
+  private makeBody(character:Character):{body:HeroBody;sprite?:Phaser.GameObjects.Sprite}{
+    const asset=this.spriteAsset(character.spriteId);
+    if(asset){const sprite=this.add.sprite(0,0,asset.frames.down[0]).setOrigin(...asset.origin).setScale(asset.scale);return {body:sprite,sprite};}
+    return {body:this.add.rectangle(0,0,38,54,CLASSES[character.classId].color).setStrokeStyle(2,0xe4ddcf)};
+  }
+  /** Troca o corpo do herói (sprite escolhido depois de criado) mantendo posição, barras e nome. */
+  private swapBody(view:HeroView,character:Character){
+    view.container.remove(view.body,true);
+    const {body,sprite}=this.makeBody(character);
+    view.container.addAt(body,0);view.body=body;view.sprite=sprite;view.spriteId=character.spriteId;
+    this.setDirection(view,view.direction,view.walking);
+  }
   private createHero(character:Character,point:ArenaPoint):HeroView{
-    const asset=CHARACTER_SPRITES[character.classId];
-    let body:HeroBody;let sprite:Phaser.GameObjects.Sprite|undefined;
-    if(asset){sprite=this.add.sprite(0,0,asset.frames.down[0]).setOrigin(...asset.origin).setScale(asset.scale);body=sprite;}
-    else body=this.add.rectangle(0,0,38,54,CLASSES[character.classId].color).setStrokeStyle(2,0xe4ddcf);
+    const {body,sprite}=this.makeBody(character);
     const hpBg=this.add.rectangle(-45,-54,90,8,0x32171c,.95).setOrigin(0,.5);
     const manaBg=this.add.rectangle(-45,-43,90,6,0x152443,.95).setOrigin(0,.5);
     const hp=this.add.rectangle(-45,-54,90,6,0xc9535d).setOrigin(0,.5);
@@ -131,7 +143,7 @@ export class Game extends Scene {
     const name=this.add.text(0,40,'',{fontSize:'12px',color:'#fff',stroke:'#090b0e',strokeThickness:4,align:'center'}).setOrigin(.5);
     const effects=this.add.text(0,58,'',{fontSize:'10px',color:'#9ce0af',stroke:'#080a0c',strokeThickness:3}).setOrigin(.5);
     const container=this.add.container(point.x,point.y,[body,hpBg,manaBg,hp,mana,name,effects]).setDepth(6+point.y/1000);
-    return {container,body,sprite,name,hpBg,hp,manaBg,mana,effects,direction:'down',walking:false};
+    return {container,spriteId:character.spriteId,body,sprite,name,hpBg,hp,manaBg,mana,effects,direction:'down',walking:false};
   }
 
   private beginWave(team:Character[]){
@@ -161,9 +173,9 @@ export class Game extends Scene {
   private setDirection(view:HeroView,direction:CharacterDirection,walking:boolean){
     view.direction=direction;if(!view.sprite)return;
     const character=[...this.heroes.entries()].find(([,candidate])=>candidate===view)?.[0];
-    const classId=character?gameStore.getSnapshot().characters.find(c=>c.id===character)?.classId:undefined;
-    const asset=classId?CHARACTER_SPRITES[classId]:undefined;if(!asset)return;
-    if(walking)view.sprite.play(characterAnimationKey(classId!,direction),true);
+    const spriteId=character?gameStore.getSnapshot().characters.find(c=>c.id===character)?.spriteId:undefined;
+    const asset=spriteId?this.spriteAsset(spriteId):undefined;if(!asset)return;
+    if(walking)view.sprite.play(characterAnimationKey(spriteId!,direction),true);
     else{view.sprite.stop();view.sprite.setTexture(asset.frames[direction][0]);}
   }
 

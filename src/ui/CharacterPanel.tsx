@@ -9,6 +9,7 @@ import { characterStats, classLabel, xpForLevel } from '../game/systems/progress
 import { colorHex, compact, pct } from './format';
 import { CHARACTER_TABS, type CharacterTab } from './navigation';
 import { ProgressBar } from './ProgressBar';
+import { SpritePicker } from './SpritePicker';
 import { CounterList, ProficiencyGrid } from './RpgPanels';
 import { SpellsPanel } from './SpellsPanel';
 import { TalentsPanel } from './TalentsPanel';
@@ -28,6 +29,7 @@ export function CharacterPanel({ state, selected, setSelected }: { state: GameSt
       <div className="identity-row"><div><span className="class-label">{classLabel(character)}</span><h3>{character.name}</h3>
         <p>Nível {character.profile.level} · {character.talentPoints} pontos de talento disponíveis · {character.row === 'front' ? 'Frente' : 'Trás'}{character.isTank ? ' · Tanque' : ''}</p></div>
         <div className="rename-control"><input aria-label="Nome do personagem" value={name} maxLength={NAME_LIMIT} onChange={event => setName(event.target.value)} /><button onClick={() => gameStore.rename(character.id, name)}>Renomear</button></div></div>
+      <div className="creation-sprite"><span>Sprite</span><SpritePicker value={character.spriteId} color={colorHex(CLASSES[character.classId].color)} onChange={id => gameStore.setSprite(character.id, id)} label={`Sprite de ${character.name}`} /></div>
       <ProgressBar tone="xp" value={character.profile.xp} max={needed} label={`Experiência ${compact(character.profile.xp)} / ${compact(needed)}`} detail={`${Math.round(pct(character.profile.xp, needed))}% · ${Math.ceil(needed - character.profile.xp)} XP restante`} />
       <div className="attribute-grid">
         <span><small>HP</small><b>{Math.round(character.hp)} / {stats.maxHp}</b></span><span><small>Mana</small><b>{Math.round(character.mana)} / {stats.maxMana}</b></span>

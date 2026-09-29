@@ -45,8 +45,8 @@ describe('persistência',()=>{
 
   it('preserva o perfil RPG: proficiências, contadores, classe e alvo offline',async()=>{
     const state=partyState();const c=state.characters[0];
-    c.profile.level=12;c.profile.xp=345;c.profile.proficiencies.melee={level:16,tries:77};c.profile.counters={crits:9,goldEarned:120};c.profile.offlineTarget='fire';c.profile.trainingFocus='melee';c.profile.trainingAcc=.5;
-    c.profile.classId='guerreiro';c.profile.classPath=['aprendiz','guerreiro'];c.equipment.weapon='rusty_sword';c.cooldowns.basic=.2;state.offlineReport={seconds:100,entries:[{name:c.name,target:'fire',seconds:100,tries:50,levelsGained:0}]};
+    c.profile.level=12;c.profile.xp=345;c.profile.proficiencies.melee={level:16,tries:77};c.profile.counters={crits:9,goldEarned:120};c.profile.offlineTargets=['fire','ice'];c.profile.offlineHistory=['fire','ice'];c.profile.prevTrained='melee';c.profile.trainingFocus='melee';c.profile.trainingAcc=.5;
+    c.profile.classId='guerreiro';c.profile.classPath=['aprendiz','guerreiro'];c.equipment.weapon='rusty_sword';c.cooldowns.basic=.2;state.offlineReport={seconds:100,hunt:'Catacumbas',share:.25,gold:10,entries:[{name:c.name,xp:5,levelsGained:0,training:[{target:'fire',tries:50,levelsGained:0}]}]};
     const restored=importBackup(exportBackup(state)).characters[0];
     expect(restored.profile).toEqual(c.profile);expect(restored.equipment.weapon).toBe('rusty_sword');
     const database=new TinyDungeonDatabase(`tiny-dungeon-test-${crypto.randomUUID()}`);databases.push(database);await database.saves.put({id:'main',version:1,state,updatedAt:1});

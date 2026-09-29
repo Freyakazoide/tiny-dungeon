@@ -1,18 +1,21 @@
+import { runtime } from './runtime';
 import { MAX_PROFICIENCY_LEVEL, PROFICIENCIES, type ProficiencyId } from './proficiencies';
 
 /** Ritmo de referência: 1 try a cada 2 s de combate (online) ou de treino (offline). */
 export const TRIES_PER_SECOND = 0.5;
 
 /**
- * Custo (em tries) para sair do nível L >= 10, com j = L - 9: A * effort * j^p (lei de potência, a mesma família
- * da curva de XP). A é calibrado para a porta do Tier 1 (skill 25) levar ~132 h (5,5 dias, 24 h/dia contando o
- * offline): os primeiros níveis saem em minutos e o último custa ~1 dia. Mexer em PACE_POWER muda a forma:
- * 2,5 deixa o 1º nível ~2 min (Tier 2 ~60 dias); 1,5 faz o contrário.
+ * Até a porta do Tier 1 (skill 25) o custo para sair do nível L >= 10, com j = L - 9, é A * effort * j^p (lei de
+ * potência). A é calibrado para a porta levar `runtime.tier1Hours` (8 h, 24 h/dia contando o offline): o primeiro
+ * nível sai em segundos e o último custa ~1,5 h. Depois da porta cada nível custa `postGateGrowth`× o anterior
+ * (exponencial): é a "parede" das subclasses de Tier 2. PACE_POWER muda a forma da parte inicial.
  */
 export const PACE_POWER = 2;
-const GATE_LEVELS = 15; // níveis 10 -> 25
+/** Porta do Tier 1 e quantos níveis há de 10 até ela. */
+export const GATE_SKILL = 25;
+const GATE_LEVELS = GATE_SKILL - 10;
 const sumPow = (p: number, n: number) => { let s = 0; for (let j = 1; j <= n; j++) s += j ** p; return s; };
-export const PACE_A = (132 * 3600 * TRIES_PER_SECOND) / sumPow(PACE_POWER, GATE_LEVELS);
+export const paceA = () => (runtime.tier1Hours * 3600 * TRIES_PER_SECOND) / sumPow(PACE_POWER, GATE_LEVELS);
 
 /** XP para sair do nível L (planilha: 50 * L^2,8; L=1 -> 50, L=30 -> 683 769). */
 export const xpForLevel = (level: number) => Math.round(50 * level ** 2.8);
@@ -23,10 +26,15 @@ export const baseTries = (id: ProficiencyId, level: number) => {
   return Math.round(p.base * p.mult ** level);
 };
 
-/** Tries reais para sair do nível `level` da proficiência. */
+/** Tries reais para sair do nível `level` da proficiência (potência até a porta, exponencial depois). */
 export const triesForNextLevel = (id: ProficiencyId, level: number) => {
-  const j = Math.max(1, level - 9);
-  return Math.max(1, Math.round(PACE_A * PROFICIENCIES[id].effort * j ** PACE_POWER));
+  const effort = PROFICIENCIES[id].effort;
+  if (level < GATE_SKILL) {
+    const j = Math.max(1, level - 9);
+    return Math.max(1, Math.round(paceA() * effort * j ** PACE_POWER));
+  }
+  const lastGateLevel = paceA() * GATE_LEVELS ** PACE_POWER; // custo de sair do nível 24
+  return Math.max(1, Math.round(lastGateLevel * effort * runtime.postGateGrowth ** (level - (GATE_SKILL - 1))));
 };
 
 /** Tries acumuladas para ir do nível `from` ao nível `to`. */
@@ -49,5 +57,6 @@ export const etaSeconds = (id: ProficiencyId, level: number, tries: number, targ
 export function formatEta(seconds: number) {
   if (!Number.isFinite(seconds)) return '—';
   const d = Math.floor(seconds / 86400), h = Math.floor((seconds % 86400) / 3600), m = Math.floor((seconds % 3600) / 60);
+  if (d >= 60) return `${Math.floor(d / 30)}meses`;
   return d > 0 ? `${d}d ${h}h` : h > 0 ? `${h}h ${m}min` : `${Math.max(1, m)}min`;
 }

@@ -7,6 +7,7 @@ import { elementFocus, focusSpellEquipped, isElement, trainingNow } from '../gam
 import { COUNTER_NAMES } from '../game/systems/guide';
 import { etaSeconds, formatEta, TRIES_PER_SECOND, triesForNextLevel } from '../game/rpg/curves';
 import { runtime } from '../game/rpg/runtime';
+import { offlineSelection } from '../game/rpg/offline';
 import { MAX_PROFICIENCY_LEVEL, PROFICIENCIES, PROFICIENCY_IDS, type ProficiencyId } from '../game/rpg/proficiencies';
 import { COUNTER_IDS } from '../game/rpg/profile';
 import { compact } from './format';
@@ -31,29 +32,31 @@ function nextGates(character: Character) {
 export function ProficiencyGrid({ character }: { character: Character }) {
   const { profile } = character, primary = CLASSES[character.classId].weaponSkill;
   const focus = elementFocus(character), focusReady = focusSpellEquipped(character), gates = nextGates(character);
-  const rate = TRIES_PER_SECOND * runtime.trainScale;
+  const rate = TRIES_PER_SECOND * runtime.trainScale, closing = offlineSelection(profile);
     const training = (id: ProficiencyId) => trainingNow(character, id);
   return <>
-    <div className="subsection-heading"><h3>Proficiências</h3><small>Arma e defesa sobem por tempo de combate; só o elemento em foco sobe por magia. Todas sobem offline no foco escolhido.</small></div>
+    <div className="subsection-heading"><h3>Proficiências</h3><small>Arma e defesa sobem por tempo de combate; só o elemento em foco sobe por magia. Todas sobem offline nas 2 vagas escolhidas.</small></div>
     <div className="skill-grid">{PROFICIENCY_IDS.map(id => {
       const progress = profile.proficiencies[id], needed = triesForNextLevel(id, progress.level), maxed = progress.level >= MAX_PROFICIENCY_LEVEL;
       const active = training(id), gate = gates.skills[id];
       return <article className={`skill-card ${id === primary ? 'primary-skill' : ''}`} key={id}>
-        <div><strong>{PROFICIENCIES[id].name}</strong>{id === primary && <em>Principal</em>}{id === focus && <em>Foco</em>}{profile.offlineTarget === id && id !== focus && <em>Offline</em>}<b>Lv. {progress.level}</b></div>
+        <div><strong>{PROFICIENCIES[id].name}</strong>{id === primary && <em>Principal</em>}{id === focus && <em>Foco</em>}{profile.offlineTargets.includes(id) && id !== focus && <em>Offline</em>}<b>Lv. {progress.level}</b></div>
         <ProgressBar compact tone="skill" value={maxed ? 1 : progress.tries} max={maxed ? 1 : needed} label={`${compact(progress.tries)} tries`} detail={maxed ? 'máximo' : `${compact(needed)} necessários`} />
         {!maxed && <small className="eta">{active ? `faltam ~${formatEta(etaSeconds(id, progress.level, progress.tries, progress.level + 1, rate))} pro próximo nível` : 'parado'}</small>}
         {gate && <small className="gate">Porta do Tier {gate.tier}: {PROFICIENCIES[id].name} {gate.need} · {active ? `faltam ~${formatEta(etaSeconds(id, progress.level, progress.tries, gate.need, rate))}` : 'parado'}</small>}
       </article>;
     })}</div>
     {gates.level && <p className="gate-level">Porta do Tier {gates.level.tier}: personagem nível {gates.level.need} (atual {profile.level}).</p>}
-    {profile.offlineTarget && isElement(profile.offlineTarget) && !focusReady && <p className="gate-level">Sem magia do foco equipada: nada treina.</p>}
-    <label className="offline-target"><span>Foco de treino</span>
-      <select value={profile.offlineTarget ?? ''} onChange={event => gameStore.setOfflineTarget(character.id, (event.target.value || undefined) as ProficiencyId | undefined)}>
-        <option value="">Automático (elemento da primeira magia equipada / última treinada){profile.lastTrained ? ` — ${PROFICIENCIES[profile.lastTrained].name}` : ''}</option>
-        {PROFICIENCY_IDS.map(id => <option key={id} value={id}>{PROFICIENCIES[id].name}</option>)}
-      </select>
-      <small>Vale online (elemento) e offline (qualquer proficiência, até 24 h de tries, sem XP nem loot).</small>
-    </label>
+    {profile.offlineTargets.some(id => !!id && isElement(id)) && !focusReady && <p className="gate-level">Sem magia do foco equipada: nada treina.</p>}
+    <div className="offline-slots"><span className="offline-title">Treino offline (2 vagas)</span>
+      {([0, 1] as const).map(slot => <label className="offline-target" key={slot}><span>Vaga {slot + 1}</span>
+        <select value={profile.offlineTargets[slot] ?? ''} onChange={event => gameStore.setOfflineTarget(character.id, slot, (event.target.value || null) as ProficiencyId | null)}>
+          <option value="">— (usar as últimas escolhidas)</option>
+          {PROFICIENCY_IDS.map(id => <option key={id} value={id}>{PROFICIENCIES[id].name}</option>)}
+        </select></label>)}
+      <p className="gate-level">{closing.length ? `Se você fechar agora, treinam: ${closing.map(id => PROFICIENCIES[id].name).join(' e ')}.` : 'Se você fechar agora, nada treina (escolha uma vaga ou treine algo antes).'}</p>
+      <small>A 1ª vaga elemental vira o foco online. Cada vaga treina no ritmo cheio (até 24 h por retorno, sem loot); o XP e o ouro vêm da hunt mais avançada, a 25%.</small>
+    </div>
   </>;
 }
 

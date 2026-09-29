@@ -31,7 +31,9 @@ function App(){
   const character=state.characters.find(c=>c.id===selected)??state.characters[0];
   const report=state.offlineReport;
   return <div id="app"><Header state={state}/>
-    {report&&<aside className="offline-report stone-panel"><div><b>Bem-vindo de volta!</b> Seus personagens treinaram por {duration(report.seconds)} enquanto você esteve fora.{report.huntEnded&&' A caçada foi encerrada.'}<ul>{report.huntEnded&&<li>Hunt encerrada: inicie de novo quando quiser.</li>}{report.entries.map(entry=><li key={entry.name}>{entry.name}: +{entry.tries.toLocaleString('pt-BR')} tries em {PROFICIENCIES[entry.target].name}{entry.levelsGained>0&&` (+${entry.levelsGained} ${entry.levelsGained===1?'nível':'níveis'})`}</li>)}</ul></div><button onClick={()=>gameStore.dismissOfflineReport()}>Ok</button></aside>}
+    {report&&<aside className="offline-report stone-panel"><div><b>Bem-vindo de volta!</b> Você ficou fora por {duration(report.seconds)}.{report.huntEnded&&' A caçada foi encerrada.'}
+      {report.hunt&&<p>A hunt mais avançada (<b>{report.hunt}</b>) rendeu {Math.round((report.share??0)*100)}% durante esse tempo{report.gold?` · +${report.gold.toLocaleString('pt-BR')} ouro`:''}.</p>}
+      <ul>{report.huntEnded&&<li>Hunt encerrada: inicie de novo quando quiser.</li>}{report.entries.map(entry=><li key={entry.name}><b>{entry.name}</b>{entry.xp>0&&`: +${entry.xp.toLocaleString('pt-BR')} XP${entry.levelsGained>0?` (+${entry.levelsGained} ${entry.levelsGained===1?'nível':'níveis'})`:''}`}{entry.training.map(t=><span key={t.target} className="offline-slot-line"> · +{t.tries.toLocaleString('pt-BR')} tries em {PROFICIENCIES[t.target].name}{t.levelsGained>0&&` (+${t.levelsGained} ${t.levelsGained===1?'nível':'níveis'})`}</span>)}</li>)}</ul></div><button onClick={()=>gameStore.dismissOfflineReport()}>Ok</button></aside>}
     <main className="app-shell"><div className="game-column">
       {/* O Phaser dirige o tick do combate: o mapa fica sempre montado e só é escondido fora da aba Caçada. */}
       <div className="map-frame" style={tab==='Caçada'?undefined:{display:'none'}}><PhaserGame/></div>

@@ -101,7 +101,7 @@ describe('C — criação com kit inicial', () => {
       expect(e.createParty([spec('A', weaponId, undefined, element), spec('B', 'rusty_sword', 'back', 'fire'), spec('C', 'oak_bow', 'front', 'ice')])).toBe(true);
       const [a, b, c] = e.getSnapshot().characters;
       expect(a.equipment).toEqual({ weapon: weaponId, offhand: 'wooden_shield' });
-      expect(a.spellSlots[0]).toBe(`basic_${element}`); expect(a.spellConditions[`basic_${element}`]).toBeDefined(); expect(a.profile.offlineTarget).toBe(element);
+      expect(a.spellSlots[0]).toBe(`basic_${element}`); expect(a.spellConditions[`basic_${element}`]).toBeDefined(); expect(a.profile.offlineTargets).toEqual([element, null]);
       expect(a.row).toBe(STARTER_WEAPONS.find(w => w.id === weaponId)!.row); // padrão pela arma
       expect(b.row).toBe('back'); expect(c.row).toBe('front'); // escolha explícita vence
       expect(e.getSnapshot().inventory.bp).toHaveLength(0);
@@ -163,7 +163,7 @@ describe('D — itens, loja e guia de classes', () => {
     expect(melee).toMatchObject({ have: 10, need: 25, met: false, training: false, eta: null }); // sem foco de tempo ainda: parado
     c.profile.trainingFocus = 'melee';
     const trained = requirementRows(c, CLASS_BY_ID.guerreiro).find(r => r.key === 'melee')!;
-    expect(trained.training).toBe(true); expect(trained.eta! / 3600).toBeGreaterThan(130); expect(trained.eta! / 3600).toBeLessThan(134);
+    expect(trained.training).toBe(true); expect(trained.eta! / 3600).toBeGreaterThan(7.9); expect(trained.eta! / 3600).toBeLessThan(8.1);
     const order = steps.map(s => Object.keys(s.node.requires.skills ?? {})[0]);
     expect(order.indexOf('melee')).toBeLessThan(order.indexOf('magic'));
   });

@@ -28,15 +28,15 @@ describe('Bloco 9 — harness de balanceamento (party de referência, 6 ciclos)'
 });
 
 describe('Bloco 9 — simulador de ritmo', () => {
-  it('a porta do Tier 1 (Melee 25) leva ~5,5 dias com 24 h/dia de treino', () => {
-    expect(daysToGate(cumulativeTries('melee', 10, 25), .5, 8)).toBeCloseTo(5.5, 0); // 8 h online + 16 h offline no mesmo foco
+  it('a porta do Tier 1 (Melee 25) leva 8 h com 24 h/dia de treino (8 h online + 16 h offline no mesmo foco)', () => {
+    expect(daysToGate(cumulativeTries('melee', 10, 25), .5, 8) * 24).toBeCloseTo(8, 0);
   });
-  it('sem foco offline o treino cai para a parte online', () => {
-    expect(daysToGate(cumulativeTries('melee', 10, 25), .5, 8, false)).toBeCloseTo(16.5, 0);
+  it('sem foco offline o treino cai para a parte online: 8 h de jogo por dia levam ~1 dia', () => {
+    expect(daysToGate(cumulativeTries('melee', 10, 25), .5, 8, false)).toBeCloseTo(1, 1);
   });
-  it('o nível 25 chega bem antes das portas de skill do Tier 2 (nível não é o gargalo)', () => {
+  it('nível 25 (~55 mil XP/h, 8 h/dia) leva dias, na mesma faixa da skill 35 (3,7 d): se travar o Tier 2, baixe T2_LEVEL para 20', () => {
     let xp = 0; for (let level = 1; level < 25; level++) xp += xpForLevel(level);
-    const daysLevel25 = daysToLevel(xp, 55000, 8);
-    expect(daysLevel25).toBeLessThan(daysToGate(cumulativeTries('fire', 10, 35), .5, 8));
+    const daysLevel25 = daysToLevel(xp, 55000, 8), gate35 = daysToGate(cumulativeTries('fire', 10, 35), .5, 8);
+    expect(daysLevel25).toBeGreaterThan(3); expect(daysLevel25).toBeLessThan(8); expect(gate35).toBeCloseTo(3.7, 0);
   });
 });

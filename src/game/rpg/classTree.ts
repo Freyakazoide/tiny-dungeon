@@ -24,7 +24,7 @@ const tier1 = (id: string, name: string, specialty: string, skill: ProficiencyId
   ({ id, name, tier: 1, parent: 'aprendiz', specialty, requires: { level: T1_LEVEL, skills: { [skill]: 25 } } });
 
 const pure = (id: string, name: string, parent: string, skill: ProficiencyId, counter?: CounterId): ClassNode =>
-  ({ id, name, tier: 2, parent, requires: { level: T2_LEVEL, skills: { [skill]: 40 }, ...(counter && { counters: { [counter]: COUNTER_TARGETS[counter] } }) } });
+  ({ id, name, tier: 2, parent, requires: { level: T2_LEVEL, skills: { [skill]: 38 }, ...(counter && { counters: { [counter]: COUNTER_TARGETS[counter] } }) } });
 
 const hybrid = (id: string, name: string, parent: string, a: ProficiencyId, b: ProficiencyId): ClassNode =>
   ({ id, name, tier: 2, parent, requires: { level: T2_LEVEL, skills: { [a]: 35, [b]: 35 } } });

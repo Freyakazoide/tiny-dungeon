@@ -78,7 +78,7 @@ describe('Bloco 5 — kits de Tier 1', () => {
     vi.spyOn(Math, 'random').mockReturnValue(.99);
     const damage = (spellId: string) => {
       const { e, a } = fresh(); e.evolve(a.id, 'mago', { force: true });
-      e.equipSpell(a.id, 3, 'basic_ice'); e.setOfflineTarget(a.id, 'fire');
+      e.equipSpell(a.id, 3, 'basic_ice'); e.setOfflineTarget(a.id, 0, 'fire');
       e.start(); const m = e.getSnapshot().monsters[0]; m.hp = m.maxHp = 1e9;
       cast(e, a, spellId); return 1e9 - m.hp;
     };

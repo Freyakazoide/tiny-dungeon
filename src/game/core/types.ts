@@ -14,6 +14,8 @@ export interface Character {
   id: string; name: string; classId: ClassId; profile: ProgressProfile; talentPoints: number;
   /** Linha de combate e tanque (no máximo um por grupo): definem a posição no mapa e quem apanha. */
   row: CharacterRow; isTank: boolean;
+  /** Sprite cosmético escolhido ('block' = bloco colorido da classe); a evolução de classe nunca o muda. */
+  spriteId: string;
   hp: number; mana: number; equipment: Partial<Record<Slot, string>>;
   spellSlots: string[]; spellConditions: Record<string, SpellCondition>; talents: Record<string, number>;
   cooldowns: Record<string, number>; effects: ActiveEffect[]; helper: HelperConfig;
@@ -41,7 +43,12 @@ export interface CharmDef { id: string; name: string; cost: number; milestone: n
 export type TalentEffect = 'maxHp' | 'maxMana' | 'attack' | 'defense' | 'attackSpeed' | 'crit' | 'resistance' | 'magicPower' | 'cooldown' | 'healing' | 'magicDamage';
 export interface TalentRequirement { talentId: string; rank: number; }
 export interface TalentDef { id: string; classId: ClassId; name: string; description: string; icon: string; tier: 1 | 2 | 3; column: 0 | 1; max: number; requiredLevel: number; requires?: TalentRequirement[]; effect: TalentEffect; value: number; }
-export interface OfflineReport { seconds: number; /** a caçada que estava salva foi encerrada ao voltar */ huntEnded?: boolean; entries: { name: string; target: ProficiencyId; seconds: number; tries: number; levelsGained: number }[]; }
+/** Retorno de uma sessão offline: XP/ouro da hunt de referência (25%) e tries nas vagas de treino. */
+export interface OfflineReport {
+  seconds: number; /** a caçada que estava salva foi encerrada ao voltar */ huntEnded?: boolean;
+  hunt?: string; share?: number; gold?: number;
+  entries: { name: string; xp: number; levelsGained: number; training: { target: ProficiencyId; tries: number; levelsGained: number }[] }[];
+}
 export interface GameState {
   version: 1; status: HuntStatus; autoAdvance: boolean; wave: number; cycle: number; transitionMs: number;
   characters: Character[]; team: string[]; monsters: MonsterRuntime[]; inventory: InventoryState;
@@ -49,5 +56,7 @@ export interface GameState {
   codex: Record<string, CodexEntry>; analyzer: Analyzer; history: Analyzer[]; message: string; lastSavedAt: number;
   /** Hunt atual (padrão 'catacumbas'). */
   huntId: string;
+  /** Estatística por hunt (tempo ativo simulado, XP por personagem, ouro, chefes): base da taxa do crédito offline. */
+  huntStats: Record<string, { activeMs: number; xp: number; gold: number; bossKills: number }>;
   offlineReport?: OfflineReport;
 }

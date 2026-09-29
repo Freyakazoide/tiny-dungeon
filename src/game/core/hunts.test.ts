@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { GameEngine } from './GameEngine';
 import { partyState } from './testing';
-import { HUNTS, HUNT_BY_ID, bossIdOf, huntWaves } from '../data/hunts';
+import { HUNTS, HUNT_BY_ID, bossIdOf, huntRisk, huntWaves } from '../data/hunts';
 import { MONSTERS } from '../data/monsters';
 import { itemById } from '../data/items';
 import { cloneValidatedState } from '../persistence/validation';
@@ -32,16 +32,19 @@ describe('Bloco 2 — hunts', () => {
   it('todo drop referencia um item existente', () => {
     for (const m of Object.values(MONSTERS)) for (const entry of m.loot) expect(itemById(entry.itemId), `${m.id}: ${entry.itemId}`).toBeDefined();
   });
-  it('selectHunt recusa hunt bloqueada e fora de idle; aceita com o nível certo', () => {
+  it('selectHunt aceita qualquer hunt, mesmo acima do nível, mas só com a caçada parada e id válido', () => {
     const e = new GameEngine(partyState());
-    expect(e.selectHunt('floresta_sombria')).toBe(false); expect(e.getSnapshot().huntId).toBe('catacumbas');
-    expect(e.selectHunt('nao_existe')).toBe(false);
-    e.getSnapshot().characters[1].profile.level = 7; // o de maior nível da party libera
-    expect(e.huntUnlocked('floresta_sombria')).toBe(true);
+    expect(e.selectHunt('templo_profano')).toBe(true);
+    expect(e.getSnapshot()).toMatchObject({ huntId: 'templo_profano', wave: 0, monsters: [], message: 'Hunt: Templo Profano' });
+    expect(e.selectHunt('nao_existe')).toBe(false); expect(e.getSnapshot().huntId).toBe('templo_profano');
     e.start(); expect(e.selectHunt('floresta_sombria')).toBe(false); e.end();
     expect(e.selectHunt('floresta_sombria')).toBe(true);
-    expect(e.getSnapshot()).toMatchObject({ huntId: 'floresta_sombria', wave: 0, monsters: [], message: 'Hunt: Floresta Sombria' });
-    expect(e.selectHunt('templo_profano', { ignoreLock: true })).toBe(true);
+  });
+  it('a etiqueta de risco segue os limites do plano', () => {
+    const rec = 10;
+    expect([1, 2, 7, 8, 9, 12, 13, 20].map(level => huntRisk(level, rec))).toEqual(['Suicida', 'Arriscada', 'Arriscada', 'Adequada', 'Adequada', 'Adequada', 'Tranquila', 'Tranquila']);
+    expect([huntRisk(1.99, rec), huntRisk(2, rec), huntRisk(7.99, rec), huntRisk(12.9, rec)]).toEqual(['Suicida', 'Arriscada', 'Arriscada', 'Adequada']);
+    const e = new GameEngine(partyState()); expect(e.averageTeamLevel()).toBe(1);
   });
   it('save antigo sem huntId carrega em Catacumbas e a wave é validada contra a hunt do save', () => {
     const legacy = structuredClone(partyState()) as unknown as Record<string, unknown>; delete legacy.huntId;

@@ -5,6 +5,8 @@ import { NAME_LIMIT, PARTY_SIZE } from '../game/core/GameEngine';
 import { itemById } from '../game/data/items';
 import { defaultRow, STARTER_ELEMENTS, STARTER_WEAPONS, type CharacterSpec } from '../game/data/starter';
 import { PROFICIENCIES } from '../game/rpg/proficiencies';
+import { defaultSpriteFor } from '../game/data/sprites';
+import { SpritePicker } from './SpritePicker';
 import { statLine } from './format';
 
 const PLACEHOLDERS = ['Nome do primeiro Squire', 'Nome do segundo Squire', 'Nome do terceiro Squire'];
@@ -13,7 +15,7 @@ const ROW_NAMES: Record<CharacterRow, string> = { front: 'Frente', back: 'Trás'
 interface Draft extends CharacterSpec { rowTouched: boolean; }
 const initialDraft = (index: number): Draft => ({
   name: '', weaponId: STARTER_WEAPONS[index % STARTER_WEAPONS.length].id, row: STARTER_WEAPONS[index % STARTER_WEAPONS.length].row,
-  element: STARTER_ELEMENTS[index % STARTER_ELEMENTS.length], rowTouched: false,
+  element: STARTER_ELEMENTS[index % STARTER_ELEMENTS.length], spriteId: defaultSpriteFor(index), rowTouched: false,
 });
 
 /** Primeira tela do jogo: para cada um dos 3 Squires, nome, arma inicial, linha de combate e elemento inicial. */
@@ -38,6 +40,7 @@ export function CreationScreen() {
         <input autoFocus={index === 0} value={draft.name} maxLength={NAME_LIMIT} placeholder={PLACEHOLDERS[index]} aria-label={`Nome do personagem ${index + 1}`}
           onChange={event => update(index, { name: event.target.value })} />
       </label>
+      <div className="creation-sprite"><span>Sprite</span><SpritePicker value={draft.spriteId ?? 'block'} onChange={spriteId => update(index, { spriteId })} label={`Sprite do personagem ${index + 1}`} /></div>
       <div className="weapon-options" role="radiogroup" aria-label={`Arma inicial do personagem ${index + 1}`}>{STARTER_WEAPONS.map(weapon => {
         const item = itemById(weapon.id)!, active = draft.weaponId === weapon.id;
         return <button type="button" role="radio" aria-checked={active} key={weapon.id} className={`weapon-card ${active ? 'selected' : ''}`}

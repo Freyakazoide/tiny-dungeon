@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { CLASS_NODES, CLASS_BY_ID, childrenOf } from './classTree';
 import { baseTries, etaSeconds, formatEta, hoursToReach, remainingTries, triesForNextLevel, xpForLevel } from './curves';
 import { checkRequirements, evolutionOptions, evolveClass } from './evolution';
-import { OFFLINE_CAP_S, SESSION_GAP_S, applyOfflineTraining, sessionGapSeconds } from './offline';
-import { PROFICIENCIES, PROFICIENCY_IDS, START_LEVEL } from './proficiencies';
+import { OFFLINE_CAP_S, SESSION_GAP_S, applyOfflineTraining, offlineSelection, sessionGapSeconds } from './offline';
+import { PROFICIENCY_IDS, START_LEVEL } from './proficiencies';
+import { runtime } from './runtime';
 import { addCounter, createProfile, gainExperience, gainTries } from './profile';
 
 const ready = (skills: Partial<Record<(typeof PROFICIENCY_IDS)[number], number>>, level = 30) => {
@@ -23,18 +24,34 @@ describe('curvas da planilha', () => {
   });
 });
 
-describe('ritmo (5,5 dias até a skill 25, 24 h/dia)', () => {
-  it.each(['melee', 'magic', 'fire', 'holy', 'death'] as const)('%s: 10 -> 25 leva ~132 h', id => {
+describe('ritmo (Tier 1 em ~8 h, depois exponencial)', () => {
+  it.each(['melee', 'magic', 'fire', 'holy', 'death'] as const)('%s: 10 -> 25 leva ~8 h', id => {
     const h = hoursToReach(id, START_LEVEL, 25);
-    expect(h).toBeGreaterThan(130); expect(h).toBeLessThan(134);
+    expect(h).toBeGreaterThan(8 * .99); expect(h).toBeLessThan(8 * 1.01);
   });
-  it('elemental 35 e 40 ficam perto de 24,5 e 41,9 dias', () => {
-    expect(hoursToReach('fire', 10, 35) / 24).toBeCloseTo(24.5, 0);
-    expect(hoursToReach('fire', 10, 40) / 24).toBeCloseTo(41.9, 0);
+  it('depois da porta: skill 35 ≈ 3,7 d, 38 ≈ 8 d, 40 ≈ 13,5 d, 50 ≈ 185 d', () => {
+    for (const [to, days] of [[35, 3.7], [38, 8.0], [40, 13.5], [45, 50], [50, 185]] as const)
+      expect(hoursToReach('fire', 10, to) / 24 / days, `skill ${to}`).toBeGreaterThan(.98), expect(hoursToReach('fire', 10, to) / 24 / days, `skill ${to}`).toBeLessThan(1.02);
   });
-  it('híbrida (35+35) custa quase o mesmo que pura (40)', () => {
-    const hybrid = 2 * hoursToReach('fire', 10, 35), pure = hoursToReach('fire', 10, 40);
-    expect(hybrid / pure).toBeGreaterThan(0.95); expect(hybrid / pure).toBeLessThan(1.2);
+  it('skill 30 ainda cabe no primeiro dia (~1 d)', () => { expect(hoursToReach('fire', 10, 30) / 24).toBeGreaterThan(.95); expect(hoursToReach('fire', 10, 30) / 24).toBeLessThan(1.1); });
+  it('híbrida (35+35) em sequência ≈ pura (38): paridade de tempo total', () => {
+    const hybrid = 2 * hoursToReach('fire', 10, 35), pure = hoursToReach('fire', 10, 38);
+    expect(hybrid / pure).toBeGreaterThan(.9); expect(hybrid / pure).toBeLessThan(1.02);
+  });
+  it('custo crescente e finito de 10 a 100 (sem Infinity/NaN)', () => {
+    let previous = 0;
+    for (let level = 10; level < 100; level++) { const t = triesForNextLevel('melee', level); expect(Number.isFinite(t)).toBe(true); expect(t).toBeGreaterThan(previous); previous = t; }
+  });
+  it('continuidade na porta: sair do 25 custa custo(24) × 1,3 e do 26 custa × 1,3²', () => {
+    const last = triesForNextLevel('melee', 24);
+    expect(Math.abs(triesForNextLevel('melee', 25) - Math.round(last * 1.3))).toBeLessThanOrEqual(1);
+    expect(Math.abs(triesForNextLevel('melee', 26) - Math.round(last * 1.3 ** 2))).toBeLessThanOrEqual(1);
+  });
+  it('tier1Hours e postGateGrowth ajustam o ritmo sem editar código', () => {
+    runtime.tier1Hours = 12;
+    try { expect(hoursToReach('melee', 10, 25) / 12).toBeGreaterThan(.99); expect(hoursToReach('melee', 10, 25) / 12).toBeLessThan(1.01); } finally { runtime.tier1Hours = 8; }
+    const base = hoursToReach('melee', 10, 45); runtime.postGateGrowth = 1.4;
+    try { expect(hoursToReach('melee', 10, 45)).toBeGreaterThan(base * 3); } finally { runtime.postGateGrowth = 1.3; }
   });
 });
 
@@ -81,7 +98,7 @@ describe('exclusividade e evolução', () => {
     expect(p.classPath).toEqual(['aprendiz', 'ladino']);
   });
   it('depois de virar Ladino, só existem as subclasses do Ladino', () => {
-    const p = ready({ melee: 25, magic: 40, fire: 40 }, 30);
+    const p = ready({ melee: 25, magic: 38, fire: 38 }, 30);
     evolveClass(p, 'ladino');
     expect(evolutionOptions(p).map(o => o.node.id).sort()).toEqual(['assassino', 'mestre_das_sombras']);
     expect(evolveClass(p, 'mago').ok).toBe(false);
@@ -90,9 +107,9 @@ describe('exclusividade e evolução', () => {
   });
   it('o progresso feito antes da classe é preservado', () => {
     const p = ready({ melee: 25 }, 10);
-    gainTries(p, 'fire', 100);
+    gainTries(p, 'fire', 5);
     evolveClass(p, 'guerreiro');
-    expect(p.proficiencies.fire.tries).toBe(100);
+    expect(p.proficiencies.fire.tries).toBe(5);
     expect(p.proficiencies.melee.level).toBe(25);
   });
   it('híbrida exige as duas proficiências em 35 e nível 25', () => {
@@ -103,16 +120,16 @@ describe('exclusividade e evolução', () => {
     p.proficiencies.energy.level = 35;
     expect(evolveClass(p, 'arcanista_de_plasma')).toMatchObject({ ok: true });
   });
-  it('pura exige 40 e a mensagem diz o que falta', () => {
-    const p = ready({ magic: 25, fire: 39 }, 10);
+  it('pura exige 38 e a mensagem diz o que falta', () => {
+    const p = ready({ magic: 25, fire: 37 }, 10);
     evolveClass(p, 'mago');
     p.level = 25;
     const check = checkRequirements(p, CLASS_BY_ID.piromante);
     expect(check.met).toBe(false);
-    expect(check.missing).toEqual(['Fogo 40 (atual 39)']);
+    expect(check.missing).toEqual(['Fogo 38 (atual 37)']);
   });
   it('subclasse com contador só libera depois de atingir o contador', () => {
-    const p = ready({ melee: 40 }, 25);
+    const p = ready({ melee: 38 }, 25);
     evolveClass(p, 'guerreiro');
     expect(evolveClass(p, 'gladiador').ok).toBe(false);
     addCounter(p, 'crits', 5000);
@@ -132,63 +149,64 @@ describe('progressão', () => {
   });
 });
 
-describe('treino offline', () => {
+describe('treino offline (2 vagas)', () => {
   it('menos de 60 s não conta como offline', () => {
     expect(sessionGapSeconds(1000, 1000 + SESSION_GAP_S * 1000)).toBe(0);
     expect(sessionGapSeconds(0, 3_600_000)).toBe(3600);
   });
-  it('credita só tries na proficiência escolhida', () => {
-    const p = createProfile(); p.offlineTarget = 'holy';
+  it('duas vagas distintas recebem seconds × 0,5 tries cada; vagas iguais contam uma vez; só tries', () => {
+    const p = createProfile(); p.offlineTargets = ['holy', 'melee'];
     const r = applyOfflineTraining(p, 3600)!;
-    expect(r.tries).toBe(1800); expect(r.target).toBe('holy');
-    expect(p.proficiencies.holy.level).toBe(12); // 1.800 tries: 192 + 766 + 1.725 ainda faltam para o 13
-    expect(p.xp).toBe(0); expect(p.level).toBe(1); expect(p.counters).toEqual({});
-    expect(p.proficiencies.melee).toEqual({ level: 10, tries: 0 });
+    expect(r.entries.map(e => [e.target, e.tries])).toEqual([['holy', 1800], ['melee', 1800]]);
+    expect(p.proficiencies.holy.level).toBeGreaterThan(12); expect(p.proficiencies.melee.level).toBeGreaterThan(12);
+    expect(p.xp).toBe(0); expect(p.level).toBe(1); expect(p.counters).toEqual({}); expect(p.proficiencies.fire).toEqual({ level: 10, tries: 0 });
+    const same = createProfile(); same.offlineTargets = ['fire', 'fire'];
+    expect(applyOfflineTraining(same, 3600)!.entries).toHaveLength(1);
   });
-  it('sem alvo usa a última treinada; sem nenhuma, não faz nada', () => {
+  it('sem vagas: o histórico (fire, melee, ice) treina fire e melee', () => {
+    const p = createProfile(); p.offlineHistory = ['fire', 'melee', 'ice'];
+    expect(offlineSelection(p)).toEqual(['fire', 'melee']);
+    expect(applyOfflineTraining(p, 3600)!.entries.map(e => e.target)).toEqual(['fire', 'melee']);
+  });
+  it('uma vaga escolhida e uma do histórico; sem repetir', () => {
+    const p = createProfile(); p.offlineTargets = [null, 'ice']; p.offlineHistory = ['ice', 'fire', 'melee'];
+    expect(offlineSelection(p)).toEqual(['ice', 'fire']);
+  });
+  it('sem vagas nem histórico: treinam lastTrained e prevTrained; sem nenhuma, nada', () => {
     const p = createProfile();
     expect(applyOfflineTraining(p, 3600)).toBeNull();
-    gainTries(p, 'death', 10);
-    expect(applyOfflineTraining(p, 3600)!.target).toBe('death');
+    gainTries(p, 'death', 1); gainTries(p, 'death', 1); gainTries(p, 'melee', 1);
+    expect(p.lastTrained).toBe('melee'); expect(p.prevTrained).toBe('death');
+    expect(offlineSelection(p)).toEqual(['melee', 'death']);
   });
   it('respeita o teto de 24 h por retorno', () => {
-    const p = createProfile(); p.offlineTarget = 'melee';
+    const p = createProfile(); p.offlineTargets = ['melee', null];
     expect(applyOfflineTraining(p, OFFLINE_CAP_S * 5)!.seconds).toBe(OFFLINE_CAP_S);
   });
-  it('24 h offline em Holy rendem cerca de 1/5,5 do caminho até a skill 25', () => {
-    const p = createProfile(); p.offlineTarget = 'holy';
-    for (let day = 0; day < 6; day++) applyOfflineTraining(p, 86400);
-    expect(p.proficiencies.holy.level).toBeGreaterThanOrEqual(25);
-    const q = createProfile(); q.offlineTarget = 'holy';
-    for (let day = 0; day < 5; day++) applyOfflineTraining(q, 86400);
-    expect(q.proficiencies.holy.level).toBeLessThan(25);
+  it('24 h offline em Holy levam da skill 10 à porta do Tier 1 e além (a porta são 8 h)', () => {
+    const p = createProfile(); p.offlineTargets = ['holy', null];
+    applyOfflineTraining(p, 86400);
+    expect(p.proficiencies.holy.level).toBeGreaterThanOrEqual(29); expect(p.proficiencies.holy.level).toBeLessThan(31);
   });
 });
 
 describe('ETA e portas novas', () => {
-  it.each(['melee', 'magic', 'fire', 'holy', 'death'] as const)('%s: etaSeconds 10 -> 25 ≈ 132 h (±1%%)', id => {
+  it.each(['melee', 'magic', 'fire', 'holy', 'death'] as const)('%s: etaSeconds 10 -> 25 ≈ 8 h (±1%%)', id => {
     const h = etaSeconds(id, 10, 0, 25) / 3600;
-    expect(h).toBeGreaterThan(132 * 0.99); expect(h).toBeLessThan(132 * 1.01);
+    expect(h).toBeGreaterThan(8 * 0.99); expect(h).toBeLessThan(8 * 1.01);
   });
-  it('curva de potência: 192 tries no 10 -> 11 e ~43 mil no 24 -> 25', () => {
-    expect(triesForNextLevel('melee', 10)).toBe(192);
-    expect(Math.abs(triesForNextLevel('fire', 24) - 43113)).toBeLessThanOrEqual(1);
-    expect(triesForNextLevel('fire', 11)).toBe(766);
+  it('curva: 12 tries no 10 -> 11, 290 no 14 -> 15, ~1.160 no 19 -> 20 e 2.613 no 24 -> 25', () => {
+    expect(triesForNextLevel('melee', 10)).toBe(12); expect(triesForNextLevel('melee', 14)).toBe(290);
+    expect(Math.abs(triesForNextLevel('melee', 19) - 1160)).toBeLessThanOrEqual(2); expect(triesForNextLevel('melee', 24)).toBe(2613);
+    expect(Math.abs(triesForNextLevel('melee', 25) - Math.round(2613 * 1.3))).toBeLessThanOrEqual(1);
   });
-  it('o primeiro nível sai em 5 a 8 minutos para todas as proficiências', () => {
-    for (const id of PROFICIENCY_IDS) { const minutes = triesForNextLevel(id, 10) * 2 / 60; expect(minutes).toBeGreaterThan(5); expect(minutes).toBeLessThan(8); }
+  it('o primeiro nível sai em ~23 s e o último da porta em ~1,45 h para todas as proficiências', () => {
+    for (const id of PROFICIENCY_IDS) { expect(triesForNextLevel(id, 10) * 2).toBeLessThan(30); expect(triesForNextLevel(id, 24) * 2 / 3600).toBeCloseTo(1.45, 1); }
   });
-  it('todas as 13 proficiências chegam à porta 25 em ~132 h, à 35 em ~24,5 d e à 40 em ~42 d', () => {
-    for (const id of PROFICIENCY_IDS) {
-      expect(hoursToReach(id, 10, 25)).toBeGreaterThan(132 * 0.99); expect(hoursToReach(id, 10, 25)).toBeLessThan(132 * 1.01);
-      expect(hoursToReach(id, 10, 35) / 24).toBeCloseTo(24.5, 0); expect(hoursToReach(id, 10, 40) / 24).toBeCloseTo(41.9, 0);
-      expect(2 * hoursToReach(id, 10, 35) / 24).toBeCloseTo(49, 0);
+  it('todas as 13 proficiências: porta 25 em 8 h, skill 35 em 3,7 d, 38 em 8 d, 40 em 13,5 d e 50 em ~185 d (±2%)', () => {
+    for (const id of PROFICIENCY_IDS) for (const [to, days] of [[25, 8 / 24], [35, 3.7], [38, 8.0], [40, 13.5], [50, 185]] as const) {
+      const ratio = hoursToReach(id, 10, to) / 24 / days; expect(ratio, `${id} ${to}`).toBeGreaterThan(.98); expect(ratio, `${id} ${to}`).toBeLessThan(1.02);
     }
-  });
-  it('effort torna uma proficiência mais pesada sem mudar a forma da curva', () => {
-    PROFICIENCIES.magic.effort = 1.5;
-    try { expect(triesForNextLevel('magic', 10) / triesForNextLevel('melee', 10)).toBeCloseTo(1.5, 1); }
-    finally { PROFICIENCIES.magic.effort = 1; }
   });
   it('remainingTries desconta o que já foi treinado e zera ao atingir o alvo', () => {
     expect(remainingTries('melee', 25, 0, 25)).toBe(0);
@@ -199,12 +217,12 @@ describe('ETA e portas novas', () => {
     expect(formatEta(5 * 86400 + 3 * 3600)).toBe('5d 3h');
     expect(formatEta(3 * 3600 + 20 * 60)).toBe('3h 20min');
     expect(formatEta(10)).toBe('1min');
-    expect(formatEta(Infinity)).toBe('—');
+    expect(formatEta(Infinity)).toBe('—'); expect(formatEta(90 * 86400)).toBe('3meses'); expect(formatEta(59 * 86400)).toBe('59d 0h');
   });
-  it('as portas da árvore usam 25 / 35 / 35 / 40', () => {
+  it('as portas da árvore usam 25 / 35 / 35 / 38', () => {
     expect(CLASS_BY_ID.guerreiro.requires.skills).toEqual({ melee: 25 });
     expect(CLASS_BY_ID.arcanista_de_plasma.requires.skills).toEqual({ fire: 35, energy: 35 });
     expect(CLASS_BY_ID.sumo_sacerdote.requires.skills).toEqual({ holy: 35 });
-    expect(CLASS_BY_ID.piromante.requires.skills).toEqual({ fire: 40 });
+    expect(CLASS_BY_ID.piromante.requires.skills).toEqual({ fire: 38 });
   });
 });
