@@ -1,13 +1,16 @@
-import { Scene } from 'phaser';
+import { Math as PhaserMath, Scene } from 'phaser';
 import { EventBus } from '../EventBus';
-import { ASSETS } from '../assets';
+import { ASSETS, CHARACTER_SPRITES, characterAnimationKey, type CharacterDirection } from '../assets';
 import { gameStore } from '../core/GameStore';
 import type { GameFx } from '../core/GameEngine';
+import type { Character, HuntStatus } from '../core/types';
 import { CLASSES } from '../data/classes';
 import { MONSTERS, WAVES } from '../data/monsters';
 import { characterStats } from '../systems/progression';
+import { combatFormation, dominantDirection, entranceFormation, stairFormation, type ArenaPoint } from './movement';
 
-type HeroView={body:Phaser.GameObjects.Rectangle;name:Phaser.GameObjects.Text;hpBg:Phaser.GameObjects.Rectangle;hp:Phaser.GameObjects.Rectangle;manaBg:Phaser.GameObjects.Rectangle;mana:Phaser.GameObjects.Rectangle;effects:Phaser.GameObjects.Text};
+type HeroBody=Phaser.GameObjects.Sprite|Phaser.GameObjects.Rectangle;
+type HeroView={container:Phaser.GameObjects.Container;body:HeroBody;sprite?:Phaser.GameObjects.Sprite;name:Phaser.GameObjects.Text;hpBg:Phaser.GameObjects.Rectangle;hp:Phaser.GameObjects.Rectangle;manaBg:Phaser.GameObjects.Rectangle;mana:Phaser.GameObjects.Rectangle;effects:Phaser.GameObjects.Text;direction:CharacterDirection;moveTween?:Phaser.Tweens.Tween;walking:boolean};
 type MonsterView={body:Phaser.GameObjects.Arc;name:Phaser.GameObjects.Text;hpBg:Phaser.GameObjects.Rectangle;hp:Phaser.GameObjects.Rectangle};
 
 export class Game extends Scene {
@@ -21,6 +24,10 @@ export class Game extends Scene {
   private stairs!:Phaser.GameObjects.Container;
   private transitionBanner!:Phaser.GameObjects.Container;
   private transitionText!:Phaser.GameObjects.Text;
+  private previousStatus:HuntStatus='idle';
+  private previousWave=-1;
+  private previousCycle=-1;
+  private visualPaused=false;
 
   constructor(){super('Game');}
 
@@ -51,7 +58,7 @@ export class Game extends Scene {
 
     this.unsubscribe=gameStore.subscribe(()=>this.renderState());
     this.unsubscribeFx=gameStore.onFx(fx=>this.animateFx(fx));
-    this.events.once('shutdown',()=>{this.unsubscribe?.();this.unsubscribeFx?.();this.heroes.clear();this.enemies.clear();this.floatLanes.clear();});
+    this.events.once('shutdown',()=>{this.unsubscribe?.();this.unsubscribeFx?.();this.cancelAllHeroMovement();this.heroes.clear();this.enemies.clear();this.floatLanes.clear();});
     this.renderState();
     EventBus.emit('current-scene-ready',this);
   }
@@ -60,61 +67,125 @@ export class Game extends Scene {
 
   private renderState(){
     const state=gameStore.getSnapshot();
-    const team=state.team.map(id=>state.characters.find(c=>c.id===id)).filter(Boolean) as typeof state.characters;
+    const team=state.team.map(id=>state.characters.find(c=>c.id===id)).filter(Boolean) as Character[];
+    const previousStatus=this.previousStatus;
+    const waveChanged=state.wave!==this.previousWave||state.cycle!==this.previousCycle;
     this.progress.setText(`Ciclo ${state.cycle+1}  ·  Wave ${state.wave+1}/${WAVES.length} — ${WAVES[state.wave].name}`);
     this.status.setText(state.message);
-    this.stairs.setVisible(state.status==='transition');
+    this.stairs.setVisible(state.status==='transition'&&state.wave<WAVES.length-1);
     const transitioning=state.status==='transition'||state.status==='recovering';
     this.transitionBanner.setVisible(transitioning);
     if(state.status==='recovering')this.transitionText.setText(`EQUIPE DERROTADA\nRecuperação: ${Math.max(0,Math.ceil(state.transitionMs/1000))}s`);
     else if(state.status==='transition')this.transitionText.setText(state.wave===WAVES.length-1?'REI DOS OSSOS DERROTADO\nRecompensas coletadas':'WAVE CONCLUÍDA\nA escada foi aberta');
 
     for(const [id,v] of this.heroes)if(!team.some(c=>c.id===id)){this.destroyHero(v);this.heroes.delete(id);}
-    team.forEach((c,i)=>{
-      const x=332+i*120,y=468;let v=this.heroes.get(c.id);
-      if(!v){
-        const hpBg=this.add.rectangle(x-45,y-54,90,8,0x32171c,.95).setOrigin(0,.5).setDepth(5);
-        const manaBg=this.add.rectangle(x-45,y-43,90,6,0x152443,.95).setOrigin(0,.5).setDepth(5);
-        v={body:this.add.rectangle(x,y,38,54,CLASSES[c.classId].color).setStrokeStyle(2,0xe4ddcf).setDepth(5),name:this.add.text(x,y+40,'',{fontSize:'12px',color:'#fff',stroke:'#090b0e',strokeThickness:4,align:'center'}).setOrigin(.5).setDepth(6),hpBg,hp:this.add.rectangle(x-45,y-54,90,6,0xc9535d).setOrigin(0,.5).setDepth(6),manaBg,mana:this.add.rectangle(x-45,y-43,90,4,0x557bd0).setOrigin(0,.5).setDepth(6),effects:this.add.text(x,y+58,'',{fontSize:'10px',color:'#9ce0af',stroke:'#080a0c',strokeThickness:3}).setOrigin(.5).setDepth(6)};
-        this.heroes.set(c.id,v);
-      }
-      const stats=characterStats(c,state);v.name.setText(`${c.name} · Nv ${c.level}${c.hp<=0?'  ☠':''}`);v.hp.displayWidth=90*Math.max(0,c.hp/stats.maxHp);v.mana.displayWidth=90*Math.max(0,c.mana/stats.maxMana);v.effects.setText(c.effects.map(e=>e.type).join(' · '));v.body.setAlpha(c.hp>0?1:.25);
+    const created:string[]=[];
+    const entrances=entranceFormation(team);
+    team.forEach(c=>{
+      let v=this.heroes.get(c.id);
+      if(!v){v=this.createHero(c,entrances.get(c.id)!);this.heroes.set(c.id,v);created.push(c.id);}
+      const stats=characterStats(c,state);
+      v.name.setText(`${c.name} · Nv ${c.level}${c.hp<=0?'  ☠':''}`);
+      v.hp.displayWidth=90*Math.max(0,c.hp/stats.maxHp);v.mana.displayWidth=90*Math.max(0,c.mana/stats.maxMana);
+      v.effects.setText(c.effects.map(e=>e.type).join(' · '));v.body.setAlpha(c.hp>0?1:.25);
     });
 
     const activeIds=new Set(state.monsters.map(m=>m.uid));
     for(const [id,v] of this.enemies)if(!activeIds.has(id)){this.destroyMonster(v);this.enemies.delete(id);}
     state.monsters.forEach((m,i)=>{
-      const x=452+i*120,y=222;const def=MONSTERS[m.defId];let v=this.enemies.get(m.uid);
-      if(!v){
-        const hpBg=this.add.rectangle(x-50,y-54,100,9,0x35171b,.95).setOrigin(0,.5).setDepth(5);
-        v={body:this.add.circle(x,y,def.boss?38:29,def.color).setStrokeStyle(2,0xf0e3cd).setDepth(5),name:this.add.text(x,y+45,def.name,{fontSize:'12px',color:'#fff',stroke:'#090b0e',strokeThickness:4}).setOrigin(.5).setDepth(6),hpBg,hp:this.add.rectangle(x-50,y-54,100,7,0xd45a5f).setOrigin(0,.5).setDepth(6)};
-        this.enemies.set(m.uid,v);
-      }
+      const x=512+(i-(state.monsters.length-1)/2)*150,y=222;const def=MONSTERS[m.defId];let v=this.enemies.get(m.uid);
+      if(!v){const hpBg=this.add.rectangle(x-50,y-54,100,9,0x35171b,.95).setOrigin(0,.5).setDepth(5);v={body:this.add.circle(x,y,def.boss?38:29,def.color).setStrokeStyle(2,0xf0e3cd).setDepth(5),name:this.add.text(x,y+45,def.name,{fontSize:'12px',color:'#fff',stroke:'#090b0e',strokeThickness:4}).setOrigin(.5).setDepth(6),hpBg,hp:this.add.rectangle(x-50,y-54,100,7,0xd45a5f).setOrigin(0,.5).setDepth(6)};this.enemies.set(m.uid,v);}
       v.hp.displayWidth=100*Math.max(0,m.hp/m.maxHp);v.body.setVisible(m.alive);v.hp.setVisible(m.alive);v.hpBg.setVisible(m.alive);v.name.setAlpha(m.alive?1:.3);
     });
+
+    if(state.status==='paused'&&!this.visualPaused){this.tweens.pauseAll();this.anims.pauseAll();this.visualPaused=true;}
+    else if(state.status!=='paused'&&this.visualPaused){this.tweens.resumeAll();this.anims.resumeAll();this.visualPaused=false;}
+
+    if(state.status==='idle'&&previousStatus!=='idle')this.resetHeroesToEntrance(team);
+    else if(state.status==='running'&&(previousStatus==='idle'||previousStatus==='transition'||previousStatus==='recovering'||waveChanged))this.beginWave(team);
+    else if(state.status==='transition'&&previousStatus==='running')this.leaveWave(team,state.wave===WAVES.length-1,state.transitionMs);
+    else if(state.status==='recovering'&&previousStatus==='running')this.moveHeroes(team,entranceFormation(team),Math.min(1400,state.transitionMs));
+    else if(state.status==='running'&&created.length){const formation=combatFormation(team);for(const id of created){const view=this.heroes.get(id),point=formation.get(id);if(view&&point)this.moveHero(view,point,900,()=>this.faceNearestEnemy(view));}}
+
+    if(state.status==='running')for(const c of team){const view=this.heroes.get(c.id);if(view&&!view.walking&&c.hp>0)this.faceNearestEnemy(view);}
+    this.previousStatus=state.status;this.previousWave=state.wave;this.previousCycle=state.cycle;
   }
 
+  private createHero(character:Character,point:ArenaPoint):HeroView{
+    const asset=CHARACTER_SPRITES[character.classId];
+    let body:HeroBody;let sprite:Phaser.GameObjects.Sprite|undefined;
+    if(asset){sprite=this.add.sprite(0,0,asset.frames.down[0]).setOrigin(...asset.origin).setScale(asset.scale);body=sprite;}
+    else body=this.add.rectangle(0,0,38,54,CLASSES[character.classId].color).setStrokeStyle(2,0xe4ddcf);
+    const hpBg=this.add.rectangle(-45,-54,90,8,0x32171c,.95).setOrigin(0,.5);
+    const manaBg=this.add.rectangle(-45,-43,90,6,0x152443,.95).setOrigin(0,.5);
+    const hp=this.add.rectangle(-45,-54,90,6,0xc9535d).setOrigin(0,.5);
+    const mana=this.add.rectangle(-45,-43,90,4,0x557bd0).setOrigin(0,.5);
+    const name=this.add.text(0,40,'',{fontSize:'12px',color:'#fff',stroke:'#090b0e',strokeThickness:4,align:'center'}).setOrigin(.5);
+    const effects=this.add.text(0,58,'',{fontSize:'10px',color:'#9ce0af',stroke:'#080a0c',strokeThickness:3}).setOrigin(.5);
+    const container=this.add.container(point.x,point.y,[body,hpBg,manaBg,hp,mana,name,effects]).setDepth(6+point.y/1000);
+    return {container,body,sprite,name,hpBg,hp,manaBg,mana,effects,direction:'down',walking:false};
+  }
+
+  private beginWave(team:Character[]){
+    const entrances=entranceFormation(team),combat=combatFormation(team);
+    for(const character of team){const view=this.heroes.get(character.id),start=entrances.get(character.id),target=combat.get(character.id);if(!view||!start||!target)continue;this.stopHero(view);view.container.setPosition(start.x,start.y).setVisible(true);this.moveHero(view,target,1050,()=>this.faceNearestEnemy(view));}
+  }
+
+  private leaveWave(team:Character[],boss:boolean,transitionMs:number){
+    const targets=boss?entranceFormation(team):stairFormation(team);
+    this.moveHeroes(team,targets,Math.max(250,Math.min(boss?1450:850,transitionMs)));
+  }
+
+  private moveHeroes(team:Character[],targets:Map<string,ArenaPoint>,duration:number){
+    for(const character of team){const view=this.heroes.get(character.id),target=targets.get(character.id);if(view&&target)this.moveHero(view,target,duration);}
+  }
+
+  private moveHero(view:HeroView,target:ArenaPoint,duration:number,onComplete?:()=>void){
+    this.stopHero(view);
+    const direction=dominantDirection({x:view.container.x,y:view.container.y},target,view.direction);
+    const distance=PhaserMath.Distance.Between(view.container.x,view.container.y,target.x,target.y);
+    if(distance<1){this.setDirection(view,direction,false);onComplete?.();return;}
+    view.walking=true;this.setDirection(view,direction,true);
+    view.moveTween=this.tweens.add({targets:view.container,x:target.x,y:target.y,duration,ease:'Sine.easeInOut',onUpdate:()=>view.container.setDepth(6+view.container.y/1000),onComplete:()=>{view.moveTween=undefined;view.walking=false;this.setDirection(view,direction,false);onComplete?.();}});
+  }
+
+  private setDirection(view:HeroView,direction:CharacterDirection,walking:boolean){
+    view.direction=direction;if(!view.sprite)return;
+    const character=[...this.heroes.entries()].find(([,candidate])=>candidate===view)?.[0];
+    const classId=character?gameStore.getSnapshot().characters.find(c=>c.id===character)?.classId:undefined;
+    const asset=classId?CHARACTER_SPRITES[classId]:undefined;if(!asset)return;
+    if(walking)view.sprite.play(characterAnimationKey(classId!,direction),true);
+    else{view.sprite.stop();view.sprite.setTexture(asset.frames[direction][0]);}
+  }
+
+  private faceNearestEnemy(view:HeroView){const target=[...this.enemies.values()].find(enemy=>enemy.body.visible);if(target)this.setDirection(view,dominantDirection({x:view.container.x,y:view.container.y},{x:target.body.x,y:target.body.y},view.direction),false);}
+
+  private resetHeroesToEntrance(team:Character[]){
+    const formation=entranceFormation(team);for(const character of team){const view=this.heroes.get(character.id),point=formation.get(character.id);if(!view||!point)continue;this.stopHero(view);this.tweens.killTweensOf(view.container);this.tweens.killTweensOf(view.body);view.container.setPosition(point.x,point.y).setDepth(6+point.y/1000);this.setDirection(view,'up',false);}
+  }
+
+  private stopHero(view:HeroView){view.moveTween?.stop();view.moveTween=undefined;view.walking=false;if(view.sprite)view.sprite.stop();}
+  private cancelAllHeroMovement(){for(const view of this.heroes.values()){this.stopHero(view);this.tweens.killTweensOf(view.container);this.tweens.killTweensOf(view.body);}}
+
   private animateFx(fx:GameFx){
-    const source=this.entity(fx.source);const target=this.entity(fx.target);
+    const source=this.entity(fx.source),target=this.entity(fx.target);
     if(fx.type==='attack'&&source){
-      if(target){const projectile=this.add.circle(source.x,source.y,5,0xf2ce72).setDepth(10).setStrokeStyle(2,0xffffff,.8);this.tweens.add({targets:projectile,x:target.x,y:target.y,duration:150,ease:'Quad.easeIn',onComplete:()=>projectile.destroy()});}
-      this.tweens.add({targets:source,y:source.y-10,duration:75,yoyo:true,ease:'Sine.easeOut'});
+      const hero=fx.source?this.heroes.get(fx.source):undefined;
+      if(hero&&target)this.setDirection(hero,dominantDirection({x:hero.container.x,y:hero.container.y},{x:target.x,y:target.y},hero.direction),hero.walking);
+      if(target){const projectile=this.add.circle(source.x,source.y-18,5,0xf2ce72).setDepth(10).setStrokeStyle(2,0xffffff,.8);this.tweens.add({targets:projectile,x:target.x,y:target.y,duration:150,ease:'Quad.easeIn',onComplete:()=>projectile.destroy()});}
+      const attackBody=hero?.body??source;const dx=target?PhaserMath.Clamp(target.x-source.x,-8,8):0;const dy=target?PhaserMath.Clamp(target.y-source.y,-8,8):-8;
+      this.tweens.add({targets:attackBody,x:attackBody.x+dx,y:attackBody.y+dy,duration:70,yoyo:true,ease:'Sine.easeOut'});
     }
-    if(fx.type==='damage'&&target){
-      const originalX=target.x;this.tweens.add({targets:target,x:originalX+5,duration:45,yoyo:true,repeat:2,onComplete:()=>target.setX(originalX)});
-      this.floatText(fx.target??'',target.x,target.y-42,`-${fx.value??0}`,'#ff7d7d');
-    }
-    if(fx.type==='heal'&&target){
-      const pulse=this.add.circle(target.x,target.y,22,0x62dd94,.18).setStrokeStyle(3,0x8ff0b1).setDepth(9);this.tweens.add({targets:pulse,scale:1.8,alpha:0,duration:520,onComplete:()=>pulse.destroy()});
-      this.floatText(fx.target??'',target.x,target.y-42,`+${fx.value??0}`,'#82f0aa');
-    }
+    if(fx.type==='damage'&&target){const body=this.entityBody(fx.target)??target;const originalX=body.x;this.tweens.add({targets:body,x:originalX+5,duration:45,yoyo:true,repeat:2,onComplete:()=>body.setX(originalX)});this.floatText(fx.target??'',target.x,target.y-42,`-${fx.value??0}`,'#ff7d7d');}
+    if(fx.type==='heal'&&target){const pulse=this.add.circle(target.x,target.y,22,0x62dd94,.18).setStrokeStyle(3,0x8ff0b1).setDepth(9);this.tweens.add({targets:pulse,scale:1.8,alpha:0,duration:520,onComplete:()=>pulse.destroy()});this.floatText(fx.target??'',target.x,target.y-42,`+${fx.value??0}`,'#82f0aa');}
     if(fx.type==='death'&&target){for(let i=0;i<7;i++){const shard=this.add.circle(target.x,target.y,3,0xdcc89c).setDepth(10);const angle=(Math.PI*2/7)*i;this.tweens.add({targets:shard,x:target.x+Math.cos(angle)*45,y:target.y+Math.sin(angle)*45,alpha:0,duration:480,onComplete:()=>shard.destroy()});}this.tweens.add({targets:target,alpha:0,scale:.55,duration:260});}
     if(fx.type==='drop'&&fx.text)this.floatText('drop',this.scale.width/2,565,fx.text,'#ffd36e');
     if((fx.type==='stairs'||fx.type==='recovery')&&fx.text){this.transitionBanner.setAlpha(0).setVisible(true);this.tweens.add({targets:this.transitionBanner,alpha:1,duration:220});}
   }
 
-  private entity(id?:string){if(!id)return undefined;return this.heroes.get(id)?.body??this.enemies.get(id)?.body;}
+  private entity(id?:string):Phaser.GameObjects.Components.Transform|undefined{if(!id)return undefined;return this.heroes.get(id)?.container??this.enemies.get(id)?.body;}
+  private entityBody(id?:string):HeroBody|Phaser.GameObjects.Arc|undefined{if(!id)return undefined;return this.heroes.get(id)?.body??this.enemies.get(id)?.body;}
   private floatText(lane:string,x:number,y:number,text:string,color:string){const offset=(this.floatLanes.get(lane)??0)%3;this.floatLanes.set(lane,offset+1);const label=this.add.text(x+(offset-1)*16,y-offset*13,text,{fontFamily:'Arial Black',fontSize:'17px',color,stroke:'#08090b',strokeThickness:5}).setOrigin(.5).setDepth(15);this.tweens.add({targets:label,y:label.y-38,alpha:0,duration:850,ease:'Cubic.easeOut',onComplete:()=>label.destroy()});}
-  private destroyHero(v:HeroView){Object.values(v).forEach(o=>o.destroy());}
+  private destroyHero(v:HeroView){this.stopHero(v);v.container.destroy(true);}
   private destroyMonster(v:MonsterView){Object.values(v).forEach(o=>o.destroy());}
 }

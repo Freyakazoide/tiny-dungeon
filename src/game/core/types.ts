@@ -1,4 +1,4 @@
-export type ClassId = 'knight' | 'monk' | 'paladin' | 'sorcerer' | 'druid';
+export type ClassId = 'knight' | 'monk' | 'paladin' | 'necromancer' | 'druid';
 export type SkillId = 'fist' | 'sword' | 'axe' | 'club' | 'distance' | 'shielding' | 'magic';
 export type Slot = 'helmet' | 'armor' | 'legs' | 'boots' | 'weapon' | 'offhand' | 'amulet' | 'ring';
 export type Rarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';

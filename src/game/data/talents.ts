@@ -4,7 +4,7 @@ const names: Record<ClassId, string[]> = {
   knight:['Vigor','Muralha','Mestre da Lâmina','Fortaleza','Contra-ataque','Guardião'],
   monk:['Disciplina','Punhos de Aço','Fluxo','Combo','Evasão','Transcendência'],
   paladin:['Precisão','Fé','Mira Mortal','Luz Protetora','Aljava','Julgamento'],
-  sorcerer:['Intelecto','Reserva Arcana','Canalização','Impacto','Barreira','Arquimago'],
+  necromancer:['Conhecimento Proibido','Reserva Sombria','Canalização','Impacto Fúnebre','Barreira Óssea','Mestre da Morte'],
   druid:['Vitalidade','Seiva','Crescimento','Espinhos','Renovação','Avatar']
 };
 const effects: TalentDef['effect'][] = ['hp','attack','defense','mana','crit','cooldown'];

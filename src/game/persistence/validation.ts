@@ -7,6 +7,27 @@ import { SPELLS } from '../data/spells';
 const statuses:HuntStatus[]=['idle','running','paused','transition','recovering'];
 const finite=(value:unknown)=>typeof value==='number'&&Number.isFinite(value);
 const record=(value:unknown):value is Record<string,unknown>=>!!value&&typeof value==='object'&&!Array.isArray(value);
+const legacySpellIds:Record<string,string>={sorc_bolt:'necro_bolt',sorc_nova:'necro_nova',sorc_barrier:'necro_barrier',sorc_meteor:'necro_meteor'};
+
+function migrateRecordKeys(value:unknown,rename:(key:string)=>string){
+  if(!record(value))return value;
+  return Object.fromEntries(Object.entries(value).map(([key,entry])=>[rename(key),entry]));
+}
+
+/** Converts version-1 Sorcerer saves before strict validation, without dropping data. */
+export function migrateGameState(value:unknown):unknown{
+  const migrated=structuredClone(value);
+  if(!record(migrated)||!Array.isArray(migrated.characters))return migrated;
+  for(const raw of migrated.characters){
+    if(!record(raw)||raw.classId!=='sorcerer')continue;
+    raw.classId='necromancer';
+    if(Array.isArray(raw.spellSlots))raw.spellSlots=raw.spellSlots.map(id=>typeof id==='string'?(legacySpellIds[id]??id):id);
+    raw.spellConditions=migrateRecordKeys(raw.spellConditions,key=>legacySpellIds[key]??key);
+    raw.cooldowns=migrateRecordKeys(raw.cooldowns,key=>legacySpellIds[key]??key);
+    raw.talents=migrateRecordKeys(raw.talents,key=>key.replace(/^sorcerer_talent_/, 'necromancer_talent_'));
+  }
+  return migrated;
+}
 
 export function validateGameState(value:unknown):value is GameState{
   if(!record(value)||value.version!==1||!statuses.includes(value.status as HuntStatus))return false;
@@ -23,6 +44,7 @@ export function validateGameState(value:unknown):value is GameState{
 }
 
 export function cloneValidatedState(value:unknown):GameState{
-  if(!validateGameState(value))throw new Error('Backup incompatível ou corrompido.');
-  return structuredClone(value);
+  const migrated=migrateGameState(value);
+  if(!validateGameState(migrated))throw new Error('Backup incompatível ou corrompido.');
+  return structuredClone(migrated);
 }

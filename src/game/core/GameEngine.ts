@@ -21,7 +21,7 @@ export function createCharacter(classId:ClassId,name=CLASSES[classId].name):Char
   return {id:`hero-${Date.now()}-${idCounter++}`,name,classId,level:1,xp:0,talentPoints:0,hp:base.maxHp,mana:base.maxMana,skills:skills(),equipment:{},spellSlots:slots,spellConditions,talents:{},cooldowns:{basic:0},effects:[],helper:helper()};
 }
 export function initialState():GameState{
-  const chars=[createCharacter('knight','Aldric'),createCharacter('monk','Kael'),createCharacter('paladin','Lyra'),createCharacter('druid','Eira'),createCharacter('sorcerer','Mira')];
+  const chars=[createCharacter('knight','Aldric'),createCharacter('monk','Kael'),createCharacter('paladin','Lyra'),createCharacter('druid','Eira'),createCharacter('necromancer','Mira')];
   return {version:1,status:'idle',autoAdvance:true,wave:0,cycle:0,transitionMs:0,characters:chars,team:chars.slice(0,4).map(c=>c.id),monsters:[],inventory:{bp:[{itemId:'rusty_sword',quantity:1},{itemId:'knuckle_wraps',quantity:1},{itemId:'oak_bow',quantity:1},{itemId:'apprentice_staff',quantity:1}],loot:[],supply:[{itemId:'health_potion',quantity:8},{itemId:'mana_potion',quantity:8}],capacity:{bp:40,loot:60,supply:30}},gold:0,charmPoints:0,charmSlots:1,equippedCharms:[],unlockedCharms:[],codex:{},analyzer:analyzer(),history:[],message:'Expedição pronta.',lastSavedAt:Date.now()};
 }
 

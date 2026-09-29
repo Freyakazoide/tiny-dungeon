@@ -1,5 +1,6 @@
-import { Scene } from 'phaser';
-import { ASSETS } from '../assets';
+import { Scene, Textures } from 'phaser';
+import { ASSETS, CHARACTER_ANIMATION_FPS, CHARACTER_DIRECTIONS, CHARACTER_SPRITES, characterAnimationKey, characterFramePath } from '../assets';
+import type { ClassId } from '../core/types';
 
 export class Preloader extends Scene
 {
@@ -36,12 +37,22 @@ export class Preloader extends Scene
         this.load.image('logo', 'logo.png');
         this.load.image('star', 'star.png');
         this.load.image(ASSETS.arena.key, ASSETS.arena.path);
+        for(const [classId, asset] of Object.entries(CHARACTER_SPRITES) as [ClassId, NonNullable<(typeof CHARACTER_SPRITES)[ClassId]>][]){
+            for(const direction of CHARACTER_DIRECTIONS){
+                asset.frames[direction].forEach((key,index)=>this.load.image(key,characterFramePath(classId,direction,(index+1) as 1|2)));
+            }
+        }
     }
 
     create ()
     {
-        //  When all the assets have loaded, it's often worth creating global objects here that the rest of the game can use.
-        //  For example, you can define global animations here, so we can use them in other scenes.
+        for(const [classId, asset] of Object.entries(CHARACTER_SPRITES) as [ClassId, NonNullable<(typeof CHARACTER_SPRITES)[ClassId]>][]){
+            for(const direction of CHARACTER_DIRECTIONS){
+                for(const key of asset.frames[direction])this.textures.get(key).setFilter(Textures.FilterMode.NEAREST);
+                const key=characterAnimationKey(classId,direction);
+                if(!this.anims.exists(key))this.anims.create({key,frames:asset.frames[direction].map(frameKey=>({key:frameKey})),frameRate:CHARACTER_ANIMATION_FPS,repeat:-1});
+            }
+        }
 
         //  Move to the MainMenu. You could also swap this for a Scene Transition, such as a camera fade.
         this.scene.start('Game');

@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it } from 'vitest';
 import { GameEngine, initialState } from '../core/GameEngine';
 import { exportBackup, importBackup } from './backup';
-import { TinyDungeonDatabase } from './repository';
+import { loadMigratedState, TinyDungeonDatabase } from './repository';
 import { cloneValidatedState } from './validation';
 
 const databases:TinyDungeonDatabase[]=[];
@@ -28,6 +28,15 @@ describe('persistência',()=>{
     const state=initialState();state.status='transition';state.transitionMs=300;state.wave=0;state.analyzer.xp=100;state.analyzer.gold=9;state.gold=9;state.monsters=[{uid:'dead-skeleton',defId:'skeleton',hp:0,maxHp:100,cooldown:.5,alive:false}];
     const engine=new GameEngine(importBackup(exportBackup(state)));for(let i=0;i<4;i++)engine.tick(100);const restored=engine.getSnapshot();
     expect(restored.status).toBe('running');expect(restored.wave).toBe(1);expect(restored.analyzer.xp).toBe(100);expect(restored.gold).toBe(9);expect(restored.monsters).toHaveLength(2);
+  });
+
+  it('migra Sorcerer de IndexedDB e backup sem perder progressão ou configurações',async()=>{
+    const state=initialState();const character=state.characters.find(c=>c.classId==='necromancer')!;
+    character.level=12;character.xp=345;character.equipment.weapon='arcane_staff';character.spellSlots=['necro_meteor','necro_bolt'];character.spellConditions.necro_meteor={minEnemies:2,manaAbove:33};character.cooldowns.necro_meteor=4.2;character.talents.necromancer_talent_5=1;
+    const legacy=structuredClone(state) as unknown as {characters:Array<Record<string,unknown>>};const old=legacy.characters.find(c=>c.classId==='necromancer')!;old.classId='sorcerer';old.spellSlots=['sorc_meteor','sorc_bolt'];old.spellConditions={sorc_meteor:{minEnemies:2,manaAbove:33}};old.cooldowns={basic:.2,sorc_meteor:4.2};old.talents={sorcerer_talent_5:1};
+    const json=JSON.stringify({format:'tiny-dungeon-save',version:1,exportedAt:new Date().toISOString(),state:legacy});const restored=importBackup(json);const necromancer=restored.characters.find(c=>c.classId==='necromancer')!;
+    expect(necromancer.level).toBe(12);expect(necromancer.xp).toBe(345);expect(necromancer.equipment.weapon).toBe('arcane_staff');expect(necromancer.spellSlots).toEqual(['necro_meteor','necro_bolt']);expect(necromancer.spellConditions.necro_meteor).toEqual({minEnemies:2,manaAbove:33});expect(necromancer.cooldowns.necro_meteor).toBe(4.2);expect(necromancer.talents.necromancer_talent_5).toBe(1);
+    const database=new TinyDungeonDatabase(`tiny-dungeon-test-${crypto.randomUUID()}`);databases.push(database);await database.saves.put({id:'main',version:1,state:legacy as never,updatedAt:1});const loaded=await loadMigratedState(database);expect(loaded?.characters.some(c=>c.classId==='necromancer')).toBe(true);expect(JSON.stringify((await database.saves.get('main'))?.state)).not.toContain('sorcerer');
   });
 
   it('rejeita JSON, versão, referências e itens inválidos',()=>{
