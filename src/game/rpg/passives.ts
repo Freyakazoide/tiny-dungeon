@@ -1,7 +1,6 @@
-import type { TalentEffect } from '../core/types';
 
-/** Efeitos de passiva: os de talento mais dois condicionais. */
-export type PassiveEffect = TalentEffect | 'tankResistance' | 'focusMagicDamage' | 'burnOnFireHit' | 'iceBarrier' | 'plasmaCrit' | 'plasmaCritMult' | 'plasmaCooldown';
+/** Efeitos de passiva: os de atributo mais os condicionais. */
+export type PassiveEffect = 'maxHp' | 'maxMana' | 'attack' | 'defense' | 'attackSpeed' | 'crit' | 'resistance' | 'magicPower' | 'cooldown' | 'tankResistance' | 'focusMagicDamage' | 'burnOnFireHit' | 'iceBarrier' | 'plasmaCrit' | 'plasmaCritMult' | 'plasmaCooldown';
 export interface PassiveDef { name: string; description: string; effects: { effect: PassiveEffect; value: number }[]; }
 
 /** Passivas de cada nó do caminho da classe; somadas em characterStats (via talentBonus) enquanto o nó estiver no `classPath`. */

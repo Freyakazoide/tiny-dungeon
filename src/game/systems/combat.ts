@@ -7,8 +7,9 @@ import { itemById } from '../data/items';
 import { addCounter } from '../rpg/profile';
 import { runtime } from '../rpg/runtime';
 import { characterStats, trainProficiency } from './progression';
+import { talentValue } from './talentGrid';
 
-export const physicalDamage=(attack:number,defense:number,crit=false)=>Math.max(1,Math.round(attack*(crit?1.65:1)-defense*.55));
+export const physicalDamage=(attack:number,defense:number,crit=false,critMultiplier=1.65)=>Math.max(1,Math.round(attack*(crit?critMultiplier:1)-defense*.55));
 export const magicDamage=(power:number,multiplier:number,defense:number)=>Math.max(1,Math.round(power*multiplier-defense*.28));
 export const healAmount=(magic:number,multiplier:number)=>Math.max(1,Math.round(magic*multiplier+12));
 export function livingMonsters(s:GameState){return s.monsters.filter(m=>m.alive);}
@@ -20,6 +21,8 @@ export const elementAffinity = (defId: string, element?: ProficiencyId) => {
   const def = MONSTERS[defId];
   return def.weak?.includes(element) ? AFFINITY.weak : def.resist?.includes(element) ? AFFINITY.resist : 1;
 };
+/** Peso de aggro de um personagem dentro do seu grupo: talentos de aggro (+) e de redução de aggro (−). */
+const aggroWeight = (c: Character) => Math.max(0.05, (1 + talentValue(c, 'aggro_up')) * (1 - talentValue(c, 'aggro_down')));
 /** Sorteia o alvo de um golpe: tanque na frente, demais da frente e trás, com pesos renormalizados sem os grupos vazios. */
 export function pickMonsterTarget(team: Character[], rnd = Math.random): Character | undefined {
   const alive = team.filter(c => c.hp > 0);
@@ -30,7 +33,13 @@ export function pickMonsterTarget(team: Character[], rnd = Math.random): Charact
   if (!groups.length) return undefined;
   const total = groups.reduce((s, [, w]) => s + w, 0);
   let roll = rnd() * total;
-  for (const [g, w] of groups) { if ((roll -= w) <= 0) return g[Math.min(g.length - 1, Math.floor(rnd() * g.length))]; }
+  for (const [g, w] of groups) {
+    if ((roll -= w) > 0) continue;
+    const weights = g.map(aggroWeight);
+    let pick = rnd() * weights.reduce((a, b) => a + b, 0);
+    for (let i = 0; i < g.length; i++) if ((pick -= weights[i]) < 0) return g[i];
+    return g[g.length - 1];
+  }
   const last = groups[groups.length - 1][0];
   return last[last.length - 1];
 }
@@ -42,7 +51,7 @@ export function aggroShares(team: Character[]): Map<string, number> {
   const back = alive.filter(c => c.row === 'back');
   const groups = ([[tank, AGGRO.tank], [front, AGGRO.front], [back, AGGRO.back]] as const).filter(([g]) => g.length);
   const total = groups.reduce((s, [, w]) => s + w, 0);
-  return new Map(groups.flatMap(([g, w]) => g.map(c => [c.id, w / total / g.length] as const)));
+  return new Map(groups.flatMap(([g, w]) => { const weights = g.map(aggroWeight), sum = weights.reduce((a, b) => a + b, 0); return g.map((c, i) => [c.id, w / total * weights[i] / sum] as const); }));
 }
 /** Arma corpo a corpo na linha de trás (fora de alcance): a UI avisa e o ataque básico sofre a penalidade. */
 export const meleeInBackRow = (c: Character) => c.row === 'back' && (itemById(c.equipment.weapon ?? '')?.trains ?? CLASSES[c.classId].weaponSkill) === 'melee';

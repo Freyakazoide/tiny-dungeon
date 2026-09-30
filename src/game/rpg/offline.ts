@@ -3,6 +3,7 @@ import { TRIES_PER_SECOND } from './curves';
 import { runtime } from './runtime';
 import type { ProficiencyId } from './proficiencies';
 import { gainTries, type ProgressProfile } from './profile';
+import { isBlocked } from './affinity';
 
 /** Sem heartbeat por mais que isso = a sessão anterior terminou (um F5 não conta como offline). */
 export const SESSION_GAP_S = 60;
@@ -21,10 +22,10 @@ export const sessionGapSeconds = (lastSeenAt: number, now: number) => {
   return gap > SESSION_GAP_S ? gap : 0;
 };
 
-/** Até 2 proficiências distintas: as vagas escolhidas, depois o histórico, depois as últimas treinadas. */
+/** Até 2 proficiências distintas e não bloqueadas para a classe: as vagas escolhidas, depois o histórico, depois as últimas treinadas. */
 export function offlineSelection(profile: ProgressProfile): ProficiencyId[] {
   const chosen: ProficiencyId[] = [];
-  const add = (id: ProficiencyId | null | undefined) => { if (id && chosen.length < 2 && !chosen.includes(id)) chosen.push(id); };
+  const add = (id: ProficiencyId | null | undefined) => { if (id && chosen.length < 2 && !chosen.includes(id) && !isBlocked(profile, id)) chosen.push(id); };
   profile.offlineTargets.forEach(add);
   profile.offlineHistory.forEach(add);
   add(profile.lastTrained); add(profile.prevTrained);
@@ -35,7 +36,7 @@ export interface OfflineResult { target: ProficiencyId; tries: number; levelsGai
 export interface OfflineOutcome { seconds: number; entries: OfflineResult[]; }
 
 /** Credita SOMENTE tries (nada de XP, ouro, loot ou contadores), no ritmo cheio, em cada proficiência escolhida. */
-export function applyOfflineTraining(profile: ProgressProfile, gapSeconds: number): OfflineOutcome | null {
+export function applyOfflineTraining(profile: ProgressProfile, gapSeconds: number, bonusPct: (id: ProficiencyId) => number = () => 0): OfflineOutcome | null {
   if (gapSeconds <= 0) return null;
   const targets = offlineSelection(profile);
   if (!targets.length) return null;
@@ -43,7 +44,7 @@ export function applyOfflineTraining(profile: ProgressProfile, gapSeconds: numbe
   const tries = Math.floor(seconds * TRIES_PER_SECOND * OFFLINE_RATE * runtime.trainScale);
   const entries = targets.map(target => {
     const before = profile.proficiencies[target].level;
-    gainTries(profile, target, tries);
+    gainTries(profile, target, tries, bonusPct(target));
     return { target, tries, levelsGained: profile.proficiencies[target].level - before };
   });
   return { seconds, entries };

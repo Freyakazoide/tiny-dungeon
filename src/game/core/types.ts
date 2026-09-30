@@ -11,13 +11,14 @@ export interface Stats { maxHp: number; maxMana: number; attack: number; defense
 export interface SpellCondition { hpBelow?: number; minEnemies?: number; allyInjured?: boolean; manaAbove?: number; }
 export interface HelperConfig { hpPotionAt: number; manaPotionAt: number; healAllies: boolean; autoSupplies: boolean; defensiveAmuletAt: number; emergencyAt: number; outOfSupplies: 'continue' | 'end'; }
 export interface Character {
-  id: string; name: string; classId: ClassId; profile: ProgressProfile; talentPoints: number;
+  id: string; name: string; classId: ClassId; profile: ProgressProfile;
   /** Linha de combate e tanque (no máximo um por grupo): definem a posição no mapa e quem apanha. */
   row: CharacterRow; isTank: boolean;
   /** Sprite cosmético escolhido ('block' = bloco colorido da classe); a evolução de classe nunca o muda. */
   spriteId: string;
   hp: number; mana: number; equipment: Partial<Record<Slot, string>>;
-  spellSlots: string[]; spellConditions: Record<string, SpellCondition>; talents: Record<string, number>;
+  spellSlots: string[]; spellConditions: Record<string, SpellCondition>; /** Ranks comprados nas grades de talentos (id do nó -> rank), Origem incluída; os pontos livres são derivados do nível. */
+  talentRanks: Record<string, number>;
   cooldowns: Record<string, number>; effects: ActiveEffect[]; helper: HelperConfig;
 }
 export interface ActiveEffect { id: string; type: 'regen' | 'shield' | 'buffAttack' | 'buffDefense'; value: number; remaining: number; tick?: number; source?: string; }
@@ -40,9 +41,6 @@ export interface InventoryState { bp: InventoryStack[]; loot: InventoryStack[]; 
 export interface Analyzer { startedAt: number; activeMs: number; xp: number; gold: number; damage: number; damageTaken: number; healing: number; byCharacter: Record<string, number>; byMonster: Record<string, number>; kills: Record<string, number>; bosses: number; loot: Record<string, number>; lootValue: number; suppliesValue: number; suppliesUsed: Record<string, number>; cycles: number; defeats: number; }
 export interface CodexEntry { kills: number; discoveredLoot: string[]; claimed: number[]; }
 export interface CharmDef { id: string; name: string; cost: number; milestone: number; effect: 'damage' | 'resistance' | 'recovery' | 'experience'; value: number; }
-export type TalentEffect = 'maxHp' | 'maxMana' | 'attack' | 'defense' | 'attackSpeed' | 'crit' | 'resistance' | 'magicPower' | 'cooldown' | 'healing' | 'magicDamage';
-export interface TalentRequirement { talentId: string; rank: number; }
-export interface TalentDef { id: string; classId: ClassId; name: string; description: string; icon: string; tier: 1 | 2 | 3; column: 0 | 1; max: number; requiredLevel: number; requires?: TalentRequirement[]; effect: TalentEffect; value: number; }
 /** Retorno de uma sessão offline: XP/ouro da hunt de referência (25%) e tries nas vagas de treino. */
 export interface OfflineReport {
   seconds: number; /** a caçada que estava salva foi encerrada ao voltar */ huntEnded?: boolean;
