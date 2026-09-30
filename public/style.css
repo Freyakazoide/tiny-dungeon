@@ -141,3 +141,10 @@
 @media(max-width:720px){.tgrid-svg{height:60vh;min-height:360px}}
 .skill-card em.affinity-seal{border-color:#3d6f6f;color:#8ad4d4}.skill-card em.affinity-seal.blocked{border-color:#7a3a3a;color:#e08a8a}.affinity-line{color:#8ad4d4}
 .skill-card>div:first-child{flex-wrap:wrap;row-gap:3px}
+
+/* Fase 7: equipamento de classe */
+.rarity-mythic{border-color:#e05ac8!important;color:#ff8de0!important}
+.gear-card{display:grid;gap:2px}.gear-card em{font:normal 9px sans-serif;text-transform:uppercase;letter-spacing:.8px;opacity:.8;margin-left:4px}
+.gear-passive{color:#8ad4a0}.gear-mechanic{color:#d9a63f}.gear-attr{color:#8ab0e6}
+.smith-class{display:flex;gap:8px;align-items:center;margin:6px 0;font-size:12px}.gear-shop{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:6px}
+.equipment-actions{flex-wrap:wrap}.equipment-actions select{min-width:0;max-width:100%}

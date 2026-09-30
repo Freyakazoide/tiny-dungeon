@@ -1,4 +1,5 @@
 import type { Character } from '../core/types';
+import { gearBonus } from './gear';
 import { EFFECTS, effectCap, pointsAt, respecGold, rootIdOf, TALENT_NODES, TALENT_TREES, talentNode, type TalentNodeDef } from '../data/talentTrees';
 
 /**
@@ -29,13 +30,15 @@ export function investedPoints(c: Character, treeId?: string) {
 }
 export const talentPointsAvailable = (c: Character) => pointsAt(c.profile.level) - investedPoints(c);
 
-/** Soma `rank × perRank` por código (em pontos percentuais), em todas as grades do caminho, com os tetos aplicados. */
+/** Soma `rank × perRank` por código (em pontos percentuais), em todas as grades do caminho, mais o equipamento de classe, com os tetos aplicados. */
 export function talentTotals(c: Character): Record<string, number> {
   const totals: Record<string, number> = {};
   for (const [id, rank] of Object.entries(c.talentRanks)) {
     if (rank <= 0 || !nodeInPath(c, id)) continue;
     for (const effect of TALENT_NODES.get(id)!.node.effects) totals[effect.code] = (totals[effect.code] ?? 0) + rank * effect.perRank;
   }
+  // equipamento de classe (passivas e atributos aleatórios) soma aos mesmos códigos; o teto vale para o total
+  for (const [code, value] of Object.entries(gearBonus(c).effects)) totals[code] = (totals[code] ?? 0) + value;
   for (const code of Object.keys(totals)) totals[code] = Math.min(totals[code], effectCap(code));
   return totals;
 }

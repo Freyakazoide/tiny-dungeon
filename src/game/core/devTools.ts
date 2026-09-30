@@ -3,6 +3,7 @@ import { CLASS_NODES } from '../rpg/classTree';
 import { runtime } from '../rpg/runtime';
 import { PROFICIENCY_IDS } from '../rpg/proficiencies';
 import { COUNTER_IDS } from '../rpg/profile';
+import { classItem, CLASSIFICATIONS, itemsForClass, QUALITY_NAMES, type Classification } from '../data/classItems';
 
 interface DevHooks { setLastSeen(hoursAgo: number): Promise<void>; resetSave(): Promise<void>; }
 
@@ -37,6 +38,11 @@ export function createDevTools(engine: GameEngine, hooks: DevHooks) {
     evolve(id: string, target: string, opts: { force?: boolean } = {}) {
       const ok = engine.evolve(id, target, opts); console.info(`[dev] evolve(${id}, ${target}):`, ok ? 'ok' : engine.getSnapshot().message); return ok;
     },
+    /** dev.giveGear('guerreiro.espada_longa', 'mythic'): põe uma instância na mochila de equipamento (classificação: common, uncommon, rare, legendary, mythic). */
+    giveGear(baseId: string, classification: Classification = 'common') {
+      return run(`giveGear(${baseId}, ${classification})`, () => { if (!classItem(baseId)) throw new Error('Item desconhecido (ex.: guerreiro.espada_longa).'); if (!CLASSIFICATIONS.includes(classification)) throw new Error(`Classificação: ${CLASSIFICATIONS.join(', ')}.`); if (!engine.grantGear(baseId, classification)) throw new Error('Mochila cheia.'); });
+    },
+    listGear(classId: string) { const items = itemsForClass(classId).map(i => `${i.id} · ${QUALITY_NAMES[i.quality]}`); console.info(`[dev] ${items.length} itens de ${classId}:\n${items.join('\n')}`); return items; },
     fastForwardOffline(hours: number) { return run(`fastForwardOffline(${hours})`, () => { engine.applyOffline(hours * 3600); engine.end(); }); },
     setLastSeen(hoursAgo: number) { return hooks.setLastSeen(hoursAgo).then(() => console.info(`[dev] lastSavedAt = ${hoursAgo} h atrás; autosave congelado. Recarregue a página.`)); },
     resetSave() { return hooks.resetSave(); },

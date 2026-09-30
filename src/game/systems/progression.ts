@@ -9,6 +9,8 @@ import { PROFICIENCIES, type ProficiencyId } from '../rpg/proficiencies';
 import { itemById } from '../data/items';
 import { CHARMS } from '../data/charms';
 import { talentTotals, talentValue } from './talentGrid';
+import { gearBonus } from './gear';
+import { ARM_DEFENSE, PROFICIENCY_LEVEL_DAMAGE } from '../data/balance';
 import { affinityFor } from '../rpg/affinity';
 import type { Character, GameState, SpellDef, Stats } from '../core/types';
 
@@ -68,12 +70,13 @@ export function characterStats(c: Character, state?: GameState): Stats {
     const stats = id && itemById(id)?.stats; if (!stats) continue;
     for (const key of Object.keys(stats) as (keyof Stats)[]) out[key] += stats[key] ?? 0;
   }
-  const path = c.profile.classPath, totals = talentTotals(c);
+  const path = c.profile.classPath, totals = talentTotals(c), gear = gearBonus(c);
+  out.defense += gear.arm * ARM_DEFENSE;
   const grid = (code: string) => (totals[code] ?? 0) / 100;
   out.maxHp *= 1 + grid('hp') + passiveBonus(path, 'maxHp');
   out.maxMana *= 1 + grid('mana') + passiveBonus(path, 'maxMana');
   out.attack *= 1 + passiveBonus(path, 'attack');
-  out.defense *= 1 + grid('def') + passiveBonus(path, 'defense');
+  out.defense *= 1 + grid('def') + passiveBonus(path, 'defense') + (gear.levels.defense ?? 0) * PROFICIENCY_LEVEL_DAMAGE;
   out.attackSpeed *= 1 + grid('aspd') + passiveBonus(path, 'attackSpeed');
   out.magicPower *= 1 + grid('magic') + passiveBonus(path, 'magicPower');
   out.crit += grid('crit') + passiveBonus(path, 'crit');

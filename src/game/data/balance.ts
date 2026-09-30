@@ -17,3 +17,8 @@ export const AFFINITY = { weak: 1.3, resist: 0.7 } as const;
 export const STATUS = { burnPerStackPerSecond: 0.10, burnSeconds: 5, burnMaxStacks: 5, frozenPhysicalBonus: 0.20 } as const;
 /** Multiplicadores globais de HP e ataque dos monstros (o `dev.monsterScale` altera o valor em memória). */
 export const MONSTER_SCALE = { hp: 1, atk: 1 };
+/** Equipamento de classe (Fase 7): cada ponto de Arm vira esta fração de Defesa; cada nível de proficiência do item vale +1,2% no que ela governa. */
+export const ARM_DEFENSE = 0.5;
+export const PROFICIENCY_LEVEL_DAMAGE = 0.012;
+/** Instâncias de equipamento de classe que cabem na mochila de equipamento (o excedente é vendido na hora). */
+export const GEAR_BAG_CAPACITY = 80;
