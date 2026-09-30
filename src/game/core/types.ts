@@ -1,5 +1,6 @@
 import type { ProficiencyId } from '../rpg/proficiencies';
 import type { ProgressProfile } from '../rpg/profile';
+import type { Classification } from '../data/classItems';
 export type ClassId = 'squire' | 'hunter' | 'mage' | 'knight' | 'monk' | 'paladin' | 'necromancer' | 'druid';
 export type CharacterRow = 'front' | 'back';
 export type Slot = 'helmet' | 'armor' | 'legs' | 'boots' | 'weapon' | 'offhand' | 'amulet' | 'ring';
@@ -10,6 +11,8 @@ export type ItemKind = 'equipment' | 'loot' | 'supply';
 export interface Stats { maxHp: number; maxMana: number; attack: number; defense: number; attackSpeed: number; crit: number; resistance: number; magicPower: number; }
 export interface SpellCondition { hpBelow?: number; minEnemies?: number; allyInjured?: boolean; manaAbove?: number; }
 export interface HelperConfig { hpPotionAt: number; manaPotionAt: number; healAllies: boolean; autoSupplies: boolean; defensiveAmuletAt: number; emergencyAt: number; outOfSupplies: 'continue' | 'end'; }
+/** Um exemplar de equipamento de classe: o item base (catálogo Fase 7) + a classificação e os atributos aleatórios sorteados. */
+export interface ItemInstance { uid: string; baseId: string; classification: Classification; attrs: { code: string; level: number }[]; }
 export interface Character {
   id: string; name: string; classId: ClassId; profile: ProgressProfile;
   /** Linha de combate e tanque (no máximo um por grupo): definem a posição no mapa e quem apanha. */
@@ -17,6 +20,8 @@ export interface Character {
   /** Sprite cosmético escolhido ('block' = bloco colorido da classe); a evolução de classe nunca o muda. */
   spriteId: string;
   hp: number; mana: number; equipment: Partial<Record<Slot, string>>;
+  /** Equipamento de classe (Fase 7) por slot. Um slot tem um item antigo (`equipment`) ou um deste, nunca os dois. */
+  gear: Partial<Record<Slot, ItemInstance>>;
   spellSlots: string[]; spellConditions: Record<string, SpellCondition>; /** Ranks comprados nas grades de talentos (id do nó -> rank), Origem incluída; os pontos livres são derivados do nível. */
   talentRanks: Record<string, number>;
   cooldowns: Record<string, number>; effects: ActiveEffect[]; helper: HelperConfig;
@@ -50,6 +55,8 @@ export interface OfflineReport {
 export interface GameState {
   version: 1; status: HuntStatus; autoAdvance: boolean; wave: number; cycle: number; transitionMs: number;
   characters: Character[]; team: string[]; monsters: MonsterRuntime[]; inventory: InventoryState;
+  /** Mochila de equipamento de classe (instâncias com atributos próprios). */
+  gearBag: ItemInstance[];
   gold: number; charmPoints: number; charmSlots: number; equippedCharms: string[]; unlockedCharms: string[];
   codex: Record<string, CodexEntry>; analyzer: Analyzer; history: Analyzer[]; message: string; lastSavedAt: number;
   /** Hunt atual (padrão 'catacumbas'). */

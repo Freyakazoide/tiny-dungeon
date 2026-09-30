@@ -1,3 +1,4 @@
+import { classItem } from '../game/data/classItems';
 import { useState } from 'react';
 import type { Character, CharacterRow, GameState } from '../game/core/types';
 import { gameStore } from '../game/core/GameStore';
@@ -14,12 +15,12 @@ const ROWS: { id: CharacterRow; title: string; hint: string }[] = [
 ];
 
 function FormationCard({ character, state, share }: { character: Character; state: GameState; share?: number }) {
-  const stats = characterStats(character, state), weapon = itemById(character.equipment.weapon ?? '');
+  const stats = characterStats(character, state), weapon = itemById(character.equipment.weapon ?? ''), gearWeapon = character.gear.weapon && classItem(character.gear.weapon.baseId);
   const other: CharacterRow = character.row === 'front' ? 'back' : 'front';
   return <article className={`formation-card ${character.isTank ? 'is-tank' : ''} ${character.hp <= 0 ? 'down' : ''}`}>
     <div className="formation-head"><strong>{character.name}</strong>{character.isTank && <em className="tank-seal">Tanque</em>}<small>{classLabel(character)} · Nv. {character.profile.level}</small></div>
     <ProgressBar compact tone="hp" value={character.hp} max={stats.maxHp} label="HP" detail={`${Math.round(character.hp)}/${stats.maxHp}`} />
-    <small>Arma: {weapon?.name ?? 'sem arma'}{weapon?.trains ? ` (${weapon.trains === 'melee' ? 'Melee' : 'Ranged'})` : ''}</small>
+    <small>Arma: {gearWeapon?.name ?? weapon?.name ?? 'sem arma'}{weapon?.trains ? ` (${weapon.trains === 'melee' ? 'Melee' : 'Ranged'})` : ''}</small>
     {share !== undefined && <small>Aggro estimado: {Math.round(share * 100)}%</small>}
     {meleeInBackRow(character) && <small className="warn">Arma corpo a corpo na linha de trás: 50% do dano.</small>}
     <div className="formation-actions">

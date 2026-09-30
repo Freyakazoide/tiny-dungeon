@@ -5,6 +5,8 @@ import { itemById } from '../game/data/items';
 import { BUY_QUANTITIES, shopStock, type ShopEntry } from '../game/data/shop';
 import { equipBlockReason } from '../game/systems/equipment';
 import { itemIcon, SLOT_IDS, slotNames, statLine } from './format';
+import { classItem } from '../game/data/classItems';
+import { GearBag, GearCard, gearEquipReason, gearOptions } from './GearPanel';
 
 type Filter = 'all' | 'equipment' | 'supply' | 'loot';
 type Sort = 'rarity' | 'value' | 'name';
@@ -44,18 +46,22 @@ export function ItemsPanel({ state, character }: { state: GameState; character: 
 
     <div className="subsection-heading"><h3>Equipamento</h3><small>Os itens iniciais ficam aqui, nos slots de cada personagem.</small></div>
     <div className="equipment-grid">{SLOT_IDS.map(slot => {
-      const item = itemById(character.equipment[slot] ?? ''), options = swapOptions(slot);
+      const gear = character.gear[slot], item = gear ? undefined : itemById(character.equipment[slot] ?? ''), options = swapOptions(slot), gearOpts = gearOptions(state, character, slot);
       return <article className="equipment-cell" key={slot}>
         <span className="slot-name">{slotNames[slot]}</span>
-        {item ? <><b className={`rarity-${item.rarity}`}>{itemIcon(item)} {item.name}</b><small>{statLine(item.stats) || 'Sem atributos'}</small></> : <b className="empty-slot">Vazio</b>}
+        {gear ? <GearCard instance={gear} /> : item ? <><b className={`rarity-${item.rarity}`}>{itemIcon(item)} {item.name}</b><small>{statLine(item.stats) || 'Sem atributos'}</small></> : <b className="empty-slot">Vazio</b>}
         <div className="equipment-actions">
-          <select aria-label={`Trocar ${slotNames[slot]}`} value="" disabled={!options.length} onChange={event => event.target.value && gameStore.equip(character.id, event.target.value)}>
-            <option value="">{options.length ? 'Trocar…' : 'Nada para trocar'}</option>{options.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+          <select aria-label={`Trocar ${slotNames[slot]}`} value="" disabled={!options.length && !gearOpts.length} onChange={event => { const v = event.target.value; if (!v) return; if (v.startsWith('gear:')) gameStore.equipGear(character.id, v.slice(5)); else gameStore.equip(character.id, v); }}>
+            <option value="">{options.length || gearOpts.length ? 'Trocar…' : 'Nada para trocar'}</option>
+            {gearOpts.map(g => <option key={g.uid} value={`gear:${g.uid}`} disabled={!!gearEquipReason(character, g)}>{classItem(g.baseId)?.name} ({g.classification === 'common' ? 'Comum' : g.classification})</option>)}
+            {options.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
           </select>
-          {item && <button onClick={() => gameStore.unequip(character.id, slot)}>Remover</button>}
+          {gear ? <button onClick={() => gameStore.unequipGear(character.id, slot)}>Remover</button> : item && <button onClick={() => gameStore.unequip(character.id, slot)}>Remover</button>}
         </div>
       </article>;
     })}</div>
+
+    <GearBag state={state} character={character} />
 
     <div className="subsection-heading"><h3>Mochila</h3>
       <div className="bag-controls">

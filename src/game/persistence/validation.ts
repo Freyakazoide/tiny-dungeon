@@ -6,7 +6,10 @@ import { DEFAULT_HUNT, HUNT_BY_ID } from '../data/hunts';
 import { DEFAULT_SPRITE, defaultSpriteFor, isKnownSprite } from '../data/sprites';
 import { SPELLS } from '../data/spells';
 import { validTalentRanks } from '../systems/talentGrid';
-import { rootIdOf, TALENT_TREES } from '../data/talentTrees';
+import { classItem, CLASSIFICATIONS, ITEM_CONFIG, type Classification } from '../data/classItems';
+import { GEAR_BAG_CAPACITY } from '../data/balance';
+import { classCanUse, handsConflict, GEAR_SLOTS } from '../systems/gear';
+import { EFFECTS, rootIdOf, TALENT_TREES } from '../data/talentTrees';
 import { CLASS_BY_ID } from '../rpg/classTree';
 import { MAX_PROFICIENCY_LEVEL, PROFICIENCY_IDS } from '../rpg/proficiencies';
 import { COUNTER_IDS } from '../rpg/profile';
@@ -51,10 +54,36 @@ export function migrateGameState(value:unknown):unknown{
     delete c.talents;delete c.talentPoints;
     if(legacy||!validTalentRanks(c.talentRanks,path,finite(c.profile.level)?Number(c.profile.level):1))c.talentRanks=origins();
   }
+  // Fase 7: equipamento de classe (instâncias). Saves antigos não têm nenhum.
+  if(!Array.isArray(migrated.gearBag))migrated.gearBag=[];
+  for(const c of characters)if(!record(c.gear))c.gear={};
   if(record(migrated.inventory)&&record(migrated.inventory.capacity)&&finite(migrated.inventory.capacity.supply)&&Number(migrated.inventory.capacity.supply)<200)migrated.inventory.capacity.supply=200;
   const analyzers=[migrated.analyzer,...(Array.isArray(migrated.history)?migrated.history:[])];
   for(const raw of analyzers)if(record(raw)&&!record(raw.suppliesUsed))raw.suppliesUsed={};
   return migrated;
+}
+
+/** Instância de equipamento de classe: item do catálogo, classificação e atributos coerentes (quantidade, códigos, níveis). */
+function validInstance(value:unknown){
+  if(!record(value)||typeof value.uid!=='string'||!value.uid||typeof value.baseId!=='string'||!classItem(value.baseId))return false;
+  if(!(CLASSIFICATIONS as readonly string[]).includes(value.classification as string)||!Array.isArray(value.attrs))return false;
+  if(value.attrs.length!==ITEM_CONFIG.rarityAttrs[value.classification as Classification])return false;
+  const codes=new Set<string>();
+  for(const a of value.attrs){if(!record(a)||typeof a.code!=='string'||!(a.code in EFFECTS)||codes.has(a.code)||!Number.isInteger(a.level)||Number(a.level)<1||Number(a.level)>ITEM_CONFIG.attrLevelCap)return false;codes.add(a.code);}
+  return true;
+}
+/** Equipamento de um personagem: slot certo, classe compatível, sem item antigo no mesmo slot e regra de mãos respeitada. */
+function validGear(raw:Record<string,unknown>,seen:Set<string>){
+  if(!record(raw.gear)||!record(raw.equipment)||!record(raw.profile))return false;
+  const path=(raw.profile as {classPath:string[]});
+  for(const [slot,value] of Object.entries(raw.gear)){
+    if(!(GEAR_SLOTS as readonly string[]).includes(slot)||!validInstance(value)||seen.has((value as {uid:string}).uid))return false;
+    const base=classItem((value as {baseId:string}).baseId)!;
+    if(base.slot!==slot||!classCanUse({profile:path} as never,base)||raw.equipment[slot]!==undefined)return false;
+    seen.add((value as {uid:string}).uid);
+  }
+  const gear=raw.gear as Record<string,{baseId:string}>;
+  return !handsConflict(gear.weapon&&classItem(gear.weapon.baseId),gear.offhand&&classItem(gear.offhand.baseId));
 }
 
 /** Perfil RPG (Squire -> classe -> subclasse): todas as proficiências presentes e numéricas. */
@@ -83,6 +112,7 @@ export function validateGameState(value:unknown):value is GameState{
   const inventory=value.inventory as Record<string,unknown>;if(!record(inventory.capacity))return false;
   const knownItems=new Set(ITEMS.map(i=>i.id));for(const key of ['bp','loot','supply'] as const){if(!Array.isArray(inventory[key]))return false;for(const raw of inventory[key] as unknown[]){if(!record(raw)||typeof raw.itemId!=='string'||!knownItems.has(raw.itemId)||!finite(raw.quantity)||Number(raw.quantity)<0)return false;}}
   if(!record(value.huntStats))return false;
+  {const seen=new Set<string>();if(!Array.isArray(value.gearBag)||value.gearBag.length>GEAR_BAG_CAPACITY)return false;for(const g of value.gearBag){if(!validInstance(g)||seen.has((g as {uid:string}).uid))return false;seen.add((g as {uid:string}).uid);}for(const raw of characters)if(!validGear(raw as Record<string,unknown>,seen))return false;}
   return record(value.analyzer)&&record(value.analyzer.suppliesUsed)&&record(value.codex)&&Array.isArray(value.history)&&value.history.every(entry=>record(entry)&&record(entry.suppliesUsed))&&Array.isArray(value.equippedCharms)&&Array.isArray(value.unlockedCharms)&&typeof value.autoAdvance==='boolean'&&typeof value.message==='string';
 }
 
