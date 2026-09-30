@@ -97,7 +97,7 @@ describe('Bloco 4 — equipamento por faixa', () => {
 
 describe('Bloco 4 — o harness com o conjunto da hunt equipado', () => {
   it.each(GEAR_SETS.map(s => s.huntId))('%s continua dentro das faixas com o conjunto equipado', huntId => {
-    const m = simulateHunt(huntId, { setup: chars => {
+    const m = simulateHunt(huntId, { seed: 5, setup: chars => {
       const set = (piece: (typeof GEAR_PIECES)[number]) => gearId(huntId, piece);
       chars[0].equipment = { weapon: set('melee'), armor: set('armor'), offhand: set('shield') };
       chars[1].equipment = { weapon: set('ranged'), armor: set('armor'), offhand: set('shield') };

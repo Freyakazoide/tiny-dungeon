@@ -354,6 +354,17 @@ export class GameEngine {
   devAddTries(id:string,prof:string,amount:number){trainProficiency(this.devCharacter(id),this.devProficiency(prof),amount);this.emit();}
   devAddCounter(id:string,counter:string,amount:number){const c=this.devCharacter(id);if(!(COUNTER_IDS as readonly string[]).includes(counter))throw new Error(`Contador desconhecido: ${counter}`);addCounter(c.profile,counter as CounterId,amount);this.emit();}
   devScaleChanged(){this.emit();}
+  /** Helper: limiares de poção e avisos de um personagem (valores em % de 0 a 100, com validação). */
+  setHelper(characterId:string,patch:Partial<HelperConfig>){
+    const c=this.state.characters.find(x=>x.id===characterId);if(!c)return false;
+    const pct=(v:unknown)=>typeof v==='number'&&Number.isFinite(v)?Math.max(0,Math.min(100,Math.round(v))):undefined;
+    const next={...c.helper};
+    for(const key of ['hpPotionAt','manaPotionAt','defensiveAmuletAt','emergencyAt'] as const)if(patch[key]!==undefined){const v=pct(patch[key]);if(v===undefined)return false;next[key]=v;}
+    if(patch.healAllies!==undefined)next.healAllies=!!patch.healAllies;
+    if(patch.autoSupplies!==undefined)next.autoSupplies=!!patch.autoSupplies;
+    if(patch.outOfSupplies==='continue'||patch.outOfSupplies==='end')next.outOfSupplies=patch.outOfSupplies;
+    c.helper=next;this.emit();return true;
+  }
   dismissOfflineReport(){if(this.state.offlineReport){delete this.state.offlineReport;this.emit();}}
   equipSpell(id:string,slot:number,spellId:string){
     const c=this.state.characters.find(x=>x.id===id),s=spellById(spellId);

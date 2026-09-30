@@ -47,6 +47,16 @@ export const PhaserGame = forwardRef<IRefPhaserGame, IProps>(function PhaserGame
         }
     }, [ref]);
 
+    // O contêiner muda de tamanho com a janela e com o layout (trilho/barra da equipe): o Phaser precisa recalcular o FIT.
+    useEffect(() =>
+    {
+        const container = document.getElementById('game-container');
+        if (!container || typeof ResizeObserver === 'undefined') return;
+        const observer = new ResizeObserver(() => { game.current?.scale.refresh(); });
+        observer.observe(container);
+        return () => observer.disconnect();
+    }, []);
+
     useEffect(() =>
     {
         EventBus.on('current-scene-ready', (scene_instance: Phaser.Scene) =>

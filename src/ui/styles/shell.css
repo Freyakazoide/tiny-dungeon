@@ -1,0 +1,65 @@
+/* Shell: a tela é a caçada. HUD em cima, trilho de ícones à esquerda, barra da equipe embaixo e o mapa (Phaser) no meio. */
+html, body, #root, #app { height: 100%; }
+body { overflow: hidden; }
+.stage { position: fixed; inset: 0; display: grid; grid-template-columns: calc(68px + var(--safe-l)) 1fr; grid-template-rows: calc(54px + var(--safe-t)) 1fr 96px; padding-top: var(--safe-t); background: var(--ink); font-size: calc(14px * var(--ui-scale)); }
+
+/* HUD */
+.hud { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; padding: 0 14px; background: linear-gradient(#10161e, #0b1017); border-bottom: 1px solid var(--edge-2); z-index: var(--z-hud); min-width: 0; }
+.brand { display: flex; align-items: center; gap: 9px; font-family: Georgia, serif; color: var(--gold); white-space: nowrap; }
+.brand b { display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid var(--bronze-2); background: #241c0f; font-size: 13px; }
+.hunt-title { display: flex; flex-direction: column; min-width: 0; }
+.hunt-title strong { font-family: Georgia, serif; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hunt-title small { color: var(--muted); font-size: 11px; }
+.risk-tranquila, .risk-adequada { color: var(--ok); } .risk-arriscada { color: var(--warn); } .risk-suicida { color: var(--danger); }
+.wave { flex: 1; max-width: 340px; min-width: 90px; }
+.wave-top { white-space: nowrap; display: flex; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--muted); margin-bottom: 3px; }
+.bar { height: 8px; background: #090d13; border: 1px solid #2b323c; position: relative; overflow: hidden; }
+.bar i { position: absolute; inset: 0 auto 0 0; background: var(--gold-2); transition: width .2s; }
+.speed { display: flex; } .speed button { padding: 5px 8px; border-radius: 0; font-size: 11px; } .speed button.on { background: #49391f; border-color: #a98a4a; }
+.dev-badge { font-size: 10px; padding: 2px 6px; border: 1px solid #6b4a25; color: var(--warn); }
+
+/* Trilho */
+.rail { grid-row: 2 / 4; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 0; background: linear-gradient(90deg, #0d1218, #10161e); border-right: 1px solid var(--edge-2); z-index: var(--z-rail); overflow-y: auto; overflow-x: visible; }
+.rail-btn { position: relative; width: 52px; height: 52px; flex: none; display: grid; place-items: center; background: linear-gradient(#1c242e, #131a22); border: 1px solid var(--edge-2); border-radius: var(--rad-2); padding: 0; }
+.rail-btn:hover { border-color: var(--bronze-2); background: linear-gradient(#26303c, #161e27); }
+.rail-btn[aria-pressed="true"] { border-color: var(--gold-2); box-shadow: inset 0 0 0 1px #6f5a2a; }
+.rail-btn small { position: absolute; bottom: 2px; font-size: 8px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.rail-btn .icon { margin-top: -6px; }
+.rail .sp { flex: 1; min-height: 4px; }
+.rail .tip { position: fixed; left: calc(74px + var(--safe-l)); transform: translateY(-14px); white-space: nowrap; background: #0b1017; border: 1px solid var(--bronze-2); padding: 5px 9px; font-size: 12px; color: var(--text); opacity: 0; pointer-events: none; transition: opacity .12s; z-index: var(--z-tooltip); }
+.rail-btn:hover .tip, .rail-btn:focus-visible .tip { opacity: 1; }
+.rail .tip kbd { margin-left: 8px; }
+
+/* Mapa: o Phaser dirige o tick do combate, então fica SEMPRE montado e visível; o modal só o cobre. */
+.arena { grid-row: 2; grid-column: 2; position: relative; overflow: hidden; background: radial-gradient(ellipse at 50% 45%, #2a2418 0, #15110b 60%, #0a0805 100%); }
+.stage #game-container { position: absolute; inset: 0; width: auto; height: auto; aspect-ratio: auto; max-height: none; background: transparent; overflow: hidden; }
+.stage #game-container canvas { display: block; }
+.session { position: absolute; top: 14px; right: 14px; z-index: 5; width: 190px; background: rgba(9, 13, 19, .86); border: 1px solid var(--edge); padding: 9px 11px; font-size: 12px; }
+.session h4 { margin: 0; font: 11px Inter, sans-serif; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); display: flex; justify-content: space-between; cursor: pointer; background: none; border: 0; padding: 0; width: 100%; }
+.session .r { display: flex; justify-content: space-between; padding: 2px 0; } .session .r:first-of-type { margin-top: 6px; } .session b { color: #fff; font-variant-numeric: tabular-nums; }
+.banner { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); z-index: 5; padding: 6px 18px; background: rgba(10, 12, 16, .82); border: 1px solid var(--gold-2); font-family: Georgia, serif; letter-spacing: .12em; color: var(--gold); text-transform: uppercase; font-size: 13px; pointer-events: none; }
+
+/* Barra da equipe */
+.party { grid-row: 3; grid-column: 2; display: flex; gap: 8px; padding: 8px 10px calc(8px + var(--safe-b)); background: linear-gradient(#0d1218, #0a0f15); border-top: 1px solid var(--edge-2); z-index: var(--z-party); overflow-x: auto; }
+.pcard { --c: #6aa0e8; flex: 1 1 210px; min-width: 190px; text-align: left; padding: 7px 9px; background: #121a23; border: 1px solid var(--edge-2); border-left: 3px solid var(--c); border-radius: 3px; color: var(--text); }
+.pcard:hover { border-color: var(--c); }
+.pcard.down { opacity: .6; } .pcard.low { animation: lowhp 1s infinite; }
+@keyframes lowhp { 50% { border-color: var(--danger); } }
+.pcard .h { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 5px; }
+.pcard strong { font-size: 13px; } .pcard small { color: var(--muted); font-size: 10px; }
+.mini { height: 6px; margin: 3px 0; background: #090d13; border: 1px solid #2b323c; position: relative; } .mini i { position: absolute; inset: 0 auto 0 0; transition: width .2s; }
+.pcard .foot { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); margin-top: 4px; gap: 6px; }
+
+/* Responsivo */
+@media (max-width: 1179px) { .session.collapsed-default { display: none; } }
+@media (max-width: 720px) {
+  .stage { grid-template-columns: 1fr; grid-template-rows: calc(54px + var(--safe-t)) 1fr 92px 62px; }
+  .rail { grid-row: 4; grid-column: 1; flex-direction: row; padding: 4px 6px calc(4px + var(--safe-b)); overflow-x: auto; overflow-y: hidden; justify-content: flex-start; }
+  .rail .sp { display: none; } .rail .tip { display: none; }
+  .arena { grid-column: 1; } .party { grid-column: 1; grid-row: 3; }
+  .hud .hide-s, .hud .speed, .hunt-title small, .hud .brand span { display: none; }
+  .pcard { min-width: 150px; } .pcard .foot span:last-child { display: none; }
+}
+@media (max-width: 720px) {
+  .hud { gap: 8px; padding: 0 8px; } .hud .btn { padding: 6px 10px; font-size: 12px; } .hunt-title { flex: 1 1 auto; } .hunt-title strong { font-size: 13px; } .wave { min-width: 70px; }
+}

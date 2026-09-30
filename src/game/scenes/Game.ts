@@ -106,7 +106,7 @@ export class Game extends Scene {
     state.monsters.forEach((m,i)=>{
       const {x,y}=layout[i];const def=MONSTERS[m.defId];let v=this.enemies.get(m.uid);
       if(!v){const hpBg=this.add.rectangle(x-50,y-54,100,9,0x35171b,.95).setOrigin(0,.5).setDepth(5);v={body:this.add.circle(x,y,(def.boss?38:29)*(layout.length>12?.9:1),def.color).setStrokeStyle(2,0xf0e3cd).setDepth(5),name:this.add.text(x,y+45,def.name,{fontSize:'12px',color:'#fff',stroke:'#090b0e',strokeThickness:4}).setOrigin(.5).setDepth(6),hpBg,hp:this.add.rectangle(x-50,y-54,100,7,0xd45a5f).setOrigin(0,.5).setDepth(6)};this.enemies.set(m.uid,v);}
-      v.hp.displayWidth=100*Math.max(0,m.hp/m.maxHp);v.body.setVisible(m.alive);v.name.setText(`${def.name}${(m.statuses?.burn?` 🔥×${m.statuses.burn.stacks}`:'')}${(m.statuses?.frozen?' ❄':'')}${(m.statuses?.stunned?' ✦':'')}`);v.body.setStrokeStyle(2,m.statuses?.frozen?0x8fd8ff:m.statuses?.burn?0xff8c3a:0xf0e3cd);v.hp.setVisible(m.alive);v.hpBg.setVisible(m.alive);v.name.setAlpha(m.alive?1:.3);
+      v.hp.displayWidth=100*Math.max(0,m.hp/m.maxHp);v.body.setVisible(m.alive);v.name.setVisible(m.alive);v.hpBg.setVisible(m.alive);v.hp.setVisible(m.alive);v.name.setText(`${def.name}${(m.statuses?.burn?` 🔥×${m.statuses.burn.stacks}`:'')}${(m.statuses?.frozen?' ❄':'')}${(m.statuses?.stunned?' ✦':'')}`);v.body.setStrokeStyle(2,m.statuses?.frozen?0x8fd8ff:m.statuses?.burn?0xff8c3a:0xf0e3cd);v.hp.setVisible(m.alive);v.hpBg.setVisible(m.alive);v.name.setAlpha(m.alive?1:.3);
     });
 
     if(state.status==='paused'&&!this.visualPaused){this.tweens.pauseAll();this.anims.pauseAll();this.visualPaused=true;}

@@ -11,7 +11,7 @@ import { nextSteps, requirementRows, treeSplit, UNTRACKED_COUNTERS } from '../sy
 import { CLASS_BY_ID } from '../rpg/classTree';
 import { runtime } from '../rpg/runtime';
 import { itemById } from '../data/items';
-import { CHARACTER_TABS, TABS } from '../../ui/navigation';
+import { CHARACTER_TABS, RAIL_ITEMS } from '../../ui/navigation';
 
 afterEach(() => { runtime.trainScale = 1; runtime.xpScale = 1; runtime.monsterHp = 1; runtime.monsterAtk = 1; vi.restoreAllMocks(); });
 
@@ -150,9 +150,10 @@ describe('D — itens, loja e guia de classes', () => {
     expect(equipBlockReason(c, itemById('bone')!)).toMatch(/equipamento/);
     expect(equipBlockReason(c, itemById('rusty_sword')!)).toBeUndefined();
   });
-  it('a navegação tem 6 abas; Magias e Talentos só existem dentro de Personagem', () => {
-    expect([...TABS]).toEqual(['Caçada', 'Grupo', 'Personagem', 'Itens', 'Classes', 'Sistema']);
-    expect((TABS as readonly string[]).includes('Magias') || (TABS as readonly string[]).includes('Talentos')).toBe(false);
+  it('o trilho tem 11 menus (Sistema embaixo); Magias e Talentos só existem dentro de Personagem', () => {
+    expect(RAIL_ITEMS.map(i => i.id)).toEqual(['personagem', 'itens', 'comercio', 'classes', 'grupo', 'hunts', 'analyzer', 'helper', 'progressao', 'charms', 'sistema']);
+    expect(RAIL_ITEMS.filter(i => i.bottom).map(i => i.id)).toEqual(['sistema']);
+    expect(RAIL_ITEMS.some(i => ['magias', 'talentos'].includes(i.id))).toBe(false);
     expect([...CHARACTER_TABS]).toEqual(['Ficha', 'Proficiências', 'Magias', 'Talentos']);
   });
   it('o Squire vê as 15 classes base ordenadas pela proficiência, com checklist e ETA', () => {

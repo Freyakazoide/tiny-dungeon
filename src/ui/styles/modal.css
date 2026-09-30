@@ -1,0 +1,24 @@
+/* Modais: cobrem o mapa, mas não o trilho nem o HUD. A caçada continua rodando por trás. */
+.veil { position: fixed; top: calc(54px + var(--safe-t)); left: calc(68px + var(--safe-l)); right: 0; bottom: 0; background: rgba(4, 6, 10, .58); backdrop-filter: blur(2px); z-index: var(--z-modal); display: flex; align-items: center; justify-content: center; padding: 16px 16px calc(16px + var(--safe-b)); }
+.modal { width: min(980px, 100%); max-height: 100%; display: flex; flex-direction: column; background: linear-gradient(#18202a, #121922); border: 1px solid var(--edge); box-shadow: var(--shadow-modal), inset 0 0 0 1px #0b1017; animation: pop .14s ease-out; color: var(--text); }
+.modal:focus { outline: none; }
+.modal.sm { width: min(620px, 100%); } .modal.xl { width: min(1180px, 100%); }
+.m-head { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--edge-2); background: linear-gradient(#1d2631, #161e28); flex: none; }
+.m-head .ic { display: grid; place-items: center; width: 40px; height: 40px; border: 1px solid var(--bronze-2); background: #241c0f; flex: none; }
+.m-title h2 { margin: 0; font: 600 18px Georgia, serif; color: var(--gold); } .m-title small { color: var(--muted); display: block; font-size: 11px; }
+.who { display: flex; gap: 6px; margin-left: auto; overflow-x: auto; }
+.who button { padding: 3px 9px; font-size: 12px; background: #10161e; border: 1px solid var(--edge-2); border-radius: 12px; white-space: nowrap; }
+.who button.on { border-color: var(--gold-2); color: var(--gold); }
+.x { margin-left: 10px; width: 30px; height: 30px; padding: 0; background: transparent; border: 1px solid var(--edge-2); border-radius: 3px; flex: none; }
+.m-body { padding: 16px; overflow: auto; min-height: 0; flex: 1; }
+.m-foot { padding: 10px 16px; border-top: 1px solid var(--edge-2); display: flex; gap: 10px; align-items: center; color: var(--muted); font-size: 12px; flex: none; }
+.m-body .section-heading:first-child { display: none; } /* o título do modal já diz onde estamos */
+.m-body .stone-panel { box-shadow: none; }
+.offline-line { font-size: 13px; padding: 4px 0; }
+@media (max-width: 720px) {
+  .veil { left: 0; bottom: 62px; padding: 0; align-items: stretch; }
+  .modal, .modal.sm, .modal.xl { width: 100%; max-height: 100%; border-left: 0; border-right: 0; }
+  .m-foot { display: none; }
+}
+.m-body .talent-character-tabs { display: none; } /* o seletor de personagem já está no cabeçalho do modal */
+.m-body .tgrid-svg { height: min(56vh, 620px); }

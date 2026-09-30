@@ -2,7 +2,7 @@ import { Boot } from './scenes/Boot';
 import { GameOver } from './scenes/GameOver';
 import { Game as MainGame } from './scenes/Game';
 import { MainMenu } from './scenes/MainMenu';
-import { AUTO, Game } from 'phaser';
+import { AUTO, Game, Scale } from 'phaser';
 import { Preloader } from './scenes/Preloader';
 
 //  Find out more information about the Game Config at:
@@ -12,7 +12,9 @@ const config: Phaser.Types.Core.GameConfig = {
     width: 1024,
     height: 640,
     parent: 'game-container',
-    backgroundColor: '#028af8',
+    backgroundColor: '#14110c',
+    // A arena de 900×500 não muda: só a escala. O mapa ocupa toda a área livre (FIT + centralizado; a sobra é o fundo do contêiner).
+    scale: { mode: Scale.FIT, autoCenter: Scale.CENTER_BOTH, width: 1024, height: 640 },
     scene: [
         Boot,
         Preloader,

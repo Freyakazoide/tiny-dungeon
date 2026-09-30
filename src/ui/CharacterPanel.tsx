@@ -7,7 +7,7 @@ import { CLASS_BY_ID } from '../game/rpg/classTree';
 import { NODE_PASSIVES } from '../game/rpg/passives';
 import { characterStats, classLabel, xpForLevel } from '../game/systems/progression';
 import { colorHex, compact, pct } from './format';
-import { CHARACTER_TABS, type CharacterTab } from './navigation';
+import { type CharacterTab } from './navigation';
 import { ProgressBar } from './ProgressBar';
 import { SpritePicker } from './SpritePicker';
 import { CounterList, ProficiencyGrid } from './RpgPanels';
@@ -16,16 +16,13 @@ import { TalentsPanel } from './TalentsPanel';
 import { talentPointsAvailable } from '../game/systems/talentGrid';
 
 /** Aba Personagem: ficha de um personagem, com abas internas Ficha / Proficiências / Magias / Talentos. */
-export function CharacterPanel({ state, selected, setSelected }: { state: GameState; selected: string; setSelected: (id: string) => void }) {
+export function CharacterPanel({ state, selected, setSelected, tab }: { state: GameState; selected: string; setSelected: (id: string) => void; tab: CharacterTab }) {
   const character = state.characters.find(entry => entry.id === selected) ?? state.characters[0];
-  const [inner, setInner] = useState<CharacterTab>('Ficha');
+  const inner = tab;
   const [name, setName] = useState(character.name);
   useEffect(() => setName(character.name), [character.id, character.name]);
   const stats = characterStats(character, state), needed = xpForLevel(character.profile.level);
   return <section className="characters-panel" style={{ '--class-color': colorHex(CLASSES[character.classId].color) } as CSSProperties}>
-    <nav className="inner-tabs" aria-label="Seções do personagem">{CHARACTER_TABS.map(tab =>
-      <button key={tab} className={inner === tab ? 'active' : ''} onClick={() => setInner(tab)}>{tab}</button>)}</nav>
-
     {inner === 'Ficha' && <div className="sheet-main">
       <div className="identity-row"><div><span className="class-label">{classLabel(character)}</span><h3>{character.name}</h3>
         <p>Nível {character.profile.level} · {talentPointsAvailable(character)} pontos de talento disponíveis · {character.row === 'front' ? 'Frente' : 'Trás'}{character.isTank ? ' · Tanque' : ''}</p></div>

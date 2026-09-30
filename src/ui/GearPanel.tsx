@@ -6,6 +6,7 @@ import { PROFICIENCIES, type ProficiencyId } from '../game/rpg/proficiencies';
 import { classItem, CLASSIFICATION_NAMES, CLASSIFICATIONS, ITEM_MECHANICS_IMPLEMENTED, itemsForClass, QUALITY_NAMES, SLOT_GROUP_NAMES } from '../game/data/classItems';
 import { attrValue, gearBase, gearBlockReason, gearValue, handsConflict, smithPrice } from '../game/systems/gear';
 import { effectLabel, formatEffectValue } from '../game/systems/talentGrid';
+import { Icon } from './components/Icon';
 
 const tier1Classes = Object.values(CLASS_BY_ID).filter(n => n.tier === 1);
 
@@ -53,12 +54,10 @@ export function gearEquipReason(character: Character, instance: ItemInstance) {
 type GearSort = 'quality' | 'value' | 'name';
 const RANK = (i: ItemInstance) => CLASSIFICATIONS.indexOf(i.classification);
 
-/** Mochila de equipamento de classe + Ferreiro de classe. */
-export function GearBag({ state, character }: { state: GameState; character: Character }) {
+/** Mochila de equipamento de classe (instâncias com atributos aleatórios). */
+export function GearInventory({ state, character }: { state: GameState; character: Character }) {
   const [sort, setSort] = useState<GearSort>('quality');
   const [slotFilter, setSlotFilter] = useState<string>('all');
-  const own = tier1Classes.find(n => character.profile.classPath.includes(n.id))?.id ?? 'guerreiro';
-  const [smithClass, setSmithClass] = useState(own);
   const bag = useMemo(() => {
     const shown = state.gearBag.filter(g => slotFilter === 'all' || classItem(g.baseId)?.slotGroup === slotFilter);
     return [...shown].sort((a, b) => sort === 'name' ? (classItem(a.baseId)?.name ?? '').localeCompare(classItem(b.baseId)?.name ?? '')
@@ -67,7 +66,6 @@ export function GearBag({ state, character }: { state: GameState; character: Cha
   }, [state.gearBag, sort, slotFilter]);
   const commons = state.gearBag.filter(g => g.classification === 'common');
   const commonValue = commons.reduce((sum, g) => sum + gearValue(g), 0);
-  const smithItems = itemsForClass(smithClass).filter(i => i.quality === 'standard');
   return <>
     <div className="subsection-heading"><h3>Equipamento de classe</h3>
       <div className="bag-controls">
@@ -78,7 +76,7 @@ export function GearBag({ state, character }: { state: GameState; character: Cha
     <div className="bag-list">{bag.map(instance => {
       const base = classItem(instance.baseId)!, reason = gearEquipReason(character, instance);
       return <article className="bag-row" key={instance.uid}>
-        <span className={`item-icon rarity-${instance.classification}`}>{base.slot === 'weapon' ? '⚔' : base.slot === 'offhand' ? '◈' : base.slot === 'helmet' ? '♛' : base.slot === 'ring' ? '◌' : base.slot === 'amulet' ? '✦' : '▣'}</span>
+        <span className={`item-icon rarity-${instance.classification}`}><Icon name={`slot_${base.slot}`} size={28} /></span>
         <div className="bag-row-copy"><GearCard instance={instance} note={`${gearValue(instance)} ouro`} />{reason && <small className="warn">{reason}</small>}</div>
         <div className="bag-row-actions">
           <button className="primary" disabled={!!reason} title={reason} onClick={() => gameStore.equipGear(character.id, instance.uid)}>Equipar em {character.name}</button>
@@ -88,7 +86,15 @@ export function GearBag({ state, character }: { state: GameState; character: Cha
     })}{!bag.length && <p className="empty-state">Nenhum equipamento de classe. Eles caem das hunts (chefes largam mais) e o Ferreiro vende os Padrão.</p>}</div>
     <div className="shop-box"><span>{commons.length} Comuns na mochila · valor <b>{commonValue.toLocaleString('pt-BR')} ouro</b></span>
       <button disabled={!commons.length} onClick={() => gameStore.sellGearUpTo('common')}>Vender todos os Comuns</button></div>
+  </>;
+}
 
+/** Ferreiro de classe: só itens Padrão, sempre Comuns. */
+export function ClassSmith({ state, character }: { state: GameState; character: Character }) {
+  const own = tier1Classes.find(n => character.profile.classPath.includes(n.id))?.id ?? 'guerreiro';
+  const [smithClass, setSmithClass] = useState(own);
+  const smithItems = itemsForClass(smithClass).filter(i => i.quality === 'standard');
+  return <>
     <div className="subsection-heading"><h3>Ferreiro de classe</h3><small>Vende só itens Padrão, sempre Comuns. Superior, BiS e atributos aleatórios só por drop.</small></div>
     <label className="smith-class">Classe <select value={smithClass} onChange={e => setSmithClass(e.target.value)}>{tier1Classes.map(n => <option key={n.id} value={n.id}>{n.name}</option>)}</select></label>
     <div className="shop-grid gear-shop">{smithItems.map(item => {

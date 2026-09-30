@@ -43,23 +43,23 @@ function TreeNode({ character, node, muted }: { character: Character; node: Clas
 }
 
 /** Aba Classes: guia "o que treinar" para o próximo tier, com checklist, ETA e a árvore completa. */
-export function ClassesPanel({ character }: { character: Character }) {
+export function ClassesPanel({ character, section = 'all' }: { character: Character; section?: 'all' | 'next' | 'tree' }) {
   const steps = nextSteps(character), { active, discarded } = treeSplit(character), current = CLASS_BY_ID[character.profile.classId];
   return <section className="classes-panel">
     <div className="section-heading"><div><span className="eyebrow">Guia de evolução</span><h2>Classes de {character.name}</h2></div></div>
     <p className="class-path">Caminho atual: <b>{pathNames(character).join(' → ')}</b></p>
 
-    <div className="subsection-heading"><h3>Próximo passo</h3><small>{steps.length ? 'Evoluir é irreversível: as outras opções viram caminhos descartados.' : ''}</small></div>
+    {section !== 'tree' && <><div className="subsection-heading"><h3>Próximo passo</h3><small>{steps.length ? 'Evoluir é irreversível: as outras opções viram caminhos descartados.' : ''}</small></div>
     {steps.length
       ? <div className="evolution-list">{steps.map(step => <StepCard key={step.node.id} character={character} {...step} />)}</div>
-      : <p className="empty-state">{current.name} está no fim do caminho.</p>}
+      : <p className="empty-state">{current.name} está no fim do caminho.</p>}</>}
 
-    <div className="subsection-heading"><h3>Árvore completa</h3><small>{active.length} {active.length === 1 ? 'classe base aberta' : 'classes base'}</small></div>
+    {section !== 'next' && <><div className="subsection-heading"><h3>Árvore completa</h3><small>{active.length} {active.length === 1 ? 'classe base aberta' : 'classes base'}</small></div>
     <div className="tree">{active.map(node => <TreeNode key={node.id} character={character} node={node} />)}</div>
 
     {discarded.length > 0 && <>
       <div className="subsection-heading"><h3>Caminhos descartados</h3><small>Somente leitura.</small></div>
       <div className="tree muted-tree">{discarded.map(node => <TreeNode key={node.id} character={character} node={node} muted />)}</div>
-    </>}
+    </>}</>}
   </section>;
 }

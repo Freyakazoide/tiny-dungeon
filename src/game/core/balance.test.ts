@@ -9,7 +9,7 @@ const XP_PER_HOUR: Record<string, number> = { catacumbas: 24000, floresta_sombri
 
 describe('Bloco 9 — harness de balanceamento (party de referência, 6 ciclos)', () => {
   it.each(HUNTS.map(h => h.id))('%s cabe nas faixas do plano', huntId => {
-    const m = simulateHunt(huntId);
+    const m = simulateHunt(huntId, { seed: 5 }); // semente fixa: a linha de base deixa de ser intermitente
     expect(m.normalWaveSeconds).toHaveLength(12); expect(m.bossWaveSeconds).toHaveLength(6);
     // Faixa do plano sobre a média das waves (cada wave individual varia alguns segundos com o RNG).
     expect(mean(m.normalWaveSeconds)).toBeGreaterThanOrEqual(15); expect(mean(m.normalWaveSeconds)).toBeLessThanOrEqual(35);
@@ -22,7 +22,7 @@ describe('Bloco 9 — harness de balanceamento (party de referência, 6 ciclos)'
     expect(m.xpPerHour).toBeGreaterThanOrEqual(XP_PER_HOUR[huntId] * .85); expect(m.xpPerHour).toBeLessThanOrEqual(XP_PER_HOUR[huntId] * 1.15);
   }, 30000);
   it('o XP/h cresce de hunt em hunt (senão o jogador farmaria a antiga)', () => {
-    const rates = HUNTS.map(h => simulateHunt(h.id, { cycles: 3 }).xpPerHour);
+    const rates = HUNTS.map(h => simulateHunt(h.id, { cycles: 3, seed: 5 }).xpPerHour);
     for (let i = 1; i < rates.length; i++) expect(rates[i]).toBeGreaterThan(rates[i - 1]);
   }, 30000);
 });

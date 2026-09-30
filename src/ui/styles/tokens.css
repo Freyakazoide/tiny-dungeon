@@ -1,0 +1,26 @@
+/* Tokens da interface (Fase 8). Tema escuro de pedra e bronze; ficam em :root para um tema claro futuro. */
+:root {
+  /* base */
+  --ink: #080c12; --panel: #111821; --panel-2: #171f29; --stone: #1b222b; --edge: #39404a; --edge-2: #2a313b;
+  /* texto */
+  --text: #e7e0d2; --muted: #8f98a4;
+  /* metal */
+  --bronze-2: #9a7a3f; --gold: #e5ca91; --gold-2: #d4a93c;
+  /* semânticas */
+  --hp: #c0453f; --mana: #3f7fd1; --xp: #c7a43a; --ok: #4fae73; --warn: #e0a05c; --danger: #d8554f;
+  /* raridade */
+  --r-common: #9aa3ad; --r-uncommon: #4fae73; --r-rare: #4a86e8; --r-epic: #b15be0;
+  /* elementos */
+  --el-fire: #e5593a; --el-ice: #7ad0f0; --el-energy: #f2d13a; --el-earth: #8a6a3c; --el-poison: #7cc13a;
+  --el-holy: #f4ecc2; --el-death: #8a5ad1; --el-physical: #c9c9c9; --el-psychic: #e56bc0;
+  /* espaço, raio, sombra */
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px;
+  --rad-1: 2px; --rad-2: 4px; --rad-3: 6px;
+  --shadow-modal: 0 18px 60px #000; --shadow-card: 0 2px 0 #0008;
+  /* camadas */
+  --z-map: 0; --z-hud: 10; --z-party: 10; --z-rail: 20; --z-modal: 100; --z-toast: 200; --z-tooltip: 300;
+  /* safe areas */
+  --safe-t: env(safe-area-inset-top, 0px); --safe-b: env(safe-area-inset-bottom, 0px); --safe-l: env(safe-area-inset-left, 0px);
+  /* escala da interface (Sistema > Opções) */
+  --ui-scale: 1;
+}
