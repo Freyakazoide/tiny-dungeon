@@ -2,10 +2,12 @@
 :root {
   /* base */
   --ink: #080c12; --panel: #111821; --panel-2: #171f29; --stone: #1b222b; --edge: #39404a; --edge-2: #2a313b;
+  /* pixel (Fase 9) */
+  --outline: #05080c; --hi: #46526a; --sh: #141a23; --face: #252e3a; --face-2: #1c2430; --px: 2px;
   /* texto */
   --text: #e7e0d2; --muted: #8f98a4;
   /* metal */
-  --bronze-2: #9a7a3f; --gold: #e5ca91; --gold-2: #d4a93c;
+  --bronze: #9a7a3f; --bronze-2: #9a7a3f; --gold: #e5ca91; --gold-2: #d4a93c;
   /* semânticas */
   --hp: #c0453f; --mana: #3f7fd1; --xp: #c7a43a; --ok: #4fae73; --warn: #e0a05c; --danger: #d8554f;
   /* raridade */

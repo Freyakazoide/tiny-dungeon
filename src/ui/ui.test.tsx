@@ -10,7 +10,8 @@ vi.mock('../PhaserGame', () => ({ PhaserGame: () => <div id="game-container" dat
 import App from '../App';
 import { gameStore } from '../game/core/GameStore';
 import { partyState } from '../game/core/testing';
-import { talentPointsAvailable } from '../game/systems/talentGrid';
+import { talentPointsAvailable, canBuy, rankOf } from '../game/systems/talentGrid';
+import { TALENT_TREES } from '../game/data/talentTrees';
 import { Icon } from './components/Icon';
 import { railBadges, canEvolve } from './badges';
 import { RAIL_ITEMS } from './navigation';
@@ -152,7 +153,7 @@ describe('Fase 8 — itens e ícones', () => {
 
   it('o Icon cai no SVG genérico quando o PNG não existe, sem erro no console', () => {
     const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const { container } = render(<Icon name="nao_existe" size={32} />);
+    const { container } = render(<Icon name="nao_existe" size={24} />);
     const img = container.querySelector('img')!; expect(img.getAttribute('src')).toBe('assets/ui/icons/nao_existe.png');
     fireEvent.error(img);
     expect(container.querySelector('img')).toBeNull(); const svg = container.querySelector('svg')!; expect(svg.getAttribute('data-icon')).toBe('nao_existe');
@@ -172,5 +173,43 @@ describe('Fase 8 — itens e ícones', () => {
       expect(png.subarray(1, 4).toString(), name).toBe('PNG');
       expect([png.readUInt32BE(16), png.readUInt32BE(20), png[25]], name).toEqual([96, 96, 6]); // largura, altura, RGBA
     }
+  });
+});
+
+describe('Fase 9 A — clique nos talentos só seleciona', () => {
+  const setup = () => {
+    const c = gameStore.getSnapshot().characters[0];
+    c.profile.level = 20;
+    const id = c.profile.classPath.flatMap(t => TALENT_TREES[t].nodes).find(n => n.kind === 'minor' && canBuy(c, n.id).ok)!.id;
+    history.replaceState(null, '', '/#/personagem/talentos');
+    render(<App />);
+    const node = () => document.querySelector(`[aria-label^="${TALENT_TREES[c.profile.classPath.find(t => TALENT_TREES[t].nodes.some(n => n.id === id))!].nodes.find(n => n.id === id)!.name}, "]`) as SVGElement;
+    return { c, id, node };
+  };
+  it('clique, Shift+clique, Enter e Espaço no nó não compram; o texto de ajuda é o novo', async () => {
+    const { c, id, node } = setup(); const user = userEvent.setup(); const before = talentPointsAvailable(c);
+    await user.click(node()); fireEvent.click(node(), { shiftKey: true });
+    node().focus(); await user.keyboard('{Enter}'); await user.keyboard(' ');
+    expect(rankOf(c, id)).toBe(0); expect(talentPointsAvailable(c)).toBe(before);
+    expect(screen.queryByText(/Shift/)).toBeNull(); expect(screen.queryByText(/Toque em um nó/)).toBeNull();
+  });
+  it('"Comprar +1 rank" compra exatamente 1 rank', async () => {
+    const { c, id, node } = setup(); const user = userEvent.setup(); const before = talentPointsAvailable(c);
+    await user.click(node());
+    await user.click(screen.getByRole('button', { name: 'Comprar +1 rank' }));
+    expect(rankOf(c, id)).toBe(1); expect(before - talentPointsAvailable(c)).toBeGreaterThan(0);
+  });
+});
+
+describe('Fase 9 B — ícones em múltiplos de 24', () => {
+  it('avisa em DEV quando o tamanho não é múltiplo de 24 e fica quieto quando é', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    render(<Icon name="x" size={24} />); render(<Icon name="x" size={48} />); expect(warn).not.toHaveBeenCalled();
+    render(<Icon name="x" size={30} />); expect(warn).toHaveBeenCalledTimes(1); warn.mockRestore();
+  });
+  it('nenhum uso de <Icon size=…> no código usa tamanho fora de 24·n', async () => {
+    const { execSync } = await import('node:child_process');
+    const out = execSync(`grep -rhoE "<Icon [^>]*size=\\\\{[0-9]+\\\\}" src --include=*.tsx --exclude=ui.test.tsx || true`).toString();
+    for (const m of out.matchAll(/size=\{(\d+)\}/g)) expect(Number(m[1]) % 24).toBe(0);
   });
 });

@@ -19,15 +19,14 @@ const nodeColor = (node: TalentNodeDef) =>
   node.kind === 'root' ? ROOT_COLOR : node.kind === 'keystone' ? KEYSTONE_COLOR : node.kind === 'major' ? ROOT_COLOR : CATEGORY_COLORS[EFFECTS[node.effects[0]?.code]?.category ?? 'utility'];
 const nodeCategory = (node: TalentNodeDef) => (node.kind === 'root' ? 'Origem' : CATEGORY_NAMES[EFFECTS[node.effects[0]?.code]?.category ?? 'utility']);
 const normalize = (text: string) => text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-const isCoarse = () => typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches;
 
 type Confirmation = { kind: 'buy'; id: string } | { kind: 'respec'; treeId?: string } | null;
 interface View { x: number; y: number; k: number; }
 const HOME: View = { x: 0, y: 0, k: 1 };
 
-function TalentCanvas({ character, treeId, selectedId, onSelect, onActivate, query }: {
+function TalentCanvas({ character, treeId, selectedId, onSelect, query }: {
   character: Character; treeId: string; selectedId: string | null; query: string;
-  onSelect: (id: string) => void; onActivate: (node: TalentNodeDef, event: { shiftKey: boolean }) => void;
+  onSelect: (id: string) => void;
 }) {
   const tree = TALENT_TREES[treeId];
   const maxY = Math.max(...tree.nodes.map(n => n.y));
@@ -83,8 +82,8 @@ function TalentCanvas({ character, treeId, selectedId, onSelect, onActivate, que
         const big = node.kind === 'major' || node.kind === 'keystone' || node.kind === 'root';
         return <g key={node.id} className={`tgrid-node ${status} ${node.kind} ${selectedId === node.id ? 'selected' : ''} ${highlighted(node) ? 'match' : ''}`} style={{ '--node-color': color, opacity: dimmed ? .25 : undefined } as CSSProperties}
           role="button" tabIndex={0} aria-label={`${node.name}, ${rank} de ${node.maxRank}`}
-          onClick={event => { if (gesture.current.moved) return; onSelect(node.id); if (node.kind !== 'root') onActivate(node, event); }}
-          onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onSelect(node.id); if (node.kind !== 'root') onActivate(node, event); } }}>
+          onClick={() => { if (gesture.current.moved) return; onSelect(node.id); }}
+          onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onSelect(node.id); } }}>
           <title>{node.name}</title>
           <circle className="tgrid-ring" cx={cx} cy={cy} r={r} />
           <circle className="tgrid-core" cx={cx} cy={cy} r={big ? r * .58 : r * .5} />
@@ -103,7 +102,7 @@ function NodeDetail({ character, node, gold, confirmation, setConfirmation }: { 
   const needsConfirm = node.kind === 'major' || node.kind === 'keystone';
   const buy = () => { if (needsConfirm && !confirming) setConfirmation({ kind: 'buy', id: node.id }); else { gameStore.invest(character.id, node.id); setConfirmation(null); } };
   void gold;
-  return <div className="tgrid-detail" style={{ '--node-color': color } as CSSProperties}>
+  return <div className="tgrid-detail" style={{ '--node-color': color } as CSSProperties} onKeyDown={event => { if (event.key === 'Enter' && event.target === event.currentTarget && check.ok && rank < node.maxRank && node.kind !== 'root') { event.preventDefault(); buy(); } }} tabIndex={-1}>
     <div className="talent-detail-title"><span className="tgrid-badge" aria-hidden="true" /><div><span>{KIND_NAMES[node.kind]} · {nodeCategory(node)}</span><h3>{node.name}</h3><small>{node.kind === 'root' ? 'Concedida ao entrar na classe' : `Rank ${rank} / ${node.maxRank} · ${node.costPerRank} ${node.costPerRank === 1 ? 'ponto' : 'pontos'} por rank`}</small></div></div>
     {node.effects.length > 0 && <dl className="talent-facts">{node.effects.map(effect => <div key={effect.code}><dt>{effectLabel(effect.code)}</dt>
       <dd>{formatEffectValue(effect.code, effect.perRank)} por rank{rank > 0 && <> · <b>{formatEffectValue(effect.code, effect.perRank * rank)}</b> aqui</>} · total {formatEffectValue(effect.code, totals[effect.code] ?? 0)}</dd></div>)}</dl>}
@@ -135,12 +134,6 @@ export function TalentsPanel({ state, selected, setSelected }: { state: GameStat
   const classDef = CLASSES[character.classId];
   const bonuses = Object.entries(totals).sort(([a], [b]) => (EFFECTS[a]?.category ?? '').localeCompare(EFFECTS[b]?.category ?? '') || a.localeCompare(b));
   const futureTiers = ([1, 2] as const).filter(t => !path.some(id => TALENT_TREES[id].tier === t));
-  const onActivate = (node: TalentNodeDef, event: { shiftKey: boolean }) => {
-    if (isCoarse()) return;
-    if (event.shiftKey) { gameStore.invest(character.id, node.id, true); return; }
-    if (node.kind === 'major' || node.kind === 'keystone') { if (canBuy(character, node.id).ok) setConfirmation({ kind: 'buy', id: node.id }); return; }
-    gameStore.invest(character.id, node.id);
-  };
   const respecScope = confirmation?.kind === 'respec' ? confirmation.treeId : undefined;
   const respecInvested = investedPoints(character, respecScope), respecCost = talentRespecCost(character, respecScope);
   return <section className="talents-panel" style={{ '--class-color': colorHex(classDef.color) } as CSSProperties}>
@@ -157,13 +150,13 @@ export function TalentsPanel({ state, selected, setSelected }: { state: GameStat
     <div className="talent-workspace">
       <div className="talent-tree-card">
         <div className="talent-tree-heading"><div><span className="class-label">{tree.name} · Tier {tree.tier}</span><h3>{tree.nodeCount} nós · {treeSpent}/{tree.totalCost} pontos</h3></div><small>Arraste para mover, role ou use pinça para dar zoom. São escolhas: não dá para completar tudo.</small></div>
-        <TalentCanvas character={character} treeId={treeId} selectedId={selectedId} query={query} onSelect={id => { setSelectedId(id); if (confirmation?.kind === 'buy' && confirmation.id !== id) setConfirmation(null); }} onActivate={onActivate} />
+        <TalentCanvas character={character} treeId={treeId} selectedId={selectedId} query={query} onSelect={id => { setSelectedId(id); if (confirmation?.kind === 'buy' && confirmation.id !== id) setConfirmation(null); }} />
         <div className="talent-legend">{(Object.keys(CATEGORY_COLORS) as EffectCategory[]).map(cat => <span key={cat}><i style={{ background: CATEGORY_COLORS[cat], borderColor: CATEGORY_COLORS[cat] }} />{CATEGORY_NAMES[cat]}</span>)}<span><i className="ring-gold" />Major</span><span><i className="ring-pink" />Keystone</span></div>
       </div>
       <aside className="talent-detail-card">
         {selectedNode && nodeInPath(character, selectedNode.id)
           ? <NodeDetail character={character} node={selectedNode} gold={state.gold} confirmation={confirmation} setConfirmation={setConfirmation} />
-          : <p className="tgrid-hint">Toque em um nó para ver o efeito, o custo e o que falta para liberá-lo. Clique compra +1 rank (Majors e Keystone pedem confirmação; <kbd>Shift</kbd>+clique compra o máximo).</p>}
+          : <p className="tgrid-hint">Clique em um nó para ver o efeito, o custo e o que falta. Compre pelo botão <b>Comprar</b> no painel ao lado.</p>}
         <div className="tgrid-bonuses"><h4>Bônus ativos</h4>{bonuses.length
           ? <ul>{bonuses.map(([code, value]) => <li key={code} style={{ '--node-color': CATEGORY_COLORS[EFFECTS[code]?.category ?? 'utility'] } as CSSProperties}><span>{effectLabel(code)}</span><b>{formatEffectValue(code, value)}</b></li>)}</ul>
           : <small>Nenhum ainda.</small>}</div>

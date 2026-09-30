@@ -56,9 +56,9 @@ export function Hud({ state }: { state: GameState }) {
     <div className="hunt-title"><strong>{hunt.name}</strong><small>Nível rec. {hunt.recommendedLevel} · <span className={`risk-${risk.toLowerCase()}`}>{risk}</span> · ciclo {state.cycle + 1}</small></div>
     <div className="wave"><div className="wave-top"><span>Wave {state.wave + 1}/{huntWaves(state.huntId).length}</span><span>{tier && info ? `${TIER_NAMES[tier]} · ${info.total} inimigos` : ''}</span></div>
       <div className="bar" role="progressbar" aria-label="Progresso da wave" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(waveProgress(state) * 100)}><i style={{ width: `${waveProgress(state) * 100}%` }} /></div></div>
-    <Chip tone={status.tone} className="hide-s"><Icon name={status.icon} size={14} /> {status.label}</Chip>
-    <Chip className="hide-s" title="Ouro"><Icon name="stat_gold" size={14} /> <b>{state.gold.toLocaleString('pt-BR')}</b></Chip>
-    <Chip tone={potionTone(potions)} className="hide-s" title="Estoque de poções de vida"><Icon name="stat_hp" size={14} /> Poções: {potions}%</Chip>
+    <Chip tone={status.tone} className="hide-s"><Icon name={status.icon} size={24} /> {status.label}</Chip>
+    <Chip className="hide-s" title="Ouro"><Icon name="stat_gold" size={24} /> <b>{state.gold.toLocaleString('pt-BR')}</b></Chip>
+    <Chip tone={potionTone(potions)} className="hide-s" title="Estoque de poções de vida"><Icon name="stat_hp" size={24} /> Poções: {potions}%</Chip>
     <span className="grow" />
     {import.meta.env.DEV && <DevBar />}
     <button type="button" className="btn primary"

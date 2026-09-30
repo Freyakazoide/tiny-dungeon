@@ -17,7 +17,7 @@ export function IconRail({ state, selected }: { state: GameState; selected: Char
       <button type="button" className="rail-btn" data-rail={item.id} aria-label={item.title} aria-pressed={ui.modal === item.id}
         onMouseEnter={event => setTipTop(event.currentTarget.getBoundingClientRect().top)} onFocus={event => setTipTop(event.currentTarget.getBoundingClientRect().top)}
         onClick={() => uiStore.toggle(item.id)}>
-        <Icon name={item.id} size={32} /><small>{item.title.slice(0, 6)}</small>
+        <Icon name={item.id} size={48} /><small>{item.title.slice(0, 6)}</small>
         {badge && <Badge tone={badge.tone} pulse={badge.pulse} title={badge.why}>{badge.value}</Badge>}
         <span className="tip" style={{ top: tipTop + 26 }}>{item.title}{item.key && <kbd>{item.key}</kbd>}</span>
       </button></div>;

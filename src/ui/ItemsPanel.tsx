@@ -53,7 +53,7 @@ export function ItemsPanel({ state, character, section = 'all' }: { state: GameS
     <div className="equipment-grid">{SLOT_IDS.map(slot => {
       const gear = character.gear[slot], item = gear ? undefined : itemById(character.equipment[slot] ?? ''), options = swapOptions(slot), gearOpts = gearOptions(state, character, slot);
       return <article className="equipment-cell" key={slot}>
-        <span className="slot-name"><Icon name={`slot_${slot}`} size={20} /> {slotNames[slot]}</span>
+        <span className="slot-name"><Icon name={`slot_${slot}`} size={24} /> {slotNames[slot]}</span>
         {gear ? <GearCard instance={gear} /> : item ? <><b className={`rarity-${item.rarity}`}>{itemIcon(item)} {item.name}</b><small>{statLine(item.stats) || 'Sem atributos'}</small></> : <b className="empty-slot">Vazio</b>}
         <div className="equipment-actions">
           <select aria-label={`Trocar ${slotNames[slot]}`} value="" disabled={!options.length && !gearOpts.length} onChange={event => { const v = event.target.value; if (!v) return; if (v.startsWith('gear:')) gameStore.equipGear(character.id, v.slice(5)); else gameStore.equip(character.id, v); }}>

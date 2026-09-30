@@ -7,8 +7,9 @@ export const ICON_PATH = 'assets/ui/icons';
  * Ícone da interface: tenta o PNG e, se o arquivo não existir (ou não carregar), cai num SVG genérico sem quebrar
  * nem poluir o console. Decorativo por padrão; passe `label` para ele virar uma imagem com nome acessível.
  */
-export function Icon({ name, size = 28, label, className = '' }: { name: string; size?: number; label?: string; className?: string }) {
+export function Icon({ name, size = 24, label, className = '' }: { name: string; size?: number; label?: string; className?: string }) {
   const [failed, setFailed] = useState<string | null>(null);
+  if (import.meta.env.DEV && size % 24 !== 0) console.warn(`Icon "${name}": tamanho ${size} não é múltiplo de 24 (pixel art borra).`);
   const style: CSSProperties = { width: size, height: size };
   const a11y = label ? { role: 'img', 'aria-label': label } : { 'aria-hidden': true as const };
   if (failed === name) {

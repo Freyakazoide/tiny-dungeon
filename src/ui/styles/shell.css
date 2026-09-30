@@ -1,7 +1,7 @@
 /* Shell: a tela é a caçada. HUD em cima, trilho de ícones à esquerda, barra da equipe embaixo e o mapa (Phaser) no meio. */
 html, body, #root, #app { height: 100%; }
 body { overflow: hidden; }
-.stage { position: fixed; inset: 0; display: grid; grid-template-columns: calc(68px + var(--safe-l)) 1fr; grid-template-rows: calc(54px + var(--safe-t)) 1fr 96px; padding-top: var(--safe-t); background: var(--ink); font-size: calc(14px * var(--ui-scale)); }
+.stage { position: fixed; inset: 0; display: grid; grid-template-columns: calc(76px + var(--safe-l)) 1fr; grid-template-rows: calc(54px + var(--safe-t)) 1fr 96px; padding-top: var(--safe-t); background: var(--ink); font-size: calc(14px * var(--ui-scale)); }
 
 /* HUD */
 .hud { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; padding: 0 14px; background: linear-gradient(#10161e, #0b1017); border-bottom: 1px solid var(--edge-2); z-index: var(--z-hud); min-width: 0; }
@@ -20,13 +20,13 @@ body { overflow: hidden; }
 
 /* Trilho */
 .rail { grid-row: 2 / 4; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 0; background: linear-gradient(90deg, #0d1218, #10161e); border-right: 1px solid var(--edge-2); z-index: var(--z-rail); overflow-y: auto; overflow-x: visible; }
-.rail-btn { position: relative; width: 52px; height: 52px; flex: none; display: grid; place-items: center; background: linear-gradient(#1c242e, #131a22); border: 1px solid var(--edge-2); border-radius: var(--rad-2); padding: 0; }
+.rail-btn { position: relative; width: 64px; height: 64px; flex: none; display: grid; place-items: center; background: linear-gradient(#1c242e, #131a22); border: 1px solid var(--edge-2); border-radius: var(--rad-2); padding: 0; }
 .rail-btn:hover { border-color: var(--bronze-2); background: linear-gradient(#26303c, #161e27); }
 .rail-btn[aria-pressed="true"] { border-color: var(--gold-2); box-shadow: inset 0 0 0 1px #6f5a2a; }
 .rail-btn small { position: absolute; bottom: 2px; font-size: 8px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 .rail-btn .icon { margin-top: -6px; }
 .rail .sp { flex: 1; min-height: 4px; }
-.rail .tip { position: fixed; left: calc(74px + var(--safe-l)); transform: translateY(-14px); white-space: nowrap; background: #0b1017; border: 1px solid var(--bronze-2); padding: 5px 9px; font-size: 12px; color: var(--text); opacity: 0; pointer-events: none; transition: opacity .12s; z-index: var(--z-tooltip); }
+.rail .tip { position: fixed; left: calc(82px + var(--safe-l)); transform: translateY(-14px); white-space: nowrap; background: #0b1017; border: 1px solid var(--bronze-2); padding: 5px 9px; font-size: 12px; color: var(--text); opacity: 0; pointer-events: none; transition: opacity .12s; z-index: var(--z-tooltip); }
 .rail-btn:hover .tip, .rail-btn:focus-visible .tip { opacity: 1; }
 .rail .tip kbd { margin-left: 8px; }
 
@@ -53,7 +53,8 @@ body { overflow: hidden; }
 /* Responsivo */
 @media (max-width: 1179px) { .session.collapsed-default { display: none; } }
 @media (max-width: 720px) {
-  .stage { grid-template-columns: 1fr; grid-template-rows: calc(54px + var(--safe-t)) 1fr 92px 62px; }
+  .stage { grid-template-columns: 1fr; grid-template-rows: calc(54px + var(--safe-t)) 1fr 92px 68px; }
+  .rail-btn { width: 56px; height: 56px; }
   .rail { grid-row: 4; grid-column: 1; flex-direction: row; padding: 4px 6px calc(4px + var(--safe-b)); overflow-x: auto; overflow-y: hidden; justify-content: flex-start; }
   .rail .sp { display: none; } .rail .tip { display: none; }
   .arena { grid-column: 1; } .party { grid-column: 1; grid-row: 3; }

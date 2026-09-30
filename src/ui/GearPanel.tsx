@@ -76,7 +76,7 @@ export function GearInventory({ state, character }: { state: GameState; characte
     <div className="bag-list">{bag.map(instance => {
       const base = classItem(instance.baseId)!, reason = gearEquipReason(character, instance);
       return <article className="bag-row" key={instance.uid}>
-        <span className={`item-icon rarity-${instance.classification}`}><Icon name={`slot_${base.slot}`} size={28} /></span>
+        <span className={`item-icon rarity-${instance.classification}`}><Icon name={`slot_${base.slot}`} size={24} /></span>
         <div className="bag-row-copy"><GearCard instance={instance} note={`${gearValue(instance)} ouro`} />{reason && <small className="warn">{reason}</small>}</div>
         <div className="bag-row-actions">
           <button className="primary" disabled={!!reason} title={reason} onClick={() => gameStore.equipGear(character.id, instance.uid)}>Equipar em {character.name}</button>

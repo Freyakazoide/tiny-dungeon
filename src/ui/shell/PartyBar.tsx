@@ -19,7 +19,7 @@ export function PartyBar({ state }: { state: GameState }) {
     return <button key={c.id} type="button" className={`pcard ${down ? 'down' : ''} ${low ? 'low' : ''}`} style={{ '--c': colorHex(CLASSES[c.classId].color) } as CSSProperties}
       title={`HP ${Math.round(c.hp)}/${stats.maxHp} · Mana ${Math.round(c.mana)}/${stats.maxMana} · XP ${Math.round(c.profile.xp)}/${needed}`}
       aria-label={`${c.name}, ${classLabel(c)} nível ${c.profile.level}. Abrir ficha`} onClick={() => uiStore.open('personagem', { who: c.id })}>
-      <div className="h"><strong>{c.isTank && <Icon name="badge_tank" size={14} />} {c.name}{down && ' ☠'}{buffs > 0 && <span title="Efeitos ativos"> 🔵</span>}</strong><small>{classLabel(c)} · Nv {c.profile.level}</small></div>
+      <div className="h"><strong>{c.isTank && <Icon name="badge_tank" size={24} />} {c.name}{down && ' ☠'}{buffs > 0 && <span title="Efeitos ativos"> 🔵</span>}</strong><small>{classLabel(c)} · Nv {c.profile.level}</small></div>
       <Bar value={c.hp} max={stats.maxHp} color="var(--hp)" /><Bar value={c.mana} max={stats.maxMana} color="var(--mana)" /><Bar value={c.profile.xp} max={needed} color="var(--xp)" />
       <div className="foot"><span>HP {Math.round(c.hp)}/{stats.maxHp}</span><span>Foco: {focusLabel(c)} · {c.row === 'front' ? 'Frente' : 'Trás'}</span></div>
     </button>;

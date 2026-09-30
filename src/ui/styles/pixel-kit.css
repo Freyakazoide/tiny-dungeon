@@ -1,0 +1,35 @@
+/* Kit visual pixel RPG (Fase 9). Componentes genéricos com prefixo pk-. Precisa dos tokens de tokens.css. */
+/* ===== kit: painel pixel ===== */
+.pk-panel{position:relative;background:linear-gradient(var(--face),var(--face-2));border:var(--px) solid var(--outline);
+  box-shadow:inset 0 0 0 1px var(--edge),inset 0 3px 0 1px #2f3a49,inset 0 -3px 0 #0f141b,0 2px 0 #000a}
+.pk-panel.flat{background:#0f151d;box-shadow:inset 0 0 0 1px #262e39,inset 0 2px 0 #090d13}
+.pk-panel.studs:before,.pk-panel.studs:after{content:"";position:absolute;width:6px;height:6px;background:var(--bronze);box-shadow:inset -1px -1px 0 #5a4621,inset 1px 1px 0 #d6b76e;top:4px}
+.pk-panel.studs:before{left:4px}.pk-panel.studs:after{right:4px}
+.pk-btn{display:inline-flex;align-items:center;gap:8px;padding:7px 12px;background:linear-gradient(#2e3846,#212a36);border:2px solid var(--outline);
+  box-shadow:inset 0 2px 0 var(--hi),inset 0 -3px 0 var(--sh);color:var(--text);text-shadow:0 1px 0 #000}
+.pk-btn:hover{background:linear-gradient(#384456,#27313f);box-shadow:inset 0 2px 0 #5d6b86,inset 0 -3px 0 var(--sh),0 0 0 1px var(--bronze)}
+.pk-btn:active{transform:translateY(1px);box-shadow:inset 0 3px 0 #0f141b}
+.pk-btn.primary{background:linear-gradient(#8a6b34,#5d4623);box-shadow:inset 0 2px 0 #c9a55c,inset 0 -3px 0 #3a2a12;color:#fff6df}
+.pk-btn.sm{padding:4px 9px;font-size:12px}
+.pk-btn[disabled]{opacity:.5;cursor:not-allowed}
+.pk-tag{display:inline-flex;align-items:center;gap:4px;padding:1px 6px;font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;border:1px solid #000;background:#0b1016;box-shadow:inset 0 0 0 1px var(--tc,#555);color:var(--tc,#aaa)}
+.pk-tag.esp{--tc:#e5ca91}.pk-tag.foco{--tc:#6fd0d0}.pk-tag.off{--tc:#8fb0ff}.pk-tag.blq{--tc:#d8554f}.pk-tag.afim{--tc:#9aa3ad}.pk-tag.ok{--tc:#4fae73}.pk-tag.up{--tc:#4fae73}
+h2,h3,h4{margin:0}
+.pk-serif{font-family:Georgia,'Times New Roman',serif}
+.pk-sec{display:flex;align-items:center;gap:8px;margin:0 0 8px;font:700 12px Georgia,serif;letter-spacing:.14em;text-transform:uppercase;color:var(--gold)}
+.pk-sec:after{content:"";flex:1;height:2px;background:linear-gradient(90deg,#5b4a27,transparent);}
+.pk-sec small{font:11px Inter,sans-serif;letter-spacing:0;text-transform:none;color:var(--muted);order:3}
+.muted{color:var(--muted)}.pk-tiny{font-size:11px}
+/* barra segmentada */
+.pk-bar{position:relative;height:14px;background:#06090e;border:2px solid var(--outline);box-shadow:inset 0 0 0 1px #2a323d}
+.pk-bar i{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(var(--c1,#d8554f),var(--c2,#8f2a26))}
+.pk-bar:after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(90deg,transparent 0 7px,rgba(0,0,0,.55) 7px 8px);pointer-events:none}
+.pk-bar.thin{height:10px}.pk-bar.hp{--c1:#e0615a;--c2:#a93832}.pk-bar.mp{--c1:#5a9cf0;--c2:#2d5fae}.pk-bar.xp{--c1:#e6c25a;--c2:#9b7a20}.pk-bar.ok{--c1:#62c88a;--c2:#2f7e52}
+.pk-bar .t{position:absolute;inset:0;display:grid;place-items:center;font:700 10px Inter,sans-serif;color:#fff;text-shadow:0 1px 0 #000;z-index:2;letter-spacing:.03em}
+
+.pk-row{display:flex;gap:8px;flex-wrap:wrap}
+.pk-chip{display:inline-flex;align-items:center;gap:5px;padding:2px 7px;font-size:11px;background:#0b1016;border:1px solid #000;box-shadow:inset 0 0 0 1px #2e3744;color:#c9d0da}
+.pk-chip img{width:16px;height:16px}
+.pk-tip{position:absolute;z-index:30;width:250px;padding:8px 10px;background:#0a0e14;border:2px solid #000;box-shadow:inset 0 0 0 1px var(--bronze),0 6px 18px #000;font-size:11px;line-height:1.5}
+.pk-tip .h{color:var(--gold);font-weight:700;margin-bottom:3px}.pk-tip .l{display:flex;justify-content:space-between}.pk-tip .l span:last-child{color:#fff}.pk-tip .l.g span:last-child{color:var(--ok)}
+kbd{font:10px Inter,sans-serif;padding:1px 6px;border:2px solid #000;background:#222b37;box-shadow:inset 0 -2px 0 #0f141b;color:var(--text)}
