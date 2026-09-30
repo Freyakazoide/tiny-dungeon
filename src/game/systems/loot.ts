@@ -6,7 +6,9 @@ export function containerFor(item: ItemDef) { return item.kind==='supply'?'suppl
 export function addItem(state:GameState,itemId:string,qty:number) {
   const item=itemById(itemId); if(!item) return 0; const container=containerFor(item); const list=state.inventory[container];
   const stack=list.find(x=>x.itemId===itemId); const used=list.reduce((n,x)=>n+x.quantity,0); const accepted=Math.max(0,Math.min(qty,state.inventory.capacity[container]-used));
-  if(!accepted) return 0; if(stack) stack.quantity+=accepted; else list.push({itemId,quantity:accepted}); return accepted;
+  if(!accepted) return 0; if(stack) stack.quantity+=accepted; else list.push({itemId,quantity:accepted});
+  if(container==='bp'){const fresh=state.freshItems??(state.freshItems=[]);if(!fresh.includes(itemId))fresh.push(itemId);}
+  return accepted;
 }
 export function removeItem(list:InventoryStack[],itemId:string,qty=1){ const s=list.find(x=>x.itemId===itemId); if(!s||s.quantity<qty)return false; s.quantity-=qty;if(!s.quantity)list.splice(list.indexOf(s),1);return true; }
 export function rollLoot(state:GameState,monster:MonsterDef,rng=Math.random,chanceMult=1){

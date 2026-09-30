@@ -145,11 +145,11 @@ describe('Fase 8 — itens e ícones', () => {
   it('equipamento simples e de classe aparecem no mesmo slot (o de classe tem prioridade e traz seus atributos)', () => {
     const state = fresh(), c = state.characters[0];
     const { rerender } = render(<ItemsPanel state={state} character={c} section="equipment" />);
-    const slot = () => screen.getByText('Arma').closest('article')!;
-    expect(within(slot()).getByText(/Espada Enferrujada/)).toBeTruthy();
+    const slot = () => screen.getByRole('button', { name: /^Arma:/ });
+    expect(slot().getAttribute('aria-label')).toMatch(/Espada Enferrujada/);
     c.gear.weapon = { uid: 'g1', baseId: 'guerreiro.espada_longa', classification: 'common', attrs: [] }; c.equipment = { ...c.equipment }; delete c.equipment.weapon;
     rerender(<ItemsPanel state={{ ...state }} character={c} section="equipment" />);
-    expect(within(slot()).getByText('Espada Longa')).toBeTruthy(); expect(within(slot()).queryByText(/Espada Enferrujada/)).toBeNull();
+    expect(slot().getAttribute('aria-label')).toMatch(/Espada Longa/); expect(slot().getAttribute('aria-label')).not.toMatch(/Espada Enferrujada/);
   });
 
   it('o Icon cai no SVG genérico quando o PNG não existe, sem erro no console', () => {

@@ -2,6 +2,7 @@ import type { Character, GameState } from '../game/core/types';
 import { isPlayable } from '../game/rpg/classTree';
 import { evolutionOptions } from '../game/rpg/evolution';
 import { itemById } from '../game/data/items';
+import { freshCount } from './items/BagTab';
 import { talentPointsAvailable } from '../game/systems/talentGrid';
 
 /** Estoque de poções de vida considerado "confortável" (100% do chip de poções no HUD). */
@@ -21,6 +22,8 @@ export function railBadges(state: GameState, selected: Character | undefined): P
   const out: Partial<Record<string, RailBadge>> = {};
   const points = selected ? talentPointsAvailable(selected) : 0;
   if (points > 0) out.personagem = { value: String(points), tone: 'gold', why: `${points} ${points === 1 ? 'ponto de talento livre' : 'pontos de talento livres'}` };
+  const fresh = freshCount(state);
+  if (fresh > 0) out.itens = { value: String(fresh), tone: 'gold', why: `${fresh} ${fresh === 1 ? 'item novo' : 'itens novos'}` };
   const ready = evolvers(state);
   if (ready.length) out.classes = { value: '!', tone: 'gold', pulse: true, why: `Pronto para evoluir: ${ready.map(c => c.name).join(', ')}` };
   const potions = potionPercent(state);

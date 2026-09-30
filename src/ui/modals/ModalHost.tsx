@@ -15,6 +15,9 @@ import { Modal, type ModalSize } from '../components/Modal';
 import { Tabs, type TabBadge } from '../components/Tabs';
 import { Avatar } from '../components/Avatar';
 import { talentPointsAvailable } from '../../game/systems/talentGrid';
+import { potionPercent } from '../badges';
+import { GEAR_BAG_CAPACITY } from '../../game/data/balance';
+import { GoldChip } from '../items/parts';
 import { classLabel } from '../../game/systems/progression';
 import { CHARACTER_TABS, type CharacterTab, type ModalId } from '../navigation';
 import { takeReturnFocus, uiStore, useUi } from '../uiStore';
@@ -23,7 +26,7 @@ export interface ModalCtx { state: GameState; character: Character; tab: string;
 export interface ModalDef {
   title: string; subtitle: string; icon: string; tabs: readonly string[];
   /** mostra o seletor de personagem no cabeçalho */
-  who?: boolean; tabIcons?: Record<string, string>; tabBadges?: (ctx: ModalCtx) => Record<string, TabBadge | undefined>; size?: (tab: string) => ModalSize; render: (ctx: ModalCtx) => ReactNode;
+  who?: boolean; gold?: boolean; tabIcons?: Record<string, string>; tabBadges?: (ctx: ModalCtx) => Record<string, TabBadge | undefined>; size?: (tab: string) => ModalSize; render: (ctx: ModalCtx) => ReactNode;
 }
 
 /** Definição de cada menu: abas, tamanho e o painel que o preenche (os painéis são os componentes de sempre, agora dentro de modais). */
@@ -32,9 +35,11 @@ export const MODALS: Record<Exclude<ModalId, 'bemvindo'>, ModalDef> = {
     tabIcons: { Ficha: 'personagem', 'Proficiências': 'prof_melee', Magias: 'stat_magic', Talentos: 'stat_xp' },
     tabBadges: ({ character }) => { const free = talentPointsAvailable(character), equipped = character.spellSlots.length; return { Magias: { value: equipped, title: `${equipped} magias equipadas` }, ...(free > 0 ? { Talentos: { value: free, gold: true, title: `${free} pontos de talento livres` } } : {}) }; }, size: tab => tab === 'Talentos' ? 'xl' : 'md',
     render: ({ state, character, tab }) => <CharacterPanel state={state} selected={character.id} setSelected={uiStore.select} tab={tab as CharacterTab} /> },
-  itens: { title: 'Itens', subtitle: 'Equipamento, mochila e suprimentos', icon: 'itens', who: true, tabs: ['Equipamento', 'Mochila', 'Suprimentos'],
+  itens: { title: 'Itens', subtitle: 'Equipamento, mochila e suprimentos', icon: 'itens', who: true, gold: true, tabs: ['Equipamento', 'Mochila', 'Suprimentos'],
+    tabIcons: { Equipamento: 'slot_armor', Mochila: 'itens', Suprimentos: 'stat_hp' },
+    tabBadges: ({ state }) => { const hp = potionPercent(state); const used = state.inventory.bp.reduce((n, x) => n + x.quantity, 0) + state.inventory.loot.reduce((n, x) => n + x.quantity, 0) + state.gearBag.length; return { Mochila: { value: `${used}/${state.inventory.capacity.bp + GEAR_BAG_CAPACITY}`, title: 'Ocupação da mochila' }, ...(hp < 40 ? { Suprimentos: { value: '!', gold: true, title: `Poções de vida em ${hp}% do estoque confortável` } } : {}) }; },
     render: ({ state, character, tab }) => <ItemsPanel state={state} character={character} section={tab === 'Equipamento' ? 'equipment' : tab === 'Mochila' ? 'bag' : 'supplies'} /> },
-  comercio: { title: 'Comércio', subtitle: 'Loja, ferreiro e venda', icon: 'comercio', tabs: ['Loja', 'Ferreiro', 'Vender'],
+  comercio: { title: 'Comércio', subtitle: 'Loja, ferreiro e venda', icon: 'comercio', gold: true, tabs: ['Loja', 'Ferreiro', 'Vender'], tabIcons: { Loja: 'stat_hp', Ferreiro: 'slot_weapon', Vender: 'stat_gold' },
     render: ({ state, character, tab }) => <ItemsPanel state={state} character={character} section={tab === 'Loja' ? 'shop' : tab === 'Ferreiro' ? 'smith' : 'sell'} /> },
   classes: { title: 'Classes', subtitle: 'Guia de evolução: o que treinar para o próximo passo', icon: 'classes', who: true, tabs: ['Próximo passo', 'Árvore completa'], size: tab => tab === 'Árvore completa' ? 'xl' : 'md',
     render: ({ character, tab }) => <ClassesPanel character={character} section={tab === 'Próximo passo' ? 'next' : 'tree'} /> },
@@ -75,7 +80,7 @@ export function ModalHost({ state }: { state: GameState }) {
   const def = MODALS[id], tab = ui.tab && def.tabs.includes(ui.tab) ? ui.tab : def.tabs[0];
   const chips = def.who && <div className="who" role="group" aria-label="Personagem">{state.characters.map(c =>
     <button key={c.id} type="button" className={c.id === character.id ? 'on' : ''} aria-pressed={c.id === character.id} aria-label={c.name} onClick={() => uiStore.select(c.id)}><span className="av"><Avatar character={c} /></span><span>{c.name}<small>{classLabel(c)} · Nv {c.profile.level}</small></span></button>)}</div>;
-  return <Modal key={id} title={def.title} subtitle={def.subtitle} icon={def.icon} size={def.size?.(tab) ?? 'md'} headerExtra={chips || undefined} onClose={uiStore.close}
+  return <Modal key={id} title={def.title} subtitle={def.subtitle} icon={def.icon} size={def.size?.(tab) ?? 'md'} headerExtra={def.who || def.gold ? <>{chips}{def.gold && <GoldChip gold={state.gold} style={{ marginLeft: def.who ? 12 : 'auto' }} />}</> : undefined} onClose={uiStore.close}
     tabs={def.tabs.length > 1 ? <Tabs tabs={def.tabs} value={tab} onChange={uiStore.setTab} label={`Seções de ${def.title}`} icons={def.tabIcons} badges={def.tabBadges?.({ state, character, tab })} /> : undefined}>
     {def.render({ state, character, tab })}
   </Modal>;

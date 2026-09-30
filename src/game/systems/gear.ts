@@ -109,6 +109,15 @@ export function gearBlockReason(c: Pick<Character, 'profile'>, instance: ItemIns
   return undefined;
 }
 
+/** Motivo pelo qual o item de classe não entra agora (classe ou mãos), ou undefined. */
+export function gearEquipReason(c: Pick<Character, 'profile' | 'gear'>, instance: ItemInstance): string | undefined {
+  const base = classItem(instance.baseId);
+  const byClass = gearBlockReason(c, instance);
+  if (byClass || !base) return byClass;
+  if (base.slot === 'offhand') return handsConflict(gearBase(c, 'weapon'), base);
+  return undefined;
+}
+
 export const describeInstance = (instance: ItemInstance) => {
   const base = classItem(instance.baseId);
   return base ? `${base.name} (${QUALITY_NAMES[base.quality]} · ${CLASSIFICATION_NAMES[instance.classification]})` : instance.baseId;

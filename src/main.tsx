@@ -10,6 +10,7 @@ import './ui/styles/modal.css';
 import './ui/styles/modal-skin.css';
 import './ui/styles/pixel-kit.css';
 import './ui/styles/personagem.css';
+import './ui/styles/itens.css';
 import './ui/styles/controls.css';
 import './ui/styles/skin.css';
 

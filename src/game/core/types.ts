@@ -12,7 +12,7 @@ export interface Stats { maxHp: number; maxMana: number; attack: number; defense
 export interface SpellCondition { hpBelow?: number; minEnemies?: number; allyInjured?: boolean; manaAbove?: number; }
 export interface HelperConfig { hpPotionAt: number; manaPotionAt: number; healAllies: boolean; autoSupplies: boolean; defensiveAmuletAt: number; emergencyAt: number; outOfSupplies: 'continue' | 'end'; }
 /** Um exemplar de equipamento de classe: o item base (catálogo Fase 7) + a classificação e os atributos aleatórios sorteados. */
-export interface ItemInstance { uid: string; baseId: string; classification: Classification; attrs: { code: string; level: number }[]; }
+export interface ItemInstance { uid: string; baseId: string; classification: Classification; attrs: { code: string; level: number }[]; /** recém-obtido: limpo ao selecionar na mochila */ fresh?: true; }
 export interface Character {
   id: string; name: string; classId: ClassId; profile: ProgressProfile;
   /** Linha de combate e tanque (no máximo um por grupo): definem a posição no mapa e quem apanha. */
@@ -57,6 +57,8 @@ export interface GameState {
   characters: Character[]; team: string[]; monsters: MonsterRuntime[]; inventory: InventoryState;
   /** Mochila de equipamento de classe (instâncias com atributos próprios). */
   gearBag: ItemInstance[];
+  /** ids de itens simples (bp) recém-obtidos, limpos ao selecionar */
+  freshItems?: string[];
   gold: number; charmPoints: number; charmSlots: number; equippedCharms: string[]; unlockedCharms: string[];
   codex: Record<string, CodexEntry>; analyzer: Analyzer; history: Analyzer[]; message: string; lastSavedAt: number;
   /** Hunt atual (padrão 'catacumbas'). */
