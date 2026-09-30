@@ -12,7 +12,10 @@ import { ProgressPanel } from '../ProgressPanel';
 import { SYSTEM_TABS, SystemPanel } from '../SystemPanel';
 import { WelcomeBack } from '../WelcomeBack';
 import { Modal, type ModalSize } from '../components/Modal';
-import { Tabs } from '../components/Tabs';
+import { Tabs, type TabBadge } from '../components/Tabs';
+import { Avatar } from '../components/Avatar';
+import { talentPointsAvailable } from '../../game/systems/talentGrid';
+import { classLabel } from '../../game/systems/progression';
 import { CHARACTER_TABS, type CharacterTab, type ModalId } from '../navigation';
 import { takeReturnFocus, uiStore, useUi } from '../uiStore';
 
@@ -20,12 +23,14 @@ export interface ModalCtx { state: GameState; character: Character; tab: string;
 export interface ModalDef {
   title: string; subtitle: string; icon: string; tabs: readonly string[];
   /** mostra o seletor de personagem no cabeçalho */
-  who?: boolean; size?: (tab: string) => ModalSize; render: (ctx: ModalCtx) => ReactNode;
+  who?: boolean; tabIcons?: Record<string, string>; tabBadges?: (ctx: ModalCtx) => Record<string, TabBadge | undefined>; size?: (tab: string) => ModalSize; render: (ctx: ModalCtx) => ReactNode;
 }
 
 /** Definição de cada menu: abas, tamanho e o painel que o preenche (os painéis são os componentes de sempre, agora dentro de modais). */
 export const MODALS: Record<Exclude<ModalId, 'bemvindo'>, ModalDef> = {
-  personagem: { title: 'Personagem', subtitle: 'Ficha, proficiências, magias e talentos', icon: 'personagem', who: true, tabs: CHARACTER_TABS, size: tab => tab === 'Talentos' ? 'xl' : 'md',
+  personagem: { title: 'Personagem', subtitle: 'Ficha, proficiências, magias e talentos', icon: 'personagem', who: true, tabs: CHARACTER_TABS,
+    tabIcons: { Ficha: 'personagem', 'Proficiências': 'prof_melee', Magias: 'stat_magic', Talentos: 'stat_xp' },
+    tabBadges: ({ character }) => { const free = talentPointsAvailable(character), equipped = character.spellSlots.length; return { Magias: { value: equipped, title: `${equipped} magias equipadas` }, ...(free > 0 ? { Talentos: { value: free, gold: true, title: `${free} pontos de talento livres` } } : {}) }; }, size: tab => tab === 'Talentos' ? 'xl' : 'md',
     render: ({ state, character, tab }) => <CharacterPanel state={state} selected={character.id} setSelected={uiStore.select} tab={tab as CharacterTab} /> },
   itens: { title: 'Itens', subtitle: 'Equipamento, mochila e suprimentos', icon: 'itens', who: true, tabs: ['Equipamento', 'Mochila', 'Suprimentos'],
     render: ({ state, character, tab }) => <ItemsPanel state={state} character={character} section={tab === 'Equipamento' ? 'equipment' : tab === 'Mochila' ? 'bag' : 'supplies'} /> },
@@ -69,9 +74,9 @@ export function ModalHost({ state }: { state: GameState }) {
   }
   const def = MODALS[id], tab = ui.tab && def.tabs.includes(ui.tab) ? ui.tab : def.tabs[0];
   const chips = def.who && <div className="who" role="group" aria-label="Personagem">{state.characters.map(c =>
-    <button key={c.id} type="button" className={c.id === character.id ? 'on' : ''} aria-pressed={c.id === character.id} onClick={() => uiStore.select(c.id)}>{c.name}</button>)}</div>;
+    <button key={c.id} type="button" className={c.id === character.id ? 'on' : ''} aria-pressed={c.id === character.id} aria-label={c.name} onClick={() => uiStore.select(c.id)}><span className="av"><Avatar character={c} /></span><span>{c.name}<small>{classLabel(c)} · Nv {c.profile.level}</small></span></button>)}</div>;
   return <Modal key={id} title={def.title} subtitle={def.subtitle} icon={def.icon} size={def.size?.(tab) ?? 'md'} headerExtra={chips || undefined} onClose={uiStore.close}
-    tabs={def.tabs.length > 1 ? <Tabs tabs={def.tabs} value={tab} onChange={uiStore.setTab} label={`Seções de ${def.title}`} /> : undefined}>
+    tabs={def.tabs.length > 1 ? <Tabs tabs={def.tabs} value={tab} onChange={uiStore.setTab} label={`Seções de ${def.title}`} icons={def.tabIcons} badges={def.tabBadges?.({ state, character, tab })} /> : undefined}>
     {def.render({ state, character, tab })}
   </Modal>;
 }

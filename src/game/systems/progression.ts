@@ -89,3 +89,56 @@ export function characterStats(c: Character, state?: GameState): Stats {
 }
 /** Efeito do talento como fração (0,08 = +8%); soma todas as grades do caminho. */
 export const talentBonus = talentValue;
+
+export interface StatPart { label: string; value: number; kind: 'flat' | 'percent' }
+export interface StatBreakdown { total: number; parts: StatPart[]; cap?: number }
+
+/**
+ * Composição de um atributo (tooltip da Ficha). Repete a ordem de soma de `characterStats`: base, nível, itens e armadura
+ * (parcelas planas), talentos/passivas/proficiência (percentuais sobre o acumulado) e buffs. A soma aplicada em ordem é o
+ * total (`characterStats(...)[key]`), salvo o teto de `crit`/`resistance`, que aparece em `cap`.
+ */
+export function statBreakdown(c: Character, state: GameState | undefined, key: keyof Stats): StatBreakdown {
+  const def = CLASSES[c.classId], level = c.profile.level - 1, path = c.profile.classPath, totals = talentTotals(c), gear = gearBonus(c);
+  const grid = (code: string) => (totals[code] ?? 0) / 100;
+  const parts: StatPart[] = [{ label: 'Base da classe', value: def.base[key], kind: 'flat' }];
+  const growth = (def.growth[key] ?? 0) * level;
+  if (growth) parts.push({ label: `Nível ${c.profile.level}`, value: growth, kind: 'flat' });
+  let items = 0;
+  for (const id of Object.values(c.equipment)) items += (id && itemById(id)?.stats?.[key]) || 0;
+  if (items) parts.push({ label: 'Itens', value: items, kind: 'flat' });
+  if (key === 'defense' && gear.arm) parts.push({ label: 'Armadura dos itens', value: gear.arm * ARM_DEFENSE, kind: 'flat' });
+  const percent: Partial<Record<keyof Stats, [string, number, number]>> = {
+    maxHp: ['hp', passiveBonus(path, 'maxHp'), 0], maxMana: ['mana', passiveBonus(path, 'maxMana'), 0], attack: ['', passiveBonus(path, 'attack'), 0],
+    defense: ['def', passiveBonus(path, 'defense'), (gear.levels.defense ?? 0) * PROFICIENCY_LEVEL_DAMAGE],
+    attackSpeed: ['aspd', passiveBonus(path, 'attackSpeed'), 0], magicPower: ['magic', passiveBonus(path, 'magicPower'), 0],
+  };
+  const additive: Partial<Record<keyof Stats, [string, number]>> = { crit: ['crit', passiveBonus(path, 'crit')], resistance: ['res', passiveBonus(path, 'resistance')] };
+  let running = parts.reduce((a, p) => a + p.value, 0);
+  const pct = percent[key];
+  if (pct) {
+    const [code, passive, levels] = pct;
+    const talent = code ? grid(code) : 0;
+    const factor = talent + passive + levels;
+    if (talent) parts.push({ label: 'Talentos', value: talent, kind: 'percent' });
+    if (passive) parts.push({ label: 'Passivas', value: passive, kind: 'percent' });
+    if (levels) parts.push({ label: 'Proficiência dos itens', value: levels, kind: 'percent' });
+    running *= 1 + factor;
+  }
+  const add = additive[key];
+  if (add) {
+    if (grid(add[0])) parts.push({ label: 'Talentos', value: grid(add[0]), kind: 'percent' });
+    if (add[1]) parts.push({ label: 'Passivas', value: add[1], kind: 'percent' });
+    running += grid(add[0]) + add[1];
+    if (key === 'resistance') {
+      if (c.isTank && passiveBonus(path, 'tankResistance')) { parts.push({ label: 'Tanque', value: passiveBonus(path, 'tankResistance'), kind: 'percent' }); running += passiveBonus(path, 'tankResistance'); }
+      if (state?.equippedCharms.includes('stone')) { const v = CHARMS.find(x => x.id === 'stone')!.value; parts.push({ label: 'Charm Pedra', value: v, kind: 'percent' }); running += v; }
+    }
+  }
+  for (const e of c.effects) {
+    if ((key === 'attack' && e.type === 'buffAttack') || (key === 'defense' && e.type === 'buffDefense')) { parts.push({ label: 'Efeito ativo', value: e.value, kind: 'percent' }); running *= 1 + e.value; }
+  }
+  void running;
+  const total = characterStats(c, state)[key];
+  return { total, parts, cap: key === 'crit' || key === 'resistance' ? .75 : undefined };
+}

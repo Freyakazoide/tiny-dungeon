@@ -91,3 +91,26 @@ details.ch-counters summary::-webkit-details-marker{display:none}details.ch-coun
 .ch-treetab.on{background:linear-gradient(#2a3442,#1b232e);color:var(--gold);box-shadow:inset 0 2px 0 #c9a55c,inset 0 0 0 1px #3b4656}
 .ch-treetab.locked{opacity:.6}
 .ch-treetab .n{font-size:10px;padding:0 5px;background:#0b1016;border:1px solid #000;color:var(--muted)}.ch-treetab .n.gold{color:#231a08;background:var(--gold-2)}
+/* extensões da Fase 9 */
+.ch-attr:focus-visible .pk-tip,.ch-attr:focus-within .pk-tip{display:block}
+.ch-attr:focus-visible{outline:2px solid var(--gold-2);outline-offset:1px}
+.ch-stage img,.who .av img,.av-block{image-rendering:pixelated}
+.av-block{display:inline-block}
+.ch-edit{display:grid;gap:8px;width:100%;padding-top:6px;border-top:2px solid #0a0e14}
+@media (max-width:900px){.ch-sheet{grid-template-columns:1fr}.ch-ptiles{grid-template-columns:1fr 1fr}.ch-tal{grid-template-columns:1fr}.ch-ctrs{grid-template-columns:repeat(2,1fr)}.ch-spell{grid-template-columns:34px 48px minmax(0,1fr) auto}.ch-spell .ch-cond{grid-column:1/-1}.ch-gate,.ch-sockets{flex-direction:column;align-items:stretch}}
+/* grade de talentos em SVG: nós quadrados com ícone (Fase 9) */
+.tgrid-node .tgrid-ring{fill:#000;stroke:var(--node-color);stroke-width:2;rx:0}
+.tgrid-node .tgrid-core{fill:#0b1016;opacity:1}
+.tgrid-node .tgrid-frame{fill:none;stroke:var(--gold-2);stroke-width:2}
+.tgrid-node.keystone .tgrid-frame{stroke:#ff6fd0}
+.tgrid-node.major .tgrid-core,.tgrid-node.root .tgrid-core{fill:#1c160a}.tgrid-node.keystone .tgrid-core{fill:#2a0f24}
+.tgrid-node.major .tgrid-ring,.tgrid-node.root .tgrid-ring{fill:#000;stroke-width:2}.tgrid-node.keystone .tgrid-ring{fill:#000;stroke-width:2}
+.tgrid-node image{opacity:.55;filter:saturate(.4)}
+.tgrid-node.acquired image,.tgrid-node.maxed image,.tgrid-node.available image,.tgrid-node.root image{opacity:1;filter:none}
+.tgrid-node.available .tgrid-ring{stroke:var(--ok);stroke-width:3;filter:drop-shadow(0 0 4px #4fae73aa)}
+.tgrid-node.locked{opacity:.38;filter:saturate(.4)}
+.tgrid-node.selected .tgrid-ring{stroke:var(--gold);stroke-width:3}
+.tgrid-node.match .tgrid-ring{stroke:#fff;filter:drop-shadow(0 0 6px #fff)}
+.tgrid-rankseal rect{fill:#000;stroke:#333;stroke-width:1}
+.tgrid-rankseal .tgrid-rank{fill:#fff;stroke:none;font:700 9px Inter,sans-serif}
+.tgrid-edge.lit{stroke:var(--gold-2)}
