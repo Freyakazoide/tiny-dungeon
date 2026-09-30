@@ -148,3 +148,6 @@
 .gear-passive{color:#8ad4a0}.gear-mechanic{color:#d9a63f}.gear-attr{color:#8ab0e6}
 .smith-class{display:flex;gap:8px;align-items:center;margin:6px 0;font-size:12px}.gear-shop{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:6px}
 .equipment-actions{flex-wrap:wrap}.equipment-actions select{min-width:0;max-width:100%}
+
+/* Fase 7 (waves): tier da wave no cabeçalho */
+.wave-tier{font-weight:700}.wave-tier.tier-light{color:#9fd39f}.wave-tier.tier-reinforced{color:#e8ce98}.wave-tier.tier-horde{color:#ff9a4a}.wave-tier.tier-invasion{color:#ff5a5a}

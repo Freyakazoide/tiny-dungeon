@@ -1,5 +1,6 @@
 import type { WaveDef } from '../core/types';
 import { WAVES as CATACOMBS_WAVES } from './monsters';
+import { EARLY_EXTRAS, type ExtraRow } from './balance';
 
 export interface HuntDef {
   id: string;
@@ -15,6 +16,11 @@ export interface HuntDef {
   refXpPerHour: number; refGoldPerHour: number;
   /** Cor do placeholder quando a imagem não existe. */
   color: number;
+  /** Multiplicadores de HP e ataque dos monstros desta hunt (por cima do `runtime`). Padrão 1. */
+  monsterScale?: { hp: number; atk: number };
+  /** Tabela de reforços das waves normais (sobrepõe WAVE_EXTRAS) e multiplicador do número sorteado. */
+  extrasTable?: ExtraRow[];
+  extrasScale?: number;
 }
 
 /** W1 = A A A A · W2 = A A B B · W3 = Boss A A (A = comum, B = elite). */
@@ -39,7 +45,21 @@ export const HUNTS: HuntDef[] = [
   { id: 'templo_profano', refXpPerHour: 86000, refGoldPerHour: 34000, name: 'Templo Profano', map: 'templo_profano', minLevel: 27, recommendedLevel: 28, color: 0x35204a,
     waves: waves(['Nave Corrompida', 'Altares Profanados', 'Santuário do Sumo Sacerdote'], 'dark_cultist', 'fallen_angel', 'profane_high_priest') },
 ];
+/**
+ * Dificuldade por hunt (Fase 7, bloco B2): HP × e ataque × dos monstros. Começo gentil nas Catacumbas; o resto foi calibrado no harness
+ * (Guerreiro/Caçador/Mago com o conjunto da hunt e talentos gastos, reforços ligados, semente fixa) para XP/h ≈ 1,2× o alvo e custo de poção
+ * de 15% a 25% do ouro. Atenção ao "joelho": acima de ~1,5 de ataque o custo de poção dispara. Ajuste em passos de 0,05 a 0,1 e rode o harness.
+ */
+const MONSTER_SCALES: Record<string, { hp: number; atk: number }> = {
+  catacumbas: { hp: 0.9, atk: 0.7 }, floresta_sombria: { hp: 1.6, atk: 1.1 }, pantano_toxico: { hp: 1.65, atk: 1.4 },
+  minas_esquecidas: { hp: 1.7, atk: 1.4 }, fortaleza_de_gelo: { hp: 1.85, atk: 1.35 }, vulcao_ardente: { hp: 1.9, atk: 1.4 }, templo_profano: { hp: 2.0, atk: 1.25 },
+};
+for (const hunt of HUNTS) hunt.monsterScale = MONSTER_SCALES[hunt.id];
+/** Primeira hora: reforços curtos (sem hordas nem invasões); os completos começam na Floresta Sombria. */
+HUNTS[0].extrasTable = EARLY_EXTRAS;
 export const HUNT_BY_ID: Record<string, HuntDef> = Object.fromEntries(HUNTS.map(h => [h.id, h]));
+/** Multiplicadores de HP e ataque da hunt (1 se não houver). */
+export const huntScale = (huntId: string) => HUNT_BY_ID[huntId]?.monsterScale ?? { hp: 1, atk: 1 };
 export const DEFAULT_HUNT = 'catacumbas';
 export const huntWaves = (huntId: string) => (HUNT_BY_ID[huntId] ?? HUNT_BY_ID[DEFAULT_HUNT]).waves;
 /** Nome do boss (primeiro monstro da última wave) — usado nos banners. */

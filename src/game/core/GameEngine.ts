@@ -1,7 +1,9 @@
 import { CLASSES, kitOfNode, kitsOfPath } from '../data/classes';
 import { MONSTERS } from '../data/monsters';
 import { DEFAULT_SPRITE, defaultSpriteFor, isKnownSprite } from '../data/sprites';
-import { DEFAULT_HUNT, HUNT_BY_ID, HUNTS, huntWaves } from '../data/hunts';
+import { DEFAULT_HUNT, HUNT_BY_ID, HUNTS, huntScale, huntWaves } from '../data/hunts';
+import { WAVE_CONFIG } from '../data/balance';
+import { batchToSpawn, composeExtras, drawFromBag, extrasTableFor, limitExtra, newBag, rollExtra, splitBatches, tierOfExtra, TIER_NAMES, waveRewards } from '../systems/waves';
 import { SPELLS, spellById } from '../data/spells';
 import { itemById } from '../data/items';
 import { CHARMS } from '../data/charms';
@@ -65,11 +67,45 @@ export class GameEngine {
   /** Estatística da hunt atual (cria a entrada se faltar). */
   private huntStat(){return this.state.huntStats[this.state.huntId]??={activeMs:0,xp:0,gold:0,bossKills:0};}
   private waves(){return huntWaves(this.state.huntId);}
-  private spawnWave(){const waves=this.waves();this.state.monsters=waves[this.state.wave].monsters.map((defId,i)=>({uid:`${this.state.cycle}-${this.state.wave}-${i}-${this.nextUid()}`,defId,hp:Math.round(MONSTERS[defId].hp*runtime.monsterHp),maxHp:Math.round(MONSTERS[defId].hp*runtime.monsterHp),cooldown:1/Math.max(.1,MONSTERS[defId].speed),alive:true}));this.state.message=waves[this.state.wave].name;this.emit({type:'wave',text:this.state.message});}
+  /** Sorteia os reforços da wave que vai nascer (saco embaralhado, válvula de HP e "sem hordas em sequência"). */
+  private rollWaveExtras(isBoss:boolean):number{
+    if(!WAVE_CONFIG.enabled)return 0;
+    const hunt=HUNT_BY_ID[this.state.huntId],table=extrasTableFor(hunt,isBoss),key=`${this.state.huntId}:${isBoss?'boss':'normal'}`;
+    let drawn:number;
+    if(WAVE_CONFIG.bag){const bags=this.state.waveBags??={};drawn=drawFromBag(bags[key]??=newBag(),table,WAVE_CONFIG.bagSize);}
+    else drawn=rollExtra(table);
+    drawn=Math.round(drawn*(hunt?.extrasScale??1));
+    const team=livingTeam(this.state),avg=team.length?team.reduce((s,c)=>s+c.hp/characterStats(c,this.state).maxHp,0)/team.length:1;
+    return limitExtra(drawn,{avgHpFraction:avg,lastExtra:this.state.lastExtra??0});
+  }
+  private makeMonster(defId:string,index:number):MonsterRuntime{const hp=Math.round(MONSTERS[defId].hp*runtime.monsterHp*huntScale(this.state.huntId).hp);return {uid:`${this.state.cycle}-${this.state.wave}-${index}-${this.nextUid()}`,defId,hp,maxHp:hp,cooldown:1/Math.max(.1,MONSTERS[defId].speed),alive:true};}
+  private spawnWave(){
+    const waves=this.waves(),isBoss=this.state.wave===waves.length-1;
+    const extra=this.rollWaveExtras(isBoss),list=[...waves[this.state.wave].monsters,...composeExtras(this.state.huntId,extra)];
+    const {initial,pending}=splitBatches(list);
+    this.state.monsters=initial.map((defId,i)=>this.makeMonster(defId,i));
+    this.state.wavePending=pending;this.state.reinforceS=0;this.state.lastExtra=extra;
+    this.state.waveInfo={extra,total:list.length,goldStart:this.state.analyzer.gold};
+    const tier=tierOfExtra(extra);
+    this.state.message=extra>0?`${waves[this.state.wave].name} — ${TIER_NAMES[tier]} (${list.length} inimigos)`:waves[this.state.wave].name;
+    this.emit({type:'wave',text:this.state.message});
+  }
+  /** Levas: enquanto houver monstros na fila, entram em grupos quando a wave esvazia (ou o tempo de espera passa). */
+  private spawnBatch(count:number){
+    const pending=this.state.wavePending??[];if(!count||!pending.length)return;
+    const ids=pending.splice(0,count),base=this.state.monsters.length;
+    this.state.monsters.push(...ids.map((defId,i)=>this.makeMonster(defId,base+i)));this.state.reinforceS=0;
+  }
+  private tickReinforcements(dt:number){
+    if(!this.state.wavePending?.length)return;
+    this.state.reinforceS=(this.state.reinforceS??0)+dt;
+    if(this.state.reinforceS<WAVE_CONFIG.intervalS)return;
+    this.spawnBatch(batchToSpawn(livingMonsters(this.state).length,this.state.wavePending.length,this.state.reinforceS));
+  }
   start(){if(this.state.status!=='idle'||!this.state.team.length)return;if(!livingTeam(this.state).length)for(const id of this.state.team){const c=this.state.characters.find(x=>x.id===id);if(c){const stats=characterStats(c,this.state);c.hp=stats.maxHp;c.mana=stats.maxMana;c.effects=[];}}if(!this.state.monsters.length||!livingMonsters(this.state).length)this.spawnWave();this.state.status='running';if(!this.state.analyzer.activeMs)this.state.analyzer.startedAt=Date.now();this.state.message='Hunt iniciada.';this.emit();}
   pause(){if(this.state.status==='idle'||this.state.status==='paused')return;this.pausedFrom=this.state.status;this.state.status='paused';this.state.message='Hunt pausada — cooldowns congelados.';this.emit();}
   resume(){if(this.state.status!=='paused')return;this.state.status=this.pausedFrom;this.state.message='Hunt retomada.';this.emit();}
-  end(){if(this.state.status==='idle')return;this.state.status='idle';this.state.transitionMs=0;this.state.wave=0;this.state.monsters=[];this.state.message='Expedição encerrada. Recompensas preservadas.';this.emit();}
+  end(){if(this.state.status==='idle')return;this.state.status='idle';this.state.transitionMs=0;this.state.wave=0;this.state.monsters=[];this.state.wavePending=[];this.state.message='Expedição encerrada. Recompensas preservadas.';this.emit();}
   /** Nível médio da equipe (base da etiqueta de risco das hunts). */
   averageTeamLevel(){const levels=this.state.team.map(id=>this.state.characters.find(c=>c.id===id)?.profile.level).filter((l):l is number=>l!==undefined);return levels.length?levels.reduce((a,b)=>a+b,0)/levels.length:0;}
   /** Troca a hunt: qualquer uma vale (sem bloqueio por nível), mas só com a caçada parada. */
@@ -93,7 +129,7 @@ export class GameEngine {
     if(this.state.status==='idle'||this.state.status==='paused')return;const dt=Math.min(ms,100)/1000;
     if(this.state.status==='transition'||this.state.status==='recovering'){this.state.transitionMs-=ms;if(this.state.transitionMs<=0)this.finishTransition();this.emit();return;}
     this.state.analyzer.activeMs+=ms;this.huntStat().activeMs+=ms;
-    this.tickStatuses(dt);if(this.state.status!=='running')return this.emit();
+    this.tickStatuses(dt);if(this.state.status!=='running')return this.emit();this.tickReinforcements(dt);
     for(const c of livingTeam(this.state)){this.updateCharacter(c,dt);if(this.state.status!=='running')break;}
     if(this.state.status==='running')for(const m of livingMonsters(this.state)){if((m.statuses?.frozen??0)>0||(m.statuses?.stunned??0)>0)continue;m.cooldown-=dt;if(m.cooldown<=0){const targets=livingTeam(this.state);if(!targets.length){this.defeat();break;}const target=pickMonsterTarget(targets)!;const dealt=monsterHit(m,target,this.state);this.emit({type:'damage',source:m.uid,target:target.id,value:dealt});const thorns=talentValue(target,'thorns');if(thorns>0&&m.alive)this.hit(target,m,Math.max(1,Math.round(dealt*thorns)));m.cooldown+=1/MONSTERS[m.defId].speed;if(!livingTeam(this.state).length){this.defeat();break;}}}
     this.emit();
@@ -181,9 +217,17 @@ export class GameEngine {
   private spellProficiency(c:Character,s:NonNullable<ReturnType<typeof spellById>>):ProficiencyId{const weapon=itemById(c.equipment.weapon??'')?.trains??CLASSES[c.classId].weaponSkill;if(s.kind==='heal'||s.kind==='regen'||weapon==='magic')return 'magic';return s.kind==='shield'?'defense':weapon;}
   private creditHealing(sourceId:string|undefined,amount:number){const healer=this.state.characters.find(x=>x.id===sourceId);if(healer)addCounter(healer.profile,'healingDone',amount);}
   private hit(c:Character,target:GameState['monsters'][number],damage:number,crit=false){if(!target.alive)return;if(crit){addCounter(c.profile,'crits');if(MONSTERS[target.defId].boss)addCounter(c.profile,'bossCrits');}const fury=this.state.equippedCharms.includes('fury')?1.08:1;damage=Math.round(damage*fury);target.hp=Math.max(0,target.hp-damage);this.state.analyzer.damage+=damage;this.state.analyzer.byCharacter[c.id]=(this.state.analyzer.byCharacter[c.id]??0)+damage;this.state.analyzer.byMonster[target.defId]=(this.state.analyzer.byMonster[target.defId]??0)+damage;this.emit({type:'damage',source:c.id,target:target.uid,value:damage});const steal=talentValue(c,'lifesteal');if(steal>0&&c.hp>0){const stats=characterStats(c,this.state),healed=Math.min(stats.maxHp-c.hp,damage*steal);if(healed>0){c.hp+=healed;this.state.analyzer.healing+=healed;}}if(target.hp<=0)this.kill(target);}
-  private kill(target:GameState['monsters'][number]){target.alive=false;const def=MONSTERS[target.defId];this.state.analyzer.kills[def.id]=(this.state.analyzer.kills[def.id]??0)+1;if(def.boss)this.state.analyzer.bosses++;const xpMult=this.state.equippedCharms.includes('wisdom')?1.12:1;const xp=Math.round(def.xp*xpMult*runtime.xpScale);this.state.analyzer.xp+=xp;const gold=Math.round(randomInt(def.gold[0],def.gold[1])*(1+this.teamBest('gold')));{const stat=this.huntStat();stat.xp+=xp;stat.gold+=gold;if(def.boss)stat.bossKills++;}for(const c of this.state.team.map(id=>this.state.characters.find(x=>x.id===id)).filter(Boolean) as Character[]){gainExperience(c,Math.round(xp*(1+talentValue(c,'xp'))));addCounter(c.profile,'goldEarned',gold);if(def.boss)addCounter(c.profile,'bossKills');}this.state.gold+=gold;this.state.analyzer.gold+=gold;const drops=rollLoot(this.state,def,Math.random,1+this.teamBest('drop'));this.dropGear(def);const entry=this.state.codex[def.id]??={kills:0,discoveredLoot:[],claimed:[]};entry.kills++;for(const d of drops)if(!entry.discoveredLoot.includes(d.itemId))entry.discoveredLoot.push(d.itemId);this.state.codex[def.id]=entry;this.checkMilestones(entry);this.emit({type:'death',target:target.uid,text:`+${xp} XP · ${gold} ouro`});if(drops.length)this.emit({type:'drop',text:drops.map(d=>`${d.quantity}× ${itemById(d.itemId)?.name}`).join(', ')});if(!livingMonsters(this.state).length)this.completeWave();}
+  private kill(target:GameState['monsters'][number]){target.alive=false;const def=MONSTERS[target.defId];this.state.analyzer.kills[def.id]=(this.state.analyzer.kills[def.id]??0)+1;if(def.boss)this.state.analyzer.bosses++;const xpMult=this.state.equippedCharms.includes('wisdom')?1.12:1;const xp=Math.round(def.xp*xpMult*runtime.xpScale);this.state.analyzer.xp+=xp;const gold=Math.round(randomInt(def.gold[0],def.gold[1])*(1+this.teamBest('gold')));{const stat=this.huntStat();stat.xp+=xp;stat.gold+=gold;if(def.boss)stat.bossKills++;}for(const c of this.state.team.map(id=>this.state.characters.find(x=>x.id===id)).filter(Boolean) as Character[]){gainExperience(c,Math.round(xp*(1+talentValue(c,'xp'))));addCounter(c.profile,'goldEarned',gold);if(def.boss)addCounter(c.profile,'bossKills');}this.state.gold+=gold;this.state.analyzer.gold+=gold;const drops=rollLoot(this.state,def,Math.random,1+this.teamBest('drop'));this.dropGear(def);const entry=this.state.codex[def.id]??={kills:0,discoveredLoot:[],claimed:[]};entry.kills++;for(const d of drops)if(!entry.discoveredLoot.includes(d.itemId))entry.discoveredLoot.push(d.itemId);this.state.codex[def.id]=entry;this.checkMilestones(entry);this.emit({type:'death',target:target.uid,text:`+${xp} XP · ${gold} ouro`});if(drops.length)this.emit({type:'drop',text:drops.map(d=>`${d.quantity}× ${itemById(d.itemId)?.name}`).join(', ')});if(!livingMonsters(this.state).length){if(this.state.wavePending?.length)this.spawnBatch(Math.min(WAVE_CONFIG.batch,this.state.wavePending.length));else this.completeWave();}}
   private checkMilestones(entry:GameState['codex'][string]){for(const [i,n] of [10,50,200].entries())if(entry.kills>=n&&!entry.claimed.includes(n)){entry.claimed.push(n);this.state.charmPoints+=i+1;for(const charm of CHARMS)if(charm.milestone<=n&&!this.state.unlockedCharms.includes(charm.id))this.state.unlockedCharms.push(charm.id);}}
-  private completeWave(){const boss=this.state.wave===this.waves().length-1;this.state.status='transition';this.state.transitionMs=boss?2000:1000;this.state.message=boss?`Boss derrotado! ${this.state.analyzer.lootValue} de valor em loot.`:'Wave concluída — a escada surgiu.';if(boss){this.state.analyzer.cycles++;this.state.cycle++;}this.emit({type:'stairs',text:this.state.message});}
+  /** Wave grande (Horda/Invasão): rolagens extras de equipamento e, na Invasão, ouro extra. Vale só se a wave foi realmente varrida. */
+  private waveBonus(){
+    const info=this.state.waveInfo;if(!info)return;
+    const {gearRolls,goldBonus}=waveRewards(info.extra);
+    if(goldBonus>0){const bonus=Math.round((this.state.analyzer.gold-info.goldStart)*goldBonus);if(bonus>0){this.state.gold+=bonus;this.state.analyzer.gold+=bonus;}}
+    for(let i=0;i<gearRolls;i++)this.dropGear({boss:true} as MonsterDef);
+  }
+  private completeWave(){this.waveBonus();this.completeWaveCore();}
+  private completeWaveCore(){const boss=this.state.wave===this.waves().length-1;this.state.status='transition';this.state.transitionMs=boss?2000:1000;this.state.message=boss?`Boss derrotado! ${this.state.analyzer.lootValue} de valor em loot.`:'Wave concluída — a escada surgiu.';if(boss){this.state.analyzer.cycles++;this.state.cycle++;}this.emit({type:'stairs',text:this.state.message});}
   private finishTransition(force=false){if(this.state.status==='recovering'){for(const id of this.state.team){const c=this.state.characters.find(x=>x.id===id);if(c){const s=characterStats(c,this.state);c.hp=s.maxHp;c.mana=s.maxMana;c.effects=[];}}this.state.wave=0;this.spawnWave();this.state.status='running';return;}if(!this.state.autoAdvance&&!force){this.state.transitionMs=0;return;}this.state.wave=(this.state.wave+1)%this.waves().length;for(const c of this.state.characters){const s=characterStats(c,this.state);c.hp=Math.min(s.maxHp,c.hp+s.maxHp*.12);c.mana=Math.min(s.maxMana,c.mana+s.maxMana*.18);}this.spawnWave();this.state.status='running';}
   private defeat(){this.state.analyzer.defeats++;this.state.status='recovering';this.state.transitionMs=5000;this.state.message='Equipe derrotada. Recuperação em 5 segundos.';this.emit({type:'recovery',text:this.state.message});}
   private autoSupply(c:Character,maxHp:number,maxMana:number){if(!c.helper.autoSupplies)return;const use=(supply:'health'|'mana')=>{const item=pickSupply(this.state.inventory.supply,supply,supply==='health'?maxHp-c.hp:maxMana-c.mana);if(!item)return false;removeItem(this.state.inventory.supply,item.id);const potency=1+talentValue(c,'potion');if(supply==='health')c.hp=Math.min(maxHp,c.hp+(item.amount??0)*potency);else c.mana=Math.min(maxMana,c.mana+(item.amount??0)*potency);this.trackSupply(item.id,item.value,c);return true;};if(c.hp/maxHp*100<=c.helper.hpPotionAt)use('health');if(c.mana/maxMana*100<=c.helper.manaPotionAt)use('mana');}

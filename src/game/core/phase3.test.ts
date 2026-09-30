@@ -82,7 +82,7 @@ describe('B — tanque, linha e penalidade', () => {
   });
   it('monsterScale multiplica o HP dos monstros que nascem', () => {
     runtime.monsterHp = 2; const e = new GameEngine(partyState()); e.start();
-    expect(e.getSnapshot().monsters[0].maxHp).toBe(1080);
+    expect(e.getSnapshot().monsters[0].maxHp).toBe(972); // 540 × 2 (runtime) × 0,9 (escala das Catacumbas)
   });
   it('saves antigos ganham linha e tanque na migração', () => {
     const state = partyState(); const legacy = structuredClone(state) as unknown as { characters: Record<string, unknown>[] };

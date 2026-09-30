@@ -22,3 +22,32 @@ export const ARM_DEFENSE = 0.5;
 export const PROFICIENCY_LEVEL_DAMAGE = 0.012;
 /** Instâncias de equipamento de classe que cabem na mochila de equipamento (o excedente é vendido na hora). */
 export const GEAR_BAG_CAPACITY = 80;
+
+/** Waves com reforços aleatórios (Fase 7): a wave do HuntDef é o núcleo; a cada nascimento somam-se `extra` monstros. */
+export interface ExtraRow { extra: number; pct: number; }
+/** Tabela "X% de vir X a mais" das waves normais (média de reforços 1,72). */
+export const WAVE_EXTRAS: ExtraRow[] = [
+  { extra: 0, pct: 41 }, { extra: 1, pct: 20 }, { extra: 2, pct: 14 }, { extra: 3, pct: 9 }, { extra: 4, pct: 6 },
+  { extra: 5, pct: 4 }, { extra: 6, pct: 2.5 }, { extra: 8, pct: 1.75 }, { extra: 12, pct: 1 }, { extra: 16, pct: 0.75 },
+];
+/** Waves de chefe: chefe nunca é duplicado; reforços só de comuns e elites. */
+export const BOSS_EXTRAS: ExtraRow[] = [{ extra: 0, pct: 60 }, { extra: 1, pct: 25 }, { extra: 2, pct: 10 }, { extra: 3, pct: 5 }];
+/** Catacumbas (primeira hora): sem hordas nem invasões. */
+export const EARLY_EXTRAS: ExtraRow[] = [{ extra: 0, pct: 50 }, { extra: 1, pct: 25 }, { extra: 2, pct: 15 }, { extra: 3, pct: 7 }, { extra: 4, pct: 3 }];
+/** Fração de elites entre os reforços (o resto é o comum da hunt). */
+export const ELITE_SHARE = 0.15;
+/** Interruptores e números do sistema de waves; mude aqui (ou em memória nos testes) sem mexer na lógica. */
+export const WAVE_CONFIG = {
+  /** Liga os reforços aleatórios (os testes de engine antigos rodam com false, ver vitest.setup.ts). */
+  enabled: true,
+  /** Saco embaralhado: a sorte se compensa a cada `bagSize` waves da hunt. */
+  bag: true, bagSize: 40,
+  /** Válvula: com HP médio da equipe abaixo de `valveHp` no início da wave, reforços limitados a +1. */
+  valve: true, valveHp: 0.35,
+  /** Depois de uma wave com `hordeAt`+ reforços, a próxima tem no máximo +2. */
+  noHordeChain: true, hordeAt: 6,
+  /** Horda (6 a 11) e Invasão (12+) rendem rolagens extras de drop de equipamento (na chance de chefe) e ouro extra. */
+  bigRewards: true, hordeRolls: 1, invasionRolls: 2, invasionGold: 0.25,
+  /** Levas: com `minTotal`+ monstros nascem só `maxAlive` de uma vez; o resto entra em grupos de `batch` quando houver menos de `below` vivos, a cada `intervalS`. */
+  batches: true, minTotal: 9, maxAlive: 8, batch: 4, below: 6, intervalS: 3,
+};

@@ -64,4 +64,9 @@ export interface GameState {
   /** Estatística por hunt (tempo ativo simulado, XP por personagem, ouro, chefes): base da taxa do crédito offline. */
   huntStats: Record<string, { activeMs: number; xp: number; gold: number; bossKills: number }>;
   offlineReport?: OfflineReport;
+  /** Waves com reforços (Fase 7): saco embaralhado por hunt e tabela, tamanho da última wave, fila de monstros que ainda vão entrar (levas) e dados da wave atual. */
+  waveBags?: Record<string, { bag: number[]; carry: Record<number, number> }>;
+  lastExtra?: number;
+  wavePending?: string[]; reinforceS?: number;
+  waveInfo?: { extra: number; total: number; goldStart: number };
 }

@@ -7,6 +7,7 @@ import type { GameFx } from '../core/GameEngine';
 import type { Character, HuntStatus } from '../core/types';
 import { CLASSES } from '../data/classes';
 import { MONSTERS } from '../data/monsters';
+import { wavePositions } from '../systems/waves';
 import { bossIdOf, huntWaves } from '../data/hunts';
 import { characterStats } from '../systems/progression';
 import { combatFormation, dominantDirection, entranceFormation, stairFormation, type ArenaPoint } from './movement';
@@ -101,9 +102,10 @@ export class Game extends Scene {
 
     const activeIds=new Set(state.monsters.map(m=>m.uid));
     for(const [id,v] of this.enemies)if(!activeIds.has(id)){this.destroyMonster(v);this.enemies.delete(id);}
+    const layout=wavePositions(Math.max(state.monsters.length,state.waveInfo?.total??0));
     state.monsters.forEach((m,i)=>{
-      const x=512+(i-(state.monsters.length-1)/2)*150,y=222;const def=MONSTERS[m.defId];let v=this.enemies.get(m.uid);
-      if(!v){const hpBg=this.add.rectangle(x-50,y-54,100,9,0x35171b,.95).setOrigin(0,.5).setDepth(5);v={body:this.add.circle(x,y,def.boss?38:29,def.color).setStrokeStyle(2,0xf0e3cd).setDepth(5),name:this.add.text(x,y+45,def.name,{fontSize:'12px',color:'#fff',stroke:'#090b0e',strokeThickness:4}).setOrigin(.5).setDepth(6),hpBg,hp:this.add.rectangle(x-50,y-54,100,7,0xd45a5f).setOrigin(0,.5).setDepth(6)};this.enemies.set(m.uid,v);}
+      const {x,y}=layout[i];const def=MONSTERS[m.defId];let v=this.enemies.get(m.uid);
+      if(!v){const hpBg=this.add.rectangle(x-50,y-54,100,9,0x35171b,.95).setOrigin(0,.5).setDepth(5);v={body:this.add.circle(x,y,(def.boss?38:29)*(layout.length>12?.9:1),def.color).setStrokeStyle(2,0xf0e3cd).setDepth(5),name:this.add.text(x,y+45,def.name,{fontSize:'12px',color:'#fff',stroke:'#090b0e',strokeThickness:4}).setOrigin(.5).setDepth(6),hpBg,hp:this.add.rectangle(x-50,y-54,100,7,0xd45a5f).setOrigin(0,.5).setDepth(6)};this.enemies.set(m.uid,v);}
       v.hp.displayWidth=100*Math.max(0,m.hp/m.maxHp);v.body.setVisible(m.alive);v.name.setText(`${def.name}${(m.statuses?.burn?` 🔥×${m.statuses.burn.stacks}`:'')}${(m.statuses?.frozen?' ❄':'')}${(m.statuses?.stunned?' ✦':'')}`);v.body.setStrokeStyle(2,m.statuses?.frozen?0x8fd8ff:m.statuses?.burn?0xff8c3a:0xf0e3cd);v.hp.setVisible(m.alive);v.hpBg.setVisible(m.alive);v.name.setAlpha(m.alive?1:.3);
     });
 
