@@ -114,3 +114,4 @@ details.ch-counters summary::-webkit-details-marker{display:none}details.ch-coun
 .tgrid-rankseal rect{fill:#000;stroke:#333;stroke-width:1}
 .tgrid-rankseal .tgrid-rank{fill:#fff;stroke:none;font:700 9px Inter,sans-serif}
 .tgrid-edge.lit{stroke:var(--gold-2)}
+@media (max-width:600px){.ch-agrid{grid-template-columns:1fr}.ch-path{flex-direction:column;gap:8px}.ch-step+.ch-step{margin-left:0}.ch-step+.ch-step:before{display:none}.ch-ptiles{grid-template-columns:1fr}.ch-spell{grid-template-columns:34px 48px minmax(0,1fr)}.ch-spell .ch-arrows{grid-column:1/-1;flex-direction:row}}

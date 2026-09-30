@@ -214,3 +214,33 @@ describe('Fase 9 B — ícones em múltiplos de 24', () => {
     for (const m of out.matchAll(/size=\{(\d+)\}/g)) expect(Number(m[1]) % 24).toBe(0);
   });
 });
+
+describe('Fase 9 C — menu Personagem', () => {
+  const open = (tab: string) => { history.replaceState(null, '', `/#/personagem/${tab}`); render(<App />); };
+  it('Ficha: atributos com tooltip de composição, crit com teto 75%', () => {
+    open('ficha');
+    expect(screen.getAllByRole('tooltip').length).toBe(8);
+    expect(screen.getByLabelText(/^Crítico: .*teto 75%/)).toBeTruthy();
+  });
+  it('Proficiências: Squire/Mago treinam elementos; Guerreiro os joga na faixa de bloqueados e oferece "Ver afinidade"', async () => {
+    const c = gameStore.getSnapshot().characters[0];
+    c.profile.classId = 'guerreiro'; c.profile.classPath = ['aprendiz', 'guerreiro'];
+    open('proficiencias'); const user = userEvent.setup();
+    expect(document.querySelector('.blockedbar')).toBeTruthy();
+    expect(screen.queryByLabelText('Fogo')).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Ver afinidade' }));
+    expect(screen.getByRole('dialog', { name: 'Classes' })).toBeTruthy();
+  });
+  it('Magias: nomes em português; condições abrem em popover', async () => {
+    open('magias'); const user = userEvent.setup();
+    await user.click(screen.getAllByRole('button', { name: /Condições/ })[0]);
+    expect(screen.getByRole('dialog', { name: /Condições de/ })).toBeTruthy();
+  });
+  it('Talentos: nós são rect + image e a aba tem role=tab com aria-selected', () => {
+    open('talentos');
+    const node = document.querySelector('.tgrid-node')!;
+    expect(node.querySelector('rect')).toBeTruthy(); expect(node.querySelector('image')).toBeTruthy();
+    expect(document.querySelector('.tgrid-node.major .tgrid-frame')).toBeTruthy();
+    for (const tab of screen.getAllByRole('tab')) expect(tab.getAttribute('aria-selected')).toBeTruthy();
+  });
+});

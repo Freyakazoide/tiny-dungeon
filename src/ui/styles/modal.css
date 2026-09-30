@@ -15,3 +15,8 @@
 }
 .m-body .talent-character-tabs { display: none; } /* o seletor de personagem já está no cabeçalho do modal */
 .m-body .tgrid-svg { height: min(56vh, 620px); }
+@media (max-width: 720px) {
+  .tabs { overflow-x: auto; scrollbar-width: none; } .tabs button { flex: none; }
+  .m-head { flex-wrap: wrap; } .m-title small { display: none; } .who { max-width: 100%; order: 3; flex-basis: 100%; margin-left: 0; }
+  .ch-attr .pk-tip { left: 0; width: min(250px, 80vw); }
+}

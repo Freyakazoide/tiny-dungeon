@@ -1,0 +1,21 @@
+/* Pele pixel dos demais menus (Fase 9 D): leva o visual do kit às caixas, cabeçalhos e botões que ainda usam as classes antigas. */
+.card, .bag, .shop-box, .metric-card, .analyzer-block, .system-block, .history-card, .evolution-card, .hunt-card, .skill-card, .spell-card, .slot-box, .stone-panel, .gear-shop, .supplies, .profit-block {
+  background: linear-gradient(var(--face), var(--face-2)); border: var(--px) solid var(--outline); border-radius: 0;
+  box-shadow: inset 0 0 0 1px var(--edge), inset 0 3px 0 1px #2f3a49, inset 0 -3px 0 #0f141b;
+}
+.card h3, .analyzer-block h3, .system-block h3, .profit-block h3 { font: 700 12px Georgia, serif; letter-spacing: .14em; text-transform: uppercase; color: var(--gold); display: flex; align-items: center; gap: 8px; }
+.card h3:after, .analyzer-block h3:after, .system-block h3:after { content: ""; flex: 1; height: 2px; background: linear-gradient(90deg, #5b4a27, transparent); }
+.subsection-heading, .section-heading { display: flex; align-items: center; gap: 8px; }
+.subsection-heading h3, .section-heading h2 { margin: 0; font: 700 12px Georgia, serif; letter-spacing: .14em; text-transform: uppercase; color: var(--gold); }
+.subsection-heading:after { content: ""; flex: 1; height: 2px; background: linear-gradient(90deg, #5b4a27, transparent); order: 2; }
+.subsection-heading small, .section-note { color: var(--muted); font-size: 11px; order: 3; margin-left: auto; }
+.empty-state { background: #0f151d; border: 2px dashed #3a4350; border-radius: 0; }
+.hunt-card.current { box-shadow: inset 0 0 0 1px var(--gold-2), inset 0 3px 0 1px #2f3a49, inset 0 -3px 0 #0f141b; }
+.hunt-thumb, .hunt-thumb-fallback, .hunt-card img { image-rendering: pixelated; }
+.soon-seal, .tank-seal, .req-mark, .eyebrow { border-radius: 0; }
+.progress, .progress-track, .bar, .mini { border-radius: 0; }
+.kv { border-bottom: 1px dashed #2a323d; }
+.segmented button.on, .segmented button.active { box-shadow: inset 0 2px 0 #c9a55c, inset 0 0 0 1px #3b4656; color: var(--gold); }
+.modal button.primary, .modal .btn.primary { background: linear-gradient(#8a6b34, #5d4623); box-shadow: inset 0 2px 0 #c9a55c, inset 0 -3px 0 #3a2a12; color: #fff6df; }
+.modal .warn { color: var(--warn); } .modal .danger { color: var(--danger); }
+.item-icon img, .slot-box img, .hunt-card img, .sprite-thumb { image-rendering: pixelated; }
