@@ -1,11 +1,12 @@
 import type { GameState, HuntStatus } from '../core/types';
-import { CLASSES, kitOfNode, kitsOfPath } from '../data/classes';
+import { CLASSES, kitOfNode } from '../data/classes';
 import { ITEMS } from '../data/items';
 import { MONSTERS } from '../data/monsters';
 import { DEFAULT_HUNT, HUNT_BY_ID } from '../data/hunts';
 import { DEFAULT_SPRITE, defaultSpriteFor, isKnownSprite } from '../data/sprites';
 import { SPELLS } from '../data/spells';
-import { talentById } from '../data/talents';
+import { validTalentRanks } from '../systems/talentGrid';
+import { rootIdOf, TALENT_TREES } from '../data/talentTrees';
 import { CLASS_BY_ID } from '../rpg/classTree';
 import { MAX_PROFICIENCY_LEVEL, PROFICIENCY_IDS } from '../rpg/proficiencies';
 import { COUNTER_IDS } from '../rpg/profile';
@@ -41,6 +42,15 @@ export function migrateGameState(value:unknown):unknown{
     delete p.offlineTarget;
     if(!Array.isArray(p.offlineHistory))p.offlineHistory=[];
   }
+  // Fase 6: talentos em grade. O modelo antigo (talents + talentPoints) é reembolsado (os pontos agora vêm do nível);
+  // ranks que não fecham com as regras de compra voltam a zero talentos (só as Origens), sem invalidar o save.
+  for(const c of characters)if(record(c.profile)&&Array.isArray(c.profile.classPath)){
+    const path=(c.profile.classPath as unknown[]).filter((id):id is string=>typeof id==='string');
+    const origins=()=>Object.fromEntries(path.filter(id=>id in TALENT_TREES).map(id=>[rootIdOf(id),1]));
+    const legacy=c.talentRanks===undefined;
+    delete c.talents;delete c.talentPoints;
+    if(legacy||!validTalentRanks(c.talentRanks,path,finite(c.profile.level)?Number(c.profile.level):1))c.talentRanks=origins();
+  }
   if(record(migrated.inventory)&&record(migrated.inventory.capacity)&&finite(migrated.inventory.capacity.supply)&&Number(migrated.inventory.capacity.supply)<200)migrated.inventory.capacity.supply=200;
   const analyzers=[migrated.analyzer,...(Array.isArray(migrated.history)?migrated.history:[])];
   for(const raw of analyzers)if(record(raw)&&!record(raw.suppliesUsed))raw.suppliesUsed={};
@@ -67,7 +77,7 @@ export function validateGameState(value:unknown):value is GameState{
   if(!finite(value.wave)||Number(value.wave)<0||typeof value.huntId!=='string'||!HUNT_BY_ID[value.huntId]||Number(value.wave)>=HUNT_BY_ID[value.huntId].waves.length||!finite(value.cycle)||!finite(value.gold))return false;
   const characters=value.characters as unknown[];if(characters.length>5)return false;
   const ids=new Set<string>();
-  for(const raw of characters){if(!record(raw)||typeof raw.id!=='string'||typeof raw.name!=='string'||typeof raw.classId!=='string'||!(raw.classId in CLASSES)||!validProfile(raw.profile)||raw.classId!==kitOfNode((raw.profile as {classId:string}).classId)||(raw.row!=='front'&&raw.row!=='back')||typeof raw.isTank!=='boolean'||typeof raw.spriteId!=='string'||!finite(raw.talentPoints)||Number(raw.talentPoints)<0||!record(raw.talents)||!record(raw.equipment)||!Array.isArray(raw.spellSlots)||!record(raw.spellConditions)||!record(raw.cooldowns)||!Array.isArray(raw.effects)||!record(raw.helper))return false;if(ids.has(raw.id))return false;ids.add(raw.id);if((raw.spellSlots as unknown[]).some(id=>typeof id!=='string'||!SPELLS.some(s=>s.id===id)))return false;for(const [talentId,rank] of Object.entries(raw.talents)){const talent=talentById(talentId);if(!talent||!kitsOfPath(((raw.profile as Record<string,unknown>).classPath as string[])).includes(talent.classId)||!finite(rank)||Number(rank)<0||!Number.isInteger(rank))return false;}}
+  for(const raw of characters){if(!record(raw)||typeof raw.id!=='string'||typeof raw.name!=='string'||typeof raw.classId!=='string'||!(raw.classId in CLASSES)||!validProfile(raw.profile)||raw.classId!==kitOfNode((raw.profile as {classId:string}).classId)||(raw.row!=='front'&&raw.row!=='back')||typeof raw.isTank!=='boolean'||typeof raw.spriteId!=='string'||!record(raw.talentRanks)||!record(raw.equipment)||!Array.isArray(raw.spellSlots)||!record(raw.spellConditions)||!record(raw.cooldowns)||!Array.isArray(raw.effects)||!record(raw.helper))return false;if(ids.has(raw.id))return false;ids.add(raw.id);if((raw.spellSlots as unknown[]).some(id=>typeof id!=='string'||!SPELLS.some(s=>s.id===id)))return false;}
   if((value.team as unknown[]).some(id=>typeof id!=='string'||!ids.has(id))||(value.team as unknown[]).length>4)return false;
   for(const raw of value.monsters as unknown[]){if(!record(raw)||typeof raw.uid!=='string'||typeof raw.defId!=='string'||!MONSTERS[raw.defId]||!finite(raw.hp)||!finite(raw.maxHp)||!finite(raw.cooldown)||typeof raw.alive!=='boolean')return false;}
   const inventory=value.inventory as Record<string,unknown>;if(!record(inventory.capacity))return false;

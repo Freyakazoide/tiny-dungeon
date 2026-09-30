@@ -118,3 +118,26 @@
 .sprite-picker button{display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 6px;min-width:64px}
 .sprite-picker button.selected{border-color:var(--bronze-light);box-shadow:inset 0 0 0 1px var(--bronze)}
 .sprite-thumb{width:40px;height:56px;object-fit:contain;image-rendering:pixelated}.sprite-block{display:block;width:26px;height:38px;border:2px solid #e4ddcf}
+
+/* Fase 6: grade de talentos em SVG */
+.tgrid-tools{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px}.tgrid-tools input{flex:1;min-width:200px;background:#0b1016;border:1px solid #434b56;color:#fff;padding:8px}.tgrid-lanes{display:flex;gap:10px;font-size:11px;color:#98a1ac}.tgrid-lanes em{font-style:normal}
+.kit-chips button small{opacity:.7;margin-left:4px}.kit-chips button.future{opacity:.4;cursor:not-allowed}
+.talent-currency small{font-size:9px;color:#8f97a1}
+.tgrid-svg{display:block;width:100%;height:min(74vh,760px);min-height:420px;background:#0d0e10;border:1px solid #29313a;touch-action:none;cursor:grab;user-select:none}.tgrid-svg:active{cursor:grabbing}
+.tgrid-edge{stroke:#5b3438;stroke-width:2;opacity:.85}.tgrid-edge.lit{stroke:#e0a24a;opacity:1;stroke-width:2.5}
+.tgrid-node{cursor:pointer;outline:none}.tgrid-node .tgrid-ring{fill:#151719;stroke:var(--node-color);stroke-width:2.5}.tgrid-node .tgrid-core{fill:var(--node-color);opacity:.28}
+.tgrid-node.acquired .tgrid-core,.tgrid-node.maxed .tgrid-core{opacity:1}.tgrid-node.maxed .tgrid-ring{stroke-width:4}
+.tgrid-node.available .tgrid-ring{filter:drop-shadow(0 0 5px var(--node-color));stroke-width:3}.tgrid-node.locked{opacity:.4}
+.tgrid-node.major .tgrid-ring,.tgrid-node.root .tgrid-ring{fill:#2b2314;stroke-width:4}.tgrid-node.keystone .tgrid-ring{fill:#3a1234;stroke-width:5}
+.tgrid-node.selected .tgrid-ring{stroke:#fff}.tgrid-node:focus-visible .tgrid-ring{stroke:#fff;stroke-dasharray:4 3}
+.tgrid-node.match .tgrid-ring{filter:drop-shadow(0 0 8px #fff);stroke:#fff}
+.tgrid-rank{fill:#e8dcc0;font:700 10px sans-serif;paint-order:stroke;stroke:#0d0e10;stroke-width:3px}.tgrid-name{fill:#e8dcc0;font:10px Georgia,serif;paint-order:stroke;stroke:#0d0e10;stroke-width:3px;pointer-events:none}
+.talent-legend i.ring-gold{border-color:#d9a63f;border-radius:50%;background:#2b2314}.talent-legend i.ring-pink{border-color:#ff6fd0;border-radius:50%;background:#3a1234}
+.tgrid-badge{width:44px;height:44px;border-radius:50%;border:3px solid var(--node-color);background:radial-gradient(circle,var(--node-color) 0 34%,#151719 36%)}
+.tgrid-detail{margin-bottom:14px}.tgrid-mechanic{font-size:11px;padding:8px;border-left:2px solid var(--node-color);background:#151b23}.tgrid-mechanic small{display:block;margin-top:4px;color:#8f97a1}
+.tgrid-missing{margin:10px 0;padding:8px 8px 8px 22px;border-left:2px solid #a05a5f;background:#26171b;color:#dda0a3;font-size:10px}
+.tgrid-actions{display:grid;gap:6px}.tgrid-hint{font-size:11px;color:#98a1ac}.tgrid-hint kbd{border:1px solid #555;padding:0 4px;font-size:10px}
+.tgrid-bonuses{margin-top:14px;padding-top:12px;border-top:1px solid #29313a}.tgrid-bonuses ul{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:2px;max-height:220px;overflow:auto}.tgrid-bonuses li{display:flex;justify-content:space-between;gap:8px;font-size:10px;padding:3px 6px;border-left:3px solid var(--node-color);background:#111922}.tgrid-bonuses li b{color:#e8dcc0}
+@media(max-width:720px){.tgrid-svg{height:60vh;min-height:360px}}
+.skill-card em.affinity-seal{border-color:#3d6f6f;color:#8ad4d4}.skill-card em.affinity-seal.blocked{border-color:#7a3a3a;color:#e08a8a}.affinity-line{color:#8ad4d4}
+.skill-card>div:first-child{flex-wrap:wrap;row-gap:3px}

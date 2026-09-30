@@ -4,12 +4,14 @@ import { partyState } from '../core/testing';
 import { monsterHit } from './combat';
 import { gainExperience, trainByTime, trainProficiency, xpForLevel } from './progression';
 import { triesForNextLevel } from '../rpg/curves';
+import { pointsAt } from '../data/talentTrees';
+import { talentPointsAvailable } from './talentGrid';
 describe('progressão',()=>{
   it('preserva XP excedente em múltiplos níveis de personagem',()=>{
     const character=createCharacter('squire');
     const amount=xpForLevel(1)+xpForLevel(2)+37;
     gainExperience(character,amount);
-    expect(character.profile.level).toBe(3);expect(character.profile.xp).toBe(37);expect(character.talentPoints).toBe(2);
+    expect(character.profile.level).toBe(3);expect(character.profile.xp).toBe(37);expect(talentPointsAvailable(character)).toBe(pointsAt(3));
   });
   it('preserva tries excedentes em múltiplos níveis de proficiência',()=>{
     const character=createCharacter('squire');

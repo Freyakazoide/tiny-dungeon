@@ -7,6 +7,7 @@ import { OFFLINE_HUNT_SHARE } from '../data/balance';
 import { HUNTS } from '../data/hunts';
 import { runtime } from '../rpg/runtime';
 import { elementFocus, xpForLevel } from '../systems/progression';
+import { talentPointsAvailable } from '../systems/talentGrid';
 import type { Character } from './types';
 
 afterEach(() => { vi.restoreAllMocks(); runtime.offlineShare = OFFLINE_HUNT_SHARE; });
@@ -25,7 +26,7 @@ describe('Bloco C — offline v2: 25% da hunt mais avançada', () => {
     expect(after.gold - gold).toBe(Math.round(.25 * 27000 * 10));
     expect(after.offlineReport).toMatchObject({ hunt: 'Floresta Sombria', share: .25, gold: 67500, seconds: 36000 });
     expect(after.offlineReport!.entries.every(x => x.xp === 100000 && x.levelsGained > 0)).toBe(true);
-    expect(after.characters[0].talentPoints).toBeGreaterThan(0); // níveis renderam pontos de talento, como no combate
+    expect(talentPointsAvailable(after.characters[0])).toBeGreaterThan(0); // níveis renderam pontos de talento, como no combate
   });
   it('a referência é a maior hunt com chefe derrotado; entrar numa hunt sem derrotar o chefe não a torna referência', () => {
     expect(referenceHunt({}).id).toBe('catacumbas');

@@ -5,6 +5,8 @@ import { partyState } from '../core/testing';
 import { exportBackup, importBackup } from './backup';
 import { loadMigratedState, TinyDungeonDatabase } from './repository';
 import { cloneValidatedState } from './validation';
+import { pointsAt } from '../data/talentTrees';
+import { talentPointsAvailable } from '../systems/talentGrid';
 
 const databases:TinyDungeonDatabase[]=[];
 afterEach(async()=>{for(const database of databases.splice(0))await database.delete();});
@@ -30,11 +32,28 @@ describe('persistência',()=>{
     const restored=cloneValidatedState(legacy);expect(restored.analyzer.suppliesUsed).toEqual({});expect(restored.history[0].suppliesUsed).toEqual({});
   });
 
-  it('preserva pontos disponíveis e ranks de talentos de saves anteriores',()=>{
+  it('preserva os ranks de talentos em grade no backup',()=>{
     const state=partyState();const knight=state.characters.find(character=>character.classId==='squire')!;
-    knight.talentPoints=4;knight.talents={squire_talent_0:2,squire_talent_5:1};
+    knight.profile.level=10;knight.talentRanks={'squire.root':1,'squire.r1c2':2,'squire.r1c3':1};
     const restored=importBackup(exportBackup(state));const saved=restored.characters.find(character=>character.classId==='squire')!;
-    expect(saved.talentPoints).toBe(4);expect(saved.talents).toEqual({squire_talent_0:2,squire_talent_5:1});
+    expect(saved.talentRanks).toEqual({'squire.root':1,'squire.r1c2':2,'squire.r1c3':1});expect(talentPointsAvailable(saved)).toBe(pointsAt(10)-3);
+  });
+  it('migra o modelo antigo de talentos: reembolsa tudo e concede a Origem',()=>{
+    const legacy=partyState() as unknown as {characters:Record<string,unknown>[]};
+    for(const c of legacy.characters){delete c.talentRanks;c.talentPoints=4;c.talents={squire_talent_0:2};}
+    const restored=cloneValidatedState(legacy);
+    for(const c of restored.characters){expect(c.talentRanks).toEqual({'squire.root':1});expect((c as unknown as Record<string,unknown>).talents).toBeUndefined();expect((c as unknown as Record<string,unknown>).talentPoints).toBeUndefined();}
+  });
+  it('ranks que violam as regras de compra voltam a zero talentos sem invalidar o save',()=>{
+    const state=partyState();const c=state.characters[0];c.profile.level=10;
+    c.talentRanks={'squire.root':1,'squire.r4c3':1}; // Major sem pais, sem trava de linha
+    expect(cloneValidatedState(state).characters[0].talentRanks).toEqual({'squire.root':1});
+    c.talentRanks={'squire.root':1,'squire.r1c2':5,'squire.r1c3':5,'squire.r1c4':5,'squire.r2c3':3}; // 18 pts ≤ pointsAt(10) = 25 e todas as regras fecham
+    expect(cloneValidatedState(state).characters[0].talentRanks).toEqual(c.talentRanks);
+    c.profile.level=3;c.talentRanks={'squire.root':1,'squire.r1c2':5,'squire.r1c3':5,'squire.r1c4':5,'squire.r2c3':3}; // 21 pts > pointsAt(3)=6
+    expect(cloneValidatedState(state).characters[0].talentRanks).toEqual({'squire.root':1});
+    c.profile.level=10;c.talentRanks={'squire.root':1,'guerreiro.r1c2':1}; // grade fora do caminho
+    expect(cloneValidatedState(state).characters[0].talentRanks).toEqual({'squire.root':1});
   });
 
   it('retoma uma transição salva sem duplicar XP, ouro ou monstros',()=>{

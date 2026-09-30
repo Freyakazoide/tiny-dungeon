@@ -7,6 +7,8 @@ import { cumulativeTries } from '../rpg/curves';
 import { runtime } from '../rpg/runtime';
 import { PROFICIENCY_IDS, type ProficiencyId } from '../rpg/proficiencies';
 import { spellById } from '../data/spells';
+import { pointsAt } from '../data/talentTrees';
+import { talentPointsAvailable } from '../systems/talentGrid';
 
 afterEach(() => { runtime.trainScale = 1; runtime.xpScale = 1; vi.restoreAllMocks(); });
 
@@ -125,7 +127,7 @@ describe('B — ferramentas de teste', () => {
   });
   it('comandos alteram o perfil e validam ids', () => {
     const { e, d, id } = dev(); const c = e.getSnapshot().characters[0];
-    d.setLevel(id, 25); expect(c.profile.level).toBe(25); expect(c.talentPoints).toBe(24);
+    d.setLevel(id, 25); expect(c.profile.level).toBe(25); expect(talentPointsAvailable(c)).toBe(pointsAt(25));
     d.setProf(id, 'fire', 35); expect(c.profile.proficiencies.fire).toEqual({ level: 35, tries: 0 });
     d.addTries(id, 'fire', 5000); expect(total(c, 'fire')).toBe(cumulativeTries('fire', 10, 35) + 5000);
     d.addCounter(id, 'crits', 5000); expect(c.profile.counters.crits).toBe(5000);

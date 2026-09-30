@@ -1,4 +1,5 @@
 import { xpForLevel, triesForNextLevel } from './curves';
+import { affinityFor } from './affinity';
 import { MAX_PROFICIENCY_LEVEL, PROFICIENCY_IDS, START_LEVEL, type ProficiencyId } from './proficiencies';
 
 /** Contadores vitalícios usados nos requisitos de algumas subclasses. */
@@ -52,8 +53,15 @@ export function gainExperience(profile: ProgressProfile, amount: number) {
   }
 }
 
-/** Soma tries e sobe quantos níveis couberem (aceita quantidades grandes, como no offline). */
-export function gainTries(profile: ProgressProfile, id: ProficiencyId, amount: number) {
+/**
+ * Soma tries e sobe quantos níveis couberem (aceita quantidades grandes, como no offline). As tries valem
+ * `amount × afinidade da classe × (1 + bonusPct/100)`; `bonusPct` é o talento `t_<proficiência>`. Afinidade 0
+ * (proficiência bloqueada) ignora tudo: o nível congela e nem `lastTrained` muda.
+ */
+export function gainTries(profile: ProgressProfile, id: ProficiencyId, amount: number, bonusPct = 0) {
+  const affinity = affinityFor(profile, id);
+  if (affinity <= 0) return;
+  amount *= affinity * (1 + bonusPct / 100);
   const progress = profile.proficiencies[id];
   progress.tries += amount;
   if (profile.lastTrained !== id) { profile.prevTrained = profile.lastTrained; profile.lastTrained = id; }

@@ -3,6 +3,7 @@ import type { Character } from '../game/core/types';
 import { gameStore } from '../game/core/GameStore';
 import { CLASS_BY_ID, childrenOf, isPlayable, type ClassNode } from '../game/rpg/classTree';
 import { NODE_PASSIVES } from '../game/rpg/passives';
+import { affinitySummary } from '../game/rpg/affinity';
 import { formatEta } from '../game/rpg/curves';
 import { nextSteps, pathNames, requirementRows, treeSplit, type RequirementRow } from '../game/systems/guide';
 import { compact } from './format';
@@ -22,7 +23,7 @@ function StepCard({ character, node, rows, ready }: { character: Character; node
   const [confirming, setConfirming] = useState(false);
   const playable = isPlayable(node.id);
   return <article className={`evolution-card ${ready ? 'ready' : ''}`}>
-    <div><strong>{node.name}{!playable && <em className="soon-seal">Em breve</em>}</strong>{node.specialty && <small>{node.specialty}</small>}{NODE_PASSIVES[node.id] && <small>Passiva — {NODE_PASSIVES[node.id].name}: {NODE_PASSIVES[node.id].description}</small>}</div>
+    <div><strong>{node.name}{!playable && <em className="soon-seal">Em breve</em>}</strong>{node.specialty && <small>{node.specialty}</small>}{affinitySummary(node.id) && <small className="affinity-line">Treino: {affinitySummary(node.id)}</small>}{NODE_PASSIVES[node.id] && <small>Passiva — {NODE_PASSIVES[node.id].name}: {NODE_PASSIVES[node.id].description}</small>}</div>
     <ul className="req-list">{rows.map(row => <RequirementLine key={row.key} row={row} />)}</ul>
     {!playable && <small className="how-to">Sem kit pronto: a evolução fica bloqueada para ninguém ficar preso numa classe vazia.</small>}
     {ready && playable && (confirming

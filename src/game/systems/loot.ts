@@ -9,8 +9,8 @@ export function addItem(state:GameState,itemId:string,qty:number) {
   if(!accepted) return 0; if(stack) stack.quantity+=accepted; else list.push({itemId,quantity:accepted}); return accepted;
 }
 export function removeItem(list:InventoryStack[],itemId:string,qty=1){ const s=list.find(x=>x.itemId===itemId); if(!s||s.quantity<qty)return false; s.quantity-=qty;if(!s.quantity)list.splice(list.indexOf(s),1);return true; }
-export function rollLoot(state:GameState,monster:MonsterDef,rng=Math.random){
+export function rollLoot(state:GameState,monster:MonsterDef,rng=Math.random,chanceMult=1){
   const found:{itemId:string;quantity:number}[]=[];
-  for(const entry of monster.loot) if(rng()<=entry.chance){const quantity=addItem(state,entry.itemId,randomInt(entry.min,entry.max,rng));if(quantity){found.push({itemId:entry.itemId,quantity});state.analyzer.loot[entry.itemId]=(state.analyzer.loot[entry.itemId]??0)+quantity;state.analyzer.lootValue+=(itemById(entry.itemId)?.value??0)*quantity;}}
+  for(const entry of monster.loot) if(rng()<=Math.min(1,entry.chance*chanceMult)){const quantity=addItem(state,entry.itemId,randomInt(entry.min,entry.max,rng));if(quantity){found.push({itemId:entry.itemId,quantity});state.analyzer.loot[entry.itemId]=(state.analyzer.loot[entry.itemId]??0)+quantity;state.analyzer.lootValue+=(itemById(entry.itemId)?.value??0)*quantity;}}
   return found;
 }

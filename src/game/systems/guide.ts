@@ -5,7 +5,7 @@ import { evolutionOptions } from '../rpg/evolution';
 import { PROFICIENCIES, PROFICIENCY_IDS, type ProficiencyId } from '../rpg/proficiencies';
 import { COUNTER_IDS, type CounterId } from '../rpg/profile';
 import { runtime } from '../rpg/runtime';
-import { trainingNow } from './progression';
+import { trainingNow, trainMultiplier } from './progression';
 
 export const COUNTER_NAMES: Record<CounterId, string> = {
   crits: 'Críticos', bossCrits: 'Críticos em chefes', damageTaken: 'Dano sofrido', healingDone: 'Cura total',
@@ -43,7 +43,7 @@ export function requirementRows(character: Character, node: ClassNode): Requirem
   const rows: RequirementRow[] = [{ key: 'level', kind: 'level', label: 'Nível do personagem', have: profile.level, need: level, met: profile.level >= level, howTo: 'ganhe XP em combate', untracked: false }];
   for (const [id, need] of Object.entries(skills) as [ProficiencyId, number][]) {
     const p = profile.proficiencies[id], met = p.level >= need, training = trainingNow(character, id);
-    rows.push({ key: id, kind: 'skill', label: PROFICIENCIES[id].name, have: p.level, need, met, howTo: HOW_TO_PROFICIENCY[id], untracked: false, training, eta: met || !training ? null : etaSeconds(id, p.level, p.tries, need, rate) });
+    rows.push({ key: id, kind: 'skill', label: PROFICIENCIES[id].name, have: p.level, need, met, howTo: HOW_TO_PROFICIENCY[id], untracked: false, training, eta: met || !training || !trainMultiplier(character, id) ? null : etaSeconds(id, p.level, p.tries, need, rate * trainMultiplier(character, id)) });
   }
   for (const [id, need] of Object.entries(counters) as [CounterId, number][]) {
     const untracked = UNTRACKED_COUNTERS.includes(id), have = profile.counters[id] ?? 0;

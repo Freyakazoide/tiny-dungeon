@@ -1,75 +1,177 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
-import type { Character, GameState, Stats, TalentDef } from '../game/core/types';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
+import type { Character, GameState } from '../game/core/types';
 import { gameStore } from '../game/core/GameStore';
-import { CLASSES, kitsOfPath } from '../game/data/classes';
-import { TALENT_EFFECT_NAMES, talentById, talentsForClass } from '../game/data/talents';
-import { characterStats, classLabel, spentTalentPoints, talentAvailability, talentBonus, talentBonusText, talentRespecCost } from '../game/systems/progression';
-import { colorHex, statNames } from './format';
+import { CLASSES } from '../game/data/classes';
+import { CLASS_BY_ID } from '../game/rpg/classTree';
+import { CATEGORY_NAMES, EFFECTS, MECHANICS_IMPLEMENTED, TALENT_TREES, type EffectCategory, type TalentNodeDef } from '../game/data/talentTrees';
+import { classLabel } from '../game/systems/progression';
+import { canBuy, effectLabel, formatEffectValue, investedPoints, nodeInPath, rankOf, talentPointsAvailable, talentRespecCost, talentTotals } from '../game/systems/talentGrid';
+import { colorHex } from './format';
 
-type Confirmation='invest'|'respec'|null;
-const percentStats=new Set<keyof Stats>(['crit','resistance']);
+/** Cor de cada categoria de efeito (igual à referência: ofensa vermelho, vida verde, defesa azul, especial rosa, utilidade âmbar, treino ciano). */
+const CATEGORY_COLORS: Record<EffectCategory, string> = { offense: '#e05a5a', life: '#3fb970', guard: '#4b80e6', special: '#e05ac8', utility: '#d9a63f', train: '#3cc4c4' };
+const ROOT_COLOR = '#d9a63f', KEYSTONE_COLOR = '#ff6fd0';
+const KIND_NAMES = { root: 'Origem', minor: 'Minor', notable: 'Notable', major: 'Major', keystone: 'Keystone' } as const;
+const RADIUS = { root: 20, minor: 10, notable: 15, major: 24, keystone: 32 } as const;
+const DX = 66, DY = 68, PAD = 46;
 
-function valueText(key:keyof Stats,value:number){
-  if(percentStats.has(key))return `${Math.round(value*1000)/10}%`;
-  if(key==='attackSpeed')return `${value.toFixed(2)}/s`;
-  return String(Math.round(value));
+const nodeColor = (node: TalentNodeDef) =>
+  node.kind === 'root' ? ROOT_COLOR : node.kind === 'keystone' ? KEYSTONE_COLOR : node.kind === 'major' ? ROOT_COLOR : CATEGORY_COLORS[EFFECTS[node.effects[0]?.code]?.category ?? 'utility'];
+const nodeCategory = (node: TalentNodeDef) => (node.kind === 'root' ? 'Origem' : CATEGORY_NAMES[EFFECTS[node.effects[0]?.code]?.category ?? 'utility']);
+const normalize = (text: string) => text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const isCoarse = () => typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches;
+
+type Confirmation = { kind: 'buy'; id: string } | { kind: 'respec'; treeId?: string } | null;
+interface View { x: number; y: number; k: number; }
+const HOME: View = { x: 0, y: 0, k: 1 };
+
+function TalentCanvas({ character, treeId, selectedId, onSelect, onActivate, query }: {
+  character: Character; treeId: string; selectedId: string | null; query: string;
+  onSelect: (id: string) => void; onActivate: (node: TalentNodeDef, event: { shiftKey: boolean }) => void;
+}) {
+  const tree = TALENT_TREES[treeId];
+  const maxY = Math.max(...tree.nodes.map(n => n.y));
+  const width = 6 * DX + PAD * 2, height = maxY * DY + PAD * 2;
+  const pos = (node: TalentNodeDef) => ({ cx: PAD + node.x * DX, cy: PAD + (maxY - node.y) * DY });
+  const byId = useMemo(() => new Map(tree.nodes.map(n => [n.id, n])), [tree]);
+  const [view, setView] = useState<View>(HOME);
+  const svgRef = useRef<SVGSVGElement>(null);
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const gesture = useRef({ moved: false, pinch: 0 });
+  useEffect(() => setView(HOME), [treeId]);
+  // A roda precisa de um listener não passivo para não rolar a página junto com o zoom.
+  useEffect(() => {
+    const svg = svgRef.current; if (!svg) return;
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      const rect = svg.getBoundingClientRect(), px = event.clientX - rect.left, py = event.clientY - rect.top;
+      setView(v => { const k = Math.min(3, Math.max(.6, v.k * (event.deltaY < 0 ? 1.12 : 1 / 1.12))); const f = k / v.k; return { k, x: px - (px - v.x) * f, y: py - (py - v.y) * f }; });
+    };
+    svg.addEventListener('wheel', onWheel, { passive: false });
+    return () => svg.removeEventListener('wheel', onWheel);
+  }, []);
+  const down = (event: ReactPointerEvent) => { pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY }); gesture.current = { moved: false, pinch: 0 }; };
+  const move = (event: ReactPointerEvent) => {
+    const previous = pointers.current.get(event.pointerId); if (!previous) return;
+    pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    const points = [...pointers.current.values()];
+    if (points.length === 2) {
+      const distance = Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
+      if (gesture.current.pinch) { const f = distance / gesture.current.pinch; setView(v => ({ ...v, k: Math.min(3, Math.max(.6, v.k * f)) })); }
+      gesture.current = { moved: true, pinch: distance }; return;
+    }
+    const dx = event.clientX - previous.x, dy = event.clientY - previous.y;
+    if (Math.abs(dx) + Math.abs(dy) > 0) { if (Math.hypot(dx, dy) > 1) gesture.current.moved = true; setView(v => ({ ...v, x: v.x + dx, y: v.y + dy })); }
+  };
+  const up = (event: ReactPointerEvent) => { pointers.current.delete(event.pointerId); };
+  const highlighted = (node: TalentNodeDef) => !!query && node.effects.some(e => normalize(`${effectLabel(e.code)} ${e.code}`).includes(query));
+  const nodeState = (node: TalentNodeDef) => {
+    const rank = rankOf(character, node.id);
+    return rank >= node.maxRank && node.kind !== 'root' ? 'maxed' : rank > 0 ? 'acquired' : canBuy(character, node.id).ok ? 'available' : 'locked';
+  };
+  return <svg ref={svgRef} className="tgrid-svg" viewBox={`0 0 ${width} ${height}`} role="group" aria-label={`Grade de talentos: ${tree.name}`}
+    onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onPointerLeave={up}>
+    <g transform={`translate(${view.x} ${view.y}) scale(${view.k})`}>
+      {tree.nodes.flatMap(node => node.parents.map(parentId => {
+        const parent = byId.get(parentId)!, a = pos(parent), b = pos(node);
+        const lit = rankOf(character, node.id) >= 1 && rankOf(character, parentId) >= 1;
+        return <line key={`${parentId}>${node.id}`} className={`tgrid-edge ${lit ? 'lit' : ''}`} x1={a.cx} y1={a.cy} x2={b.cx} y2={b.cy} />;
+      }))}
+      {tree.nodes.map(node => {
+        const { cx, cy } = pos(node), r = RADIUS[node.kind], rank = rankOf(character, node.id), status = nodeState(node), color = nodeColor(node);
+        const dimmed = !!query && !highlighted(node);
+        const big = node.kind === 'major' || node.kind === 'keystone' || node.kind === 'root';
+        return <g key={node.id} className={`tgrid-node ${status} ${node.kind} ${selectedId === node.id ? 'selected' : ''} ${highlighted(node) ? 'match' : ''}`} style={{ '--node-color': color, opacity: dimmed ? .25 : undefined } as CSSProperties}
+          role="button" tabIndex={0} aria-label={`${node.name}, ${rank} de ${node.maxRank}`}
+          onClick={event => { if (gesture.current.moved) return; onSelect(node.id); if (node.kind !== 'root') onActivate(node, event); }}
+          onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onSelect(node.id); if (node.kind !== 'root') onActivate(node, event); } }}>
+          <title>{node.name}</title>
+          <circle className="tgrid-ring" cx={cx} cy={cy} r={r} />
+          <circle className="tgrid-core" cx={cx} cy={cy} r={big ? r * .58 : r * .5} />
+          {(rank > 0 && node.kind !== 'root' && node.maxRank > 1 || selectedId === node.id) && node.kind !== 'root' && <text className="tgrid-rank" x={cx} y={cy + r + 11} textAnchor="middle">{rank}/{node.maxRank}</text>}
+          {node.kind !== 'minor' && node.kind !== 'root' && <text className="tgrid-name" x={cx} y={cy - r - 5} textAnchor="middle">{node.name}</text>}
+        </g>;
+      })}
+    </g>
+  </svg>;
 }
 
-function previewCharacter(character:Character,talent:TalentDef){
-  const preview:Character={...character,talents:{...character.talents}};
-  preview.talents[talent.id]=(preview.talents[talent.id]??0)+1;
-  return preview;
+function NodeDetail({ character, node, gold, confirmation, setConfirmation }: { character: Character; node: TalentNodeDef; gold: number; confirmation: Confirmation; setConfirmation: (value: Confirmation) => void }) {
+  const rank = rankOf(character, node.id), check = canBuy(character, node.id), totals = talentTotals(character);
+  const color = nodeColor(node), mechanicReady = !!node.mechanic && MECHANICS_IMPLEMENTED.has(node.mechanic.id);
+  const confirming = confirmation?.kind === 'buy' && confirmation.id === node.id;
+  const needsConfirm = node.kind === 'major' || node.kind === 'keystone';
+  const buy = () => { if (needsConfirm && !confirming) setConfirmation({ kind: 'buy', id: node.id }); else { gameStore.invest(character.id, node.id); setConfirmation(null); } };
+  void gold;
+  return <div className="tgrid-detail" style={{ '--node-color': color } as CSSProperties}>
+    <div className="talent-detail-title"><span className="tgrid-badge" aria-hidden="true" /><div><span>{KIND_NAMES[node.kind]} · {nodeCategory(node)}</span><h3>{node.name}</h3><small>{node.kind === 'root' ? 'Concedida ao entrar na classe' : `Rank ${rank} / ${node.maxRank} · ${node.costPerRank} ${node.costPerRank === 1 ? 'ponto' : 'pontos'} por rank`}</small></div></div>
+    {node.effects.length > 0 && <dl className="talent-facts">{node.effects.map(effect => <div key={effect.code}><dt>{effectLabel(effect.code)}</dt>
+      <dd>{formatEffectValue(effect.code, effect.perRank)} por rank{rank > 0 && <> · <b>{formatEffectValue(effect.code, effect.perRank * rank)}</b> aqui</>} · total {formatEffectValue(effect.code, totals[effect.code] ?? 0)}</dd></div>)}</dl>}
+    {node.mechanic && <p className="tgrid-mechanic"><b>Mecânica{mechanicReady ? '' : ' · Em breve'}:</b> {node.mechanic.text}{!mechanicReady && <small> O bônus numérico já vale; a mecânica entra em uma fase futura.</small>}</p>}
+    {node.kind !== 'root' && rank < node.maxRank && !check.ok && <ul className="tgrid-missing">{check.reasons.map(reason => <li key={reason}>{reason}</li>)}</ul>}
+    {node.kind !== 'root' && rank >= node.maxRank && <p className="talent-status-note success">Rank máximo.</p>}
+    {node.kind !== 'root' && rank < node.maxRank && (confirming
+      ? <div className="talent-confirm"><p>Investir {node.costPerRank} pontos em <b>{node.name}</b>?</p><div><button onClick={() => setConfirmation(null)}>Cancelar</button><button className="primary" onClick={buy}>Confirmar</button></div></div>
+      : <div className="tgrid-actions"><button className="talent-invest" disabled={!check.ok} onClick={buy}>Comprar +1 rank</button>
+        {node.maxRank > 1 && <button disabled={!check.ok} onClick={() => { gameStore.invest(character.id, node.id, true); setConfirmation(null); }}>Comprar tudo o que der</button>}</div>)}
+  </div>;
 }
 
-function TalentNode({character,talent,selected,onSelect}:{character:Character;talent:TalentDef;selected:boolean;onSelect:()=>void}){
-  const rank=character.talents[talent.id]??0;
-  const availability=talentAvailability(character,talent);
-  const status=rank>=talent.max?'maxed':rank>0?'acquired':availability.available?'available':'locked';
-  return <button className={`talent-node ${status} ${selected?'selected':''}`} onClick={onSelect} aria-label={`${talent.name}, ${rank} de ${talent.max}`}>
-    <span className="talent-icon" aria-hidden="true">{talent.icon}</span>
-    <span className="talent-node-copy"><strong>{talent.name}</strong><small>{status==='locked'?availability.reason:talentBonusText(talent)}</small></span>
-    <b>{rank}/{talent.max}</b>
-  </button>;
-}
-
-export function TalentsPanel({state,selected,setSelected}:{state:GameState;selected:string;setSelected:(id:string)=>void}){
-  const character=state.characters.find(entry=>entry.id===selected)??state.characters[0];
-  const kits=kitsOfPath(character.profile.classPath);const [kitPick,setKitPick]=useState(character.classId);const kit=kits.includes(kitPick)?kitPick:character.classId;
-  const talents=talentsForClass(kit);
-  const [selectedTalentId,setSelectedTalentId]=useState(talents[0].id);
-  const [confirmation,setConfirmation]=useState<Confirmation>(null);
-  useEffect(()=>{setKitPick(character.classId);},[character.id,character.classId]);
-  useEffect(()=>{setSelectedTalentId(talentsForClass(kit)[0].id);setConfirmation(null);},[character.id,kit]);
-  const selectedCandidate=talentById(selectedTalentId);
-  const selectedTalent=selectedCandidate?.classId===kit?selectedCandidate:talents[0];
-  const availability=talentAvailability(character,selectedTalent);
-  const rank=character.talents[selectedTalent.id]??0;
-  const spent=spentTalentPoints(character),respecCost=talentRespecCost(character);
-  const currentStats=characterStats(character,state);
-  const nextStats=useMemo(()=>characterStats(previewCharacter(character,selectedTalent),state),[character,selectedTalent,state]);
-  const changedStats=(Object.keys(currentStats) as (keyof Stats)[]).filter(key=>Math.abs(nextStats[key]-currentStats[key])>.0001);
-  const currentEffect=talentBonus(character,selectedTalent.effect);
-  const nextEffect=currentEffect+selectedTalent.value;
-  const classDef=CLASSES[kit];
-  const requirements=selectedTalent.requires??[];
-  return <section className="talents-panel" style={{'--class-color':colorHex(classDef.color)} as CSSProperties}>
-    <div className="section-heading"><div><span className="eyebrow">Especialização</span><h2>Árvore de talentos</h2></div><div className="talent-currency"><span>Pontos disponíveis</span><b>✦ {character.talentPoints}</b></div></div>
-    <div className="talent-character-tabs" role="list" aria-label="Personagens">{state.characters.map(entry=><button key={entry.id} className={entry.id===character.id?'active':''} onClick={()=>setSelected(entry.id)}><span style={{background:colorHex(CLASSES[entry.classId].color)}}>{entry.name.slice(0,1)}</span><b>{entry.name}</b><small>{classLabel(entry)} · Nv. {entry.profile.level}</small><em>✦ {entry.talentPoints}</em></button>)}</div>
-    {kits.length>1&&<div className="kit-chips" role="tablist" aria-label="Talentos por classe do caminho">{kits.map(k=><button key={k} role="tab" aria-selected={k===kit} className={k===kit?'active':''} onClick={()=>setKitPick(k)}>{CLASSES[k].name}</button>)}</div>}
+export function TalentsPanel({ state, selected, setSelected }: { state: GameState; selected: string; setSelected: (id: string) => void }) {
+  const character = state.characters.find(entry => entry.id === selected) ?? state.characters[0];
+  const path = character.profile.classPath.filter(id => id in TALENT_TREES);
+  const [pick, setPick] = useState(character.profile.classId);
+  const treeId = path.includes(pick) ? pick : character.profile.classId;
+  const tree = TALENT_TREES[treeId];
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [confirmation, setConfirmation] = useState<Confirmation>(null);
+  const [search, setSearch] = useState('');
+  useEffect(() => { setPick(character.profile.classId); }, [character.id, character.profile.classId]);
+  useEffect(() => { setSelectedId(null); setConfirmation(null); }, [character.id, treeId]);
+  const query = normalize(search.trim());
+  const available = talentPointsAvailable(character), spent = investedPoints(character), treeSpent = investedPoints(character, treeId);
+  const totals = talentTotals(character);
+  const selectedNode = selectedId ? tree.nodes.find(n => n.id === selectedId) : undefined;
+  const classDef = CLASSES[character.classId];
+  const bonuses = Object.entries(totals).sort(([a], [b]) => (EFFECTS[a]?.category ?? '').localeCompare(EFFECTS[b]?.category ?? '') || a.localeCompare(b));
+  const futureTiers = ([1, 2] as const).filter(t => !path.some(id => TALENT_TREES[id].tier === t));
+  const onActivate = (node: TalentNodeDef, event: { shiftKey: boolean }) => {
+    if (isCoarse()) return;
+    if (event.shiftKey) { gameStore.invest(character.id, node.id, true); return; }
+    if (node.kind === 'major' || node.kind === 'keystone') { if (canBuy(character, node.id).ok) setConfirmation({ kind: 'buy', id: node.id }); return; }
+    gameStore.invest(character.id, node.id);
+  };
+  const respecScope = confirmation?.kind === 'respec' ? confirmation.treeId : undefined;
+  const respecInvested = investedPoints(character, respecScope), respecCost = talentRespecCost(character, respecScope);
+  return <section className="talents-panel" style={{ '--class-color': colorHex(classDef.color) } as CSSProperties}>
+    <div className="section-heading"><div><span className="eyebrow">Especialização</span><h2>Grade de talentos</h2></div><div className="talent-currency"><span>Pontos disponíveis</span><b>✦ {available}</b><small>{spent} gastos</small></div></div>
+    <div className="talent-character-tabs" role="list" aria-label="Personagens">{state.characters.map(entry => <button key={entry.id} className={entry.id === character.id ? 'active' : ''} onClick={() => setSelected(entry.id)}><span style={{ background: colorHex(CLASSES[entry.classId].color) }}>{entry.name.slice(0, 1)}</span><b>{entry.name}</b><small>{classLabel(entry)} · Nv. {entry.profile.level}</small><em>✦ {talentPointsAvailable(entry)}</em></button>)}</div>
+    <div className="kit-chips" role="tablist" aria-label="Grades do caminho">
+      {path.map(id => <button key={id} role="tab" aria-selected={id === treeId} className={id === treeId ? 'active' : ''} onClick={() => setPick(id)}>{CLASS_BY_ID[id].name} <small>{investedPoints(character, id)}/{TALENT_TREES[id].totalCost}</small></button>)}
+      {futureTiers.map(t => <button key={t} role="tab" aria-selected={false} disabled className="future">Tier {t} · abre ao evoluir</button>)}
+    </div>
+    <div className="tgrid-tools">
+      <input type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder="Buscar efeito (ex.: crítico, fogo, tries)" aria-label="Buscar talento por efeito" />
+      <span className="tgrid-lanes">{Object.entries(tree.lanes).map(([lane, name]) => <em key={lane}>{lane === 'A' ? '◀' : '▶'} {name}</em>)}</span>
+    </div>
     <div className="talent-workspace">
       <div className="talent-tree-card">
-        <div className="talent-tree-heading"><div><span className="class-label">{classLabel(character)}</span><h3>Caminhos de especialização</h3></div><small>Escolha um caminho; não é necessário adquirir todos os talentos.</small></div>
-        <div className="talent-tree">{([1,2,3] as const).map(tier=><div className={`talent-tier tier-${tier}`} key={tier}><div className="tier-label"><b>Nível {tier}</b><small>{tier===1?'Fundamentos':tier===2?'Especialização':'Maestria'}</small></div><div className="tier-nodes">{talents.filter(talent=>talent.tier===tier).sort((a,b)=>a.column-b.column).map(talent=><TalentNode key={talent.id} character={character} talent={talent} selected={selectedTalent.id===talent.id} onSelect={()=>{setSelectedTalentId(talent.id);setConfirmation(null);}}/>)}</div></div>)}</div>
-        <div className="talent-legend"><span><i className="available"/>Disponível</span><span><i className="acquired"/>Adquirido</span><span><i className="maxed"/>Completo</span><span><i className="locked"/>Bloqueado</span></div>
+        <div className="talent-tree-heading"><div><span className="class-label">{tree.name} · Tier {tree.tier}</span><h3>{tree.nodeCount} nós · {treeSpent}/{tree.totalCost} pontos</h3></div><small>Arraste para mover, role ou use pinça para dar zoom. São escolhas: não dá para completar tudo.</small></div>
+        <TalentCanvas character={character} treeId={treeId} selectedId={selectedId} query={query} onSelect={id => { setSelectedId(id); if (confirmation?.kind === 'buy' && confirmation.id !== id) setConfirmation(null); }} onActivate={onActivate} />
+        <div className="talent-legend">{(Object.keys(CATEGORY_COLORS) as EffectCategory[]).map(cat => <span key={cat}><i style={{ background: CATEGORY_COLORS[cat], borderColor: CATEGORY_COLORS[cat] }} />{CATEGORY_NAMES[cat]}</span>)}<span><i className="ring-gold" />Major</span><span><i className="ring-pink" />Keystone</span></div>
       </div>
       <aside className="talent-detail-card">
-        <div className="talent-detail-title"><span className="talent-icon">{selectedTalent.icon}</span><div><span>{TALENT_EFFECT_NAMES[selectedTalent.effect]}</span><h3>{selectedTalent.name}</h3><small>Nível {rank} / {selectedTalent.max}</small></div></div>
-        <p>{selectedTalent.description}</p>
-        <dl className="talent-facts"><div><dt>Bônus por nível</dt><dd>{talentBonusText(selectedTalent)}</dd></div><div><dt>Nível necessário</dt><dd>{selectedTalent.requiredLevel}</dd></div><div><dt>Pré-requisitos</dt><dd>{requirements.length?requirements.map(requirement=>{const required=talentById(requirement.talentId);return `${required?.name??requirement.talentId} ${(character.talents[requirement.talentId]??0)}/${requirement.rank}`;}).join(', '):'Nenhum'}</dd></div></dl>
-        <div className="talent-comparison"><h4>Próximo nível</h4>{rank>=selectedTalent.max?<p className="talent-status-note success">Talento completamente evoluído.</p>:changedStats.length?changedStats.map(key=><div key={key}><span>{statNames[key]}</span><b>{valueText(key,currentStats[key])}</b><i>→</i><strong>{valueText(key,nextStats[key])}</strong></div>):<div><span>{TALENT_EFFECT_NAMES[selectedTalent.effect]}</span><b>{Math.round(currentEffect*1000)/10}%</b><i>→</i><strong>{Math.round(nextEffect*1000)/10}%</strong></div>}</div>
-        {!availability.available&&rank<selectedTalent.max&&<p className="talent-status-note">{availability.reason}</p>}
-        {confirmation==='invest'?<div className="talent-confirm"><p>Investir 1 ponto em <b>{selectedTalent.name}</b>?</p><div><button onClick={()=>setConfirmation(null)}>Cancelar</button><button className="primary" onClick={()=>{gameStore.invest(character.id,selectedTalent.id);setConfirmation(null);}}>Confirmar</button></div></div>:<button className="talent-invest" disabled={!availability.available} onClick={()=>setConfirmation('invest')}>Investir 1 ponto</button>}
-        <div className="respec-box"><div><span>Redistribuição</span><b>{spent} {spent===1?'ponto investido':'pontos investidos'}</b><small>Custo: {respecCost} ouro · Saldo: {state.gold}</small></div>{confirmation==='respec'?<div className="talent-confirm"><p>Devolver {spent} pontos e pagar <b>{respecCost} ouro</b>?</p>{state.gold<respecCost&&<small>Ouro insuficiente para redistribuir.</small>}<div><button onClick={()=>setConfirmation(null)}>Cancelar</button><button className="danger" disabled={state.gold<respecCost} onClick={()=>{gameStore.respecTalents(character.id);setConfirmation(null);}}>Redistribuir</button></div></div>:<button disabled={!spent} onClick={()=>setConfirmation('respec')}>Redistribuir talentos</button>}</div>
+        {selectedNode && nodeInPath(character, selectedNode.id)
+          ? <NodeDetail character={character} node={selectedNode} gold={state.gold} confirmation={confirmation} setConfirmation={setConfirmation} />
+          : <p className="tgrid-hint">Toque em um nó para ver o efeito, o custo e o que falta para liberá-lo. Clique compra +1 rank (Majors e Keystone pedem confirmação; <kbd>Shift</kbd>+clique compra o máximo).</p>}
+        <div className="tgrid-bonuses"><h4>Bônus ativos</h4>{bonuses.length
+          ? <ul>{bonuses.map(([code, value]) => <li key={code} style={{ '--node-color': CATEGORY_COLORS[EFFECTS[code]?.category ?? 'utility'] } as CSSProperties}><span>{effectLabel(code)}</span><b>{formatEffectValue(code, value)}</b></li>)}</ul>
+          : <small>Nenhum ainda.</small>}</div>
+        <div className="respec-box"><div><span>Redistribuição</span><b>{spent} {spent === 1 ? 'ponto investido' : 'pontos investidos'}</b><small>Custo: 25 × pontos^1,6 em ouro · Saldo: {state.gold}</small></div>
+          {confirmation?.kind === 'respec'
+            ? <div className="talent-confirm"><p>Devolver {respecInvested} pontos de {respecScope ? tree.name : 'todas as grades'} e pagar <b>{respecCost} ouro</b>? As Origens ficam.</p>{state.gold < respecCost && <small>Ouro insuficiente para redistribuir.</small>}<div><button onClick={() => setConfirmation(null)}>Cancelar</button><button className="danger" disabled={state.gold < respecCost || !respecInvested} onClick={() => { gameStore.respecTalents(character.id, respecScope); setConfirmation(null); }}>Redistribuir</button></div></div>
+            : <div className="tgrid-actions"><button disabled={!treeSpent} onClick={() => setConfirmation({ kind: 'respec', treeId })}>Zerar esta grade ({talentRespecCost(character, treeId)} ouro)</button><button disabled={!spent} onClick={() => setConfirmation({ kind: 'respec' })}>Zerar tudo ({talentRespecCost(character)} ouro)</button></div>}
+        </div>
       </aside>
     </div>
   </section>;
