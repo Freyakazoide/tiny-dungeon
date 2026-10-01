@@ -3,9 +3,10 @@ import type { ClassNode } from '../../game/rpg/classTree';
 import type { ProficiencyId } from '../../game/rpg/proficiencies';
 import { Icon } from '../components/Icon';
 import { profIcon } from '../RpgPanels';
+import { TIER2_SPECS } from '../../game/rpg/tier2Specs';
 
 /** PNGs `class_*` presentes em public/assets/ui/icons, sem ".png". Um teste confere com o diretório. */
-export const CLASS_ICON_PNGS = new Set<string>(['guerreiro', 'guardiao', 'ladino', 'cacador', 'mago', 'clerigo', 'bardo', 'monge', 'bruxo', 'alquimista', 'mercenario', 'mestre_runico', 'ilusionista', 'druida', 'artilheiro'].map(id => `class_${id}`));
+export const CLASS_ICON_PNGS = new Set<string>(['guerreiro', 'guardiao', 'ladino', 'cacador', 'mago', 'clerigo', 'bardo', 'monge', 'bruxo', 'alquimista', 'mercenario', 'mestre_runico', 'ilusionista', 'druida', 'artilheiro', ...TIER2_SPECS.map(s => s.id)].map(id => `class_${id}`));
 
 const gateSkill = (node: ClassNode) => Object.keys(node.requires.skills ?? {})[0] as ProficiencyId | undefined;
 
@@ -13,8 +14,6 @@ const gateSkill = (node: ClassNode) => Object.keys(node.requires.skills ?? {})[0
 export function classIconName(node: ClassNode): string {
   const own = `class_${node.id}`;
   if (CLASS_ICON_PNGS.has(own)) return own;
-  const parent = node.parent && CLASS_ICON_PNGS.has(`class_${node.parent}`) ? `class_${node.parent}` : undefined;   // especialização: usa o emblema da classe-mãe
-  if (parent) return parent;
   const skill = gateSkill(node);
   return skill ? profIcon(skill) : 'classes';
 }
