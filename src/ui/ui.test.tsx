@@ -162,14 +162,14 @@ describe('Fase 8 — itens e ícones', () => {
     expect(errors).not.toHaveBeenCalled();
   });
 
-  it('os 48 PNGs de ícones existem com 96×96 px (cabeçalho do arquivo)', async () => {
+  it('os 47 PNGs de ícones existem com 96×96 px (cabeçalho do arquivo)', async () => {
     const { readFileSync } = await import('node:fs'); const { join } = await import('node:path');
-    const names = ['personagem', 'itens', 'comercio', 'classes', 'grupo', 'hunts', 'analyzer', 'helper', 'progressao', 'charms', 'sistema',
+    const names = ['personagem', 'itens', 'comercio', 'grupo', 'hunts', 'analyzer', 'helper', 'progressao', 'charms', 'sistema',
       ...['hp', 'mana', 'xp', 'gold', 'attack', 'defense', 'resistance', 'crit', 'speed', 'magic'].map(n => `stat_${n}`),
       ...['fire', 'ice', 'energy', 'earth', 'poison', 'holy', 'death', 'physical', 'psychic'].map(n => `elem_${n}`),
       ...['melee', 'ranged', 'defense', 'magic'].map(n => `prof_${n}`), ...['helmet', 'armor', 'legs', 'boots', 'weapon', 'offhand', 'amulet', 'ring'].map(n => `slot_${n}`),
       'status_running', 'status_paused', 'status_recovering', 'status_transition', 'badge_tank', 'badge_new'];
-    expect(names).toHaveLength(48);
+    expect(names).toHaveLength(47);
     for (const name of names) {
       const png = readFileSync(join(process.cwd(), 'public/assets/ui/icons', `${name}.png`));
       expect(png.subarray(1, 4).toString(), name).toBe('PNG');
@@ -243,5 +243,17 @@ describe('Fase 9 C — menu Personagem', () => {
     expect(node.querySelector('rect')).toBeTruthy(); expect(node.querySelector('image')).toBeTruthy();
     expect(document.querySelector('.tgrid-node.major .tgrid-frame')).toBeTruthy();
     for (const tab of screen.getAllByRole('tab')) expect(tab.getAttribute('aria-selected')).toBeTruthy();
+  });
+});
+
+describe('Helper auto-buy', () => {
+  it('mostra a compra automática e liga o interruptor', async () => {
+    const { HelperPanel } = await import('./HelperPanel');
+    const state = gameStore.getSnapshot();
+    render(<HelperPanel state={state} character={state.characters[0]} />);
+    expect(screen.getByLabelText('Compra automática')).toBeTruthy();
+    expect(screen.getByLabelText('Usar poção de vida abaixo de')).toBeTruthy();
+    fireEvent.click(screen.getByRole('switch', { name: 'Comprar poções automaticamente' }));
+    expect(gameStore.getSnapshot().autoBuy?.enabled).toBe(true);
   });
 });

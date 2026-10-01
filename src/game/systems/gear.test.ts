@@ -167,7 +167,7 @@ describe('Fase 7 — mochila, venda, Ferreiro e drops', () => {
 
   it('mochila cheia: o item novo é vendido na hora, sem perder ouro nem estourar a capacidade', () => {
     const { e } = setup();
-    for (let i = 0; i < GEAR_BAG_CAPACITY; i++) expect(give(e, 'guerreiro.espada_longa')).toBeDefined();
+    e.getSnapshot().gearBag = Array.from({ length: GEAR_BAG_CAPACITY }, (_, i) => ({ uid: `f${i}`, baseId: `filler.${i}`, classification: 'common' as const, attrs: [] }));
     e.getSnapshot().gold = 0; expect(e.grantGear('guerreiro.gladio_de_legionario')).toBeUndefined();
     expect(e.getSnapshot().gearBag).toHaveLength(GEAR_BAG_CAPACITY); expect(e.getSnapshot().gold).toBeGreaterThan(0);
     expect(e.buyGear('guerreiro.espada_longa')).toBe(false);

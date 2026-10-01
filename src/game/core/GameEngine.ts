@@ -11,7 +11,7 @@ import { lateWaveBonus, batchToSpawn, composeExtras, drawFromBag, extrasTableFor
 import { SPELLS, spellById } from '../data/spells';
 import { itemById } from '../data/items';
 import { CHARMS } from '../data/charms';
-import type { Character, CharacterRow, ClassId, GameState, HelperConfig, InventoryStack, ItemInstance, MonsterDef, MonsterRuntime, Slot, SpellCondition } from './types';
+import type { AutoBuyConfig, Character, CharacterRow, ClassId, GameState, HelperConfig, InventoryStack, ItemInstance, MonsterDef, MonsterRuntime, Slot, SpellCondition } from './types';
 import { evolveClass } from '../rpg/evolution';
 import { CLASS_BY_ID, isPlayable } from '../rpg/classTree';
 import { passiveBonus } from '../rpg/passives';
@@ -39,6 +39,7 @@ import type { FormationPlan } from '../systems/group';
 import { createAnalyzer, hasAnalyzerActivity } from '../systems/analyzer';
 
 export type GameFx = { type:'attack'|'damage'|'heal'|'death'|'drop'|'stairs'|'wave'|'recovery'; source?:string; target?:string; value?:number; text?:string; fx?:FxKind; targets?:string[] };
+export const defaultAutoBuy=():AutoBuyConfig=>({enabled:false,reserve:0,refillAt:50,targets:{},spent:0,bought:0});
 const helper=():HelperConfig=>({hpPotionAt:35,manaPotionAt:25,healAllies:true,autoSupplies:true,defensiveAmuletAt:25,emergencyAt:15,outOfSupplies:'continue'});
 const defaultCondition=(s:NonNullable<ReturnType<typeof spellById>>):SpellCondition=>s.kind==='heal'||s.kind==='regen'?{allyInjured:true,manaAbove:10}:s.target==='allEnemies'?{minEnemies:2,manaAbove:15}:s.kind==='shield'?{hpBelow:65,manaAbove:10}:{manaAbove:10};
 export const SPELL_SLOTS=4;
@@ -54,7 +55,7 @@ export function createCharacter(classId:ClassId,name=CLASSES[classId].name,kit?:
 }
 /** Estado inicial: sem personagens. A tela de criação monta o grupo de 3 Squires. */
 export function initialState():GameState{
-  return {version:1,status:'idle',autoAdvance:true,huntId:DEFAULT_HUNT,huntStats:{},wave:0,cycle:0,transitionMs:0,characters:[],team:[],monsters:[],gearBag:[],inventory:{bp:[],loot:[],supply:[{itemId:'health_potion',quantity:8},{itemId:'mana_potion',quantity:8}],capacity:{bp:40,loot:60,supply:200}},gold:0,charmPoints:0,charmSlots:1,equippedCharms:[],unlockedCharms:[],codex:{},analyzer:createAnalyzer(),history:[],message:'Crie seus 3 personagens para começar.',lastSavedAt:Date.now()};
+  return {version:1,status:'idle',autoAdvance:true,huntId:DEFAULT_HUNT,huntStats:{},wave:0,cycle:0,transitionMs:0,characters:[],team:[],monsters:[],gearBag:[],inventory:{bp:[],loot:[],supply:[{itemId:'health_potion',quantity:8},{itemId:'mana_potion',quantity:8}],capacity:{bp:40,loot:60,supply:200}},gold:0,autoBuy:defaultAutoBuy(),charmPoints:0,charmSlots:1,equippedCharms:[],unlockedCharms:[],codex:{},analyzer:createAnalyzer(),history:[],message:'Crie seus 3 personagens para começar.',lastSavedAt:Date.now()};
 }
 export const PARTY_SIZE=3,ROSTER_LIMIT=5,NAME_LIMIT=18;
 export interface RecruitSpec{name:string;weaponId?:string;element?:ProficiencyId;look?:Partial<Look>;row?:CharacterRow;goal?:string}
@@ -172,7 +173,7 @@ export class GameEngine {
     if(this.state.status==='idle'||this.state.status==='paused')return;const dt=Math.min(ms,100)/1000;
     if(this.state.status==='transition'||this.state.status==='recovering'){this.state.transitionMs-=ms;if(this.state.transitionMs<=0)this.finishTransition();this.emit();return;}
     this.state.analyzer.activeMs+=ms;this.huntStat().activeMs+=ms;
-    this.tickStatuses(dt);if(this.state.status!=='running')return this.emit();this.mech.tick(dt);this.tickReinforcements(dt);
+    this.tickStatuses(dt);if(this.state.status!=='running')return this.emit();this.mech.tick(dt);this.tickReinforcements(dt);this.autoBuyT+=dt;if(this.autoBuyT>=3){this.autoBuyT=0;this.runAutoBuy();}
     for(const c of livingTeam(this.state)){this.updateCharacter(c,dt);if(this.state.status!=='running')break;}
     if(this.state.status==='running')for(const m of livingMonsters(this.state)){if((m.statuses?.frozen??0)>0||(m.statuses?.stunned??0)>0)continue;m.cooldown-=dt;if(m.cooldown<=0){const all=livingTeam(this.state);if(!all.length){this.defeat();break;}const hidden=all.filter(x=>!this.mech.untargetable(x));const targets=hidden.length?hidden:all;if(m.statuses?.confused){const others=livingMonsters(this.state).filter(x=>x!==m),src=this.state.characters.find(x=>x.id===m.statuses!.confused!.source);if(others.length&&src){this.hit(src,others[Math.floor(Math.random()*others.length)],Math.max(1,Math.round(MONSTERS[m.defId].attack*3*runtime.monsterAtk)),false,true);m.cooldown+=1/MONSTERS[m.defId].speed;if(!livingMonsters(this.state).length)break;continue;}}const target=pickMonsterTarget(targets)!;const absorbed=this.mech.monsterMisses(m)||this.mech.decoyAbsorbs();const inMult=absorbed?0:this.mech.incoming(target);const dealt=inMult<=0?0:monsterHit(m,target,this.state,inMult);this.emit({type:'attack',source:m.uid,target:target.id,fx:monsterFx(m.defId)});this.emit({type:'damage',source:m.uid,target:target.id,value:dealt});const thorns=talentValue(target,'thorns');if(thorns>0&&m.alive&&dealt>0)this.hit(target,m,Math.max(1,Math.round(dealt*thorns)));this.mech.afterDamaged(target,m,dealt);if(dealt>0)this.mech.afterMonsterAttack(m);m.cooldown+=1/MONSTERS[m.defId].speed;if(!livingTeam(this.state).length){this.defeat();break;}}}
     this.emit();
@@ -302,9 +303,8 @@ export class GameEngine {
     if(!entry||!entry.unlocked)return false;
     const cost=buyPrice(itemId)*qty;
     if(this.state.gold<cost)return false;
-    const container=item.kind==='supply'?'supply':item.kind==='loot'?'loot':'bp';
-    const used=this.state.inventory[container].reduce((n,s)=>n+s.quantity,0);
-    if(used+qty>this.state.inventory.capacity[container])return false;
+    const probe={inventory:structuredClone(this.state.inventory)} as GameState;
+    if(addItem(probe,itemId,qty)!==qty)return false;
     this.state.gold-=cost;addItem(this.state,itemId,qty);
     this.state.message=`Comprou ${qty}× ${item.name} por ${cost} ouro.`;this.emit();return true;
   }
@@ -497,6 +497,32 @@ export class GameEngine {
     if(patch.outOfSupplies==='continue'||patch.outOfSupplies==='end')next.outOfSupplies=patch.outOfSupplies;
     c.helper=next;this.emit();return true;
   }
+  /** Helper › Compra automática: liga/desliga, reserva de ouro, % de recompra e meta por poção. */
+  setAutoBuy(patch:{enabled?:boolean;reserve?:number;refillAt?:number;target?:{itemId:string;qty:number}}){
+    const cfg=this.state.autoBuy??=defaultAutoBuy();const num=(v:unknown,min:number,max:number)=>typeof v==='number'&&Number.isFinite(v)?Math.max(min,Math.min(max,Math.round(v))):undefined;
+    if(patch.enabled!==undefined)cfg.enabled=!!patch.enabled;
+    if(patch.reserve!==undefined){const v=num(patch.reserve,0,1e9);if(v===undefined)return false;cfg.reserve=v;}
+    if(patch.refillAt!==undefined){const v=num(patch.refillAt,1,100);if(v===undefined)return false;cfg.refillAt=v;}
+    if(patch.target){const item=itemById(patch.target.itemId);const v=num(patch.target.qty,0,this.state.inventory.capacity.supply);if(!item?.supply||v===undefined)return false;if(v>0)cfg.targets[item.id]=v;else delete cfg.targets[item.id];}
+    this.emit();return true;
+  }
+  /** Compra o que as regras pedem agora; devolve as compras. Roda sozinha a cada 3 s de caçada. */
+  runAutoBuy(){
+    const cfg=this.state.autoBuy;const done:{itemId:string;qty:number;cost:number}[]=[];if(!cfg?.enabled)return done;
+    const best=Math.max(0,...this.state.team.map(id=>this.state.characters.find(c=>c.id===id)?.profile.level??0));
+    const entries=shopStock(this.state.huntId,best).potions.filter(e=>e.unlocked&&(cfg.targets[e.itemId]??0)>0).sort((a,b)=>a.price-b.price);
+    for(const entry of entries){
+      const target=cfg.targets[entry.itemId],have=this.state.inventory.supply.find(s=>s.itemId===entry.itemId)?.quantity??0;
+      if(have>=target*cfg.refillAt/100&&have>0)continue;
+      const used=this.state.inventory.supply.reduce((n,s)=>n+s.quantity,0);
+      const qty=Math.min(target-have,Math.floor((this.state.gold-cfg.reserve)/entry.price),this.state.inventory.capacity.supply-used);
+      if(qty<1)continue;
+      const cost=entry.price*qty;if(this.buy(entry.itemId,qty)){cfg.spent+=cost;cfg.bought+=qty;done.push({itemId:entry.itemId,qty,cost});}
+    }
+    if(done.length)this.state.message=`Compra automática: ${done.map(d=>`${d.qty}× ${itemById(d.itemId)?.name}`).join(', ')}.`;
+    return done;
+  }
+  private autoBuyT=0;
   dismissOfflineReport(){if(this.state.offlineReport){delete this.state.offlineReport;this.emit();}}
   equipSpell(id:string,slot:number,spellId:string){
     const c=this.state.characters.find(x=>x.id===id),s=spellById(spellId);

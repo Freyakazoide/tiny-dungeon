@@ -16,6 +16,7 @@ import './ui/styles/grupo.css';
 import './ui/styles/hunts.css';
 import './ui/styles/aparencia.css';
 import './ui/styles/goal.css';
+import './ui/styles/helper.css';
 import './ui/styles/controls.css';
 import './ui/styles/skin.css';
 

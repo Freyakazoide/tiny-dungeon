@@ -77,7 +77,7 @@ describe('Fase 12 B — engine', () => {
     e.saveFormationPreset(0, 'Padrão'); e.toggleTeam(ids[2]); e.swapTeamMember(ids[1], zed.id); e.swapTeamMember(zed.id, ids[1]);
     s().team = [ids[0], ids[1]];
     const bagBefore = s().inventory.bp.length;
-    s().gearBag = Array.from({ length: 80 }, (_, i) => ({ uid: `f${i}`, baseId: 'guerreiro.espada_longa', classification: 'common' as const, attrs: [] }));
+    s().gearBag = Array.from({ length: 80 }, (_, i) => ({ uid: `f${i}`, baseId: `filler.${i}`, classification: 'common' as const, attrs: [] }));
     const snap = () => JSON.stringify({ ...s(), message: '' }); const before = snap(); expect(e.dismiss(zed.id)).toBe(false); expect(snap()).toBe(before);
     s().gearBag = [];
     expect(e.dismiss(zed.id)).toBe(true);

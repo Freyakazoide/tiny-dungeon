@@ -60,11 +60,14 @@ export interface OfflineReport {
   hunt?: string; share?: number; gold?: number;
   entries: { name: string; xp: number; levelsGained: number; training: { target: ProficiencyId; tries: number; levelsGained: number }[] }[];
 }
+/** Compra automática de poções (Helper): quando o estoque cai abaixo de `refillAt`% da meta, repõe até a meta, sem passar da reserva de ouro. */
+export interface AutoBuyConfig { enabled: boolean; /** ouro que nunca é gasto */ reserve: number; /** % da meta abaixo da qual recompra */ refillAt: number; /** meta de estoque por poção (0 = não compra) */ targets: Record<string, number>; spent: number; bought: number; }
 export interface GameState {
   version: 1; status: HuntStatus; autoAdvance: boolean; wave: number; cycle: number; transitionMs: number;
   characters: Character[]; team: string[]; monsters: MonsterRuntime[]; inventory: InventoryState;
   /** Mochila de equipamento de classe (instâncias com atributos próprios). */
   gearBag: ItemInstance[];
+  autoBuy?: AutoBuyConfig;
   /** ids de itens simples (bp) recém-obtidos, limpos ao selecionar */
   freshItems?: string[];
   /** presets de formação (3 vagas) e hunt programada para o fim do ciclo */

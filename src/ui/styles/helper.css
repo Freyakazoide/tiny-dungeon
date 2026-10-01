@@ -1,0 +1,20 @@
+.he-grid{display:grid;grid-template-columns:1fr 1.2fr;gap:12px;align-items:start}
+.he-col{display:flex;flex-direction:column;gap:12px}.he-card{padding:12px;display:flex;flex-direction:column;gap:10px}
+.he-switch{display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px}
+.he-switch input{position:absolute;opacity:0;width:1px;height:1px}
+.he-switch i{width:38px;height:20px;border:2px solid #303944;background:#0c1219;position:relative;flex:none}
+.he-switch i::after{content:"";position:absolute;top:2px;left:2px;width:12px;height:12px;background:#8d95a0;transition:left .12s}
+.he-switch input:checked+i{border-color:#e5ca91;background:#2a2418}.he-switch input:checked+i::after{left:20px;background:#e5ca91}
+.he-switch input:focus-visible+i{outline:2px solid #86b6f4;outline-offset:2px}
+.he-slider{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(90px,1fr) 44px;gap:8px;align-items:center;font-size:12px}
+.he-lab{display:flex;gap:6px;align-items:center}.he-val{text-align:right;color:#e5ca91}
+.he-slider input[type=range]{accent-color:#e5ca91;width:100%}
+.he-rules{display:flex;flex-direction:column;gap:10px}.he-rule{display:flex;flex-direction:column;gap:4px}
+.he-chips{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.he-num{display:flex;align-items:center;gap:4px;font-size:11px}.he-num input{width:74px;background:#0c1219;border:2px solid #303944;color:#f1e4c9;padding:3px 5px;font:inherit}
+.he-pots{display:flex;flex-direction:column;gap:6px}
+.he-pot{display:grid;grid-template-columns:36px minmax(0,1fr) auto auto;gap:8px;align-items:center;padding:6px;background:#10161e;border:1px solid #28313a}
+.he-pot.locked{opacity:.55}.he-pname small{display:block;font-size:10px}.he-pname .pk-bar{margin-top:3px}
+.he-steps{display:flex;gap:3px}
+.he-foot{display:flex;flex-wrap:wrap;gap:12px;align-items:center;font-size:12px;border-top:1px solid #28313a;padding-top:8px}.he-foot .pk-btn{margin-left:auto}
+@media (max-width:860px){.he-grid{grid-template-columns:1fr}.he-pot{grid-template-columns:36px 1fr}}

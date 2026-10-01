@@ -50,7 +50,7 @@ export const MODALS: Record<Exclude<ModalId, 'bemvindo'>, ModalDef> = {
     render: ({ state, tab }) => <GroupPanel state={state} section={tab === 'Formação' ? 'formation' : 'reserves'} /> },
   hunts: { title: 'Hunts', subtitle: 'Escolha onde caçar', icon: 'hunts', tabs: ['Mapas'], size: () => 'xl', bodyClass: 'hn-body', render: ({ state }) => <HuntSelector state={state} /> },
   analyzer: { title: 'Analyzer', subtitle: 'Métricas da sessão', icon: 'analyzer', tabs: ['Sessão'], render: ({ state }) => <AnalyzerPanel state={state} /> },
-  helper: { title: 'Helper', subtitle: 'Automação de poções e avanço', icon: 'helper', who: true, tabs: ['Automação'], render: ({ state, character }) => <HelperPanel state={state} character={character} /> },
+  helper: { title: 'Helper', subtitle: 'Poções, avanço e compra automática', icon: 'helper', who: true, tabs: ['Automação'], size: () => 'xl', bodyClass: 'he-body', render: ({ state, character }) => <HelperPanel state={state} character={character} /> },
   progressao: { title: 'Progressão', subtitle: 'Metas, portas e marcos', icon: 'progressao', who: true, tabs: ['Metas'], render: ({ state, character }) => <ProgressPanel state={state} character={character} /> },
   charms: { title: 'Charms', subtitle: 'Em breve', icon: 'charms', tabs: ['Em breve'], size: () => 'sm',
     render: ({ state }) => <div className="empty-state">Os charms já existem no jogo ({state.charmPoints} pontos · {state.equippedCharms.length}/{state.charmSlots} equipados · {state.unlockedCharms.length} desbloqueados), mas ainda não têm tela.</div> },

@@ -150,11 +150,11 @@ describe('D — itens, loja e guia de classes', () => {
     expect(equipBlockReason(c, itemById('bone')!)).toMatch(/equipamento/);
     expect(equipBlockReason(c, itemById('rusty_sword')!)).toBeUndefined();
   });
-  it('o trilho tem 11 menus (Sistema embaixo); Magias e Talentos só existem dentro de Personagem', () => {
-    expect(RAIL_ITEMS.map(i => i.id)).toEqual(['personagem', 'itens', 'comercio', 'classes', 'grupo', 'hunts', 'analyzer', 'helper', 'progressao', 'charms', 'sistema']);
+  it('o trilho tem 10 menus (Sistema embaixo); Magias e Talentos só existem dentro de Personagem', () => {
+    expect(RAIL_ITEMS.map(i => i.id)).toEqual(['personagem', 'itens', 'comercio', 'grupo', 'hunts', 'analyzer', 'helper', 'progressao', 'charms', 'sistema']);
     expect(RAIL_ITEMS.filter(i => i.bottom).map(i => i.id)).toEqual(['sistema']);
     expect(RAIL_ITEMS.some(i => ['magias', 'talentos'].includes(i.id))).toBe(false);
-    expect([...CHARACTER_TABS]).toEqual(['Ficha', 'Proficiências', 'Magias', 'Talentos']);
+    expect([...CHARACTER_TABS]).toEqual(['Ficha', 'Proficiências', 'Magias', 'Talentos', 'Classes']);
   });
   it('o Squire vê as 15 classes base ordenadas pela proficiência, com checklist e ETA', () => {
     const c = new GameEngine(partyState()).getSnapshot().characters[0]; const steps = nextSteps(c);

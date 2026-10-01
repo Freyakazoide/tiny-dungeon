@@ -58,6 +58,7 @@ export function migrateGameState(value:unknown):unknown{
   }
   // Fase 7: equipamento de classe (instâncias). Saves antigos não têm nenhum.
   if(!Array.isArray(migrated.gearBag))migrated.gearBag=[];
+  {const ab=migrated.autoBuy;const ok=record(ab)&&typeof ab.enabled==='boolean'&&finite(ab.reserve)&&finite(ab.refillAt)&&record(ab.targets)&&finite(ab.spent)&&finite(ab.bought)&&Object.values(ab.targets).every(v=>finite(v)&&Number(v)>=0);if(!ok)migrated.autoBuy={enabled:false,reserve:0,refillAt:50,targets:{},spent:0,bought:0};}
   if(migrated.pendingHunt!==undefined&&(typeof migrated.pendingHunt!=='string'||!(migrated.pendingHunt in HUNT_BY_ID)))delete migrated.pendingHunt;
   for(const c of characters)if(!record(c.gear))c.gear={};
   if(record(migrated.inventory)&&record(migrated.inventory.capacity)&&finite(migrated.inventory.capacity.supply)&&Number(migrated.inventory.capacity.supply)<200)migrated.inventory.capacity.supply=200;
