@@ -32,3 +32,58 @@ describe('Corredor procedural no motor', () => {
     const s = e.getSnapshot(); expect(s.analyzer.damage).toBe(0);
   });
 });
+
+describe('Corredor: ritmo e regras', () => {
+  it('o ritmo de XP e ouro fica perto da referência das hunts (grupo de referência, 10 min simulados)', async () => {
+    const { simulateRun } = await import('./balanceHarness'); const { HUNT_BY_ID } = await import('../data/hunts');
+    for (const id of ['catacumbas', 'vulcao_ardente']) {
+      const m = simulateRun(id, { minutes: 10 }), ref = HUNT_BY_ID[id];
+      expect(m.xpPerHour / ref.refXpPerHour, `${id} xp`).toBeGreaterThan(.6); expect(m.xpPerHour / ref.refXpPerHour, `${id} xp`).toBeLessThan(1.4);
+      expect(m.goldPerHour / ref.refGoldPerHour, `${id} ouro`).toBeGreaterThan(.6); expect(m.goldPerHour / ref.refGoldPerHour, `${id} ouro`).toBeLessThan(1.6);
+      expect(m.kills).toBeGreaterThan(40);
+    }
+  }, 120000);
+  it('cair é recuperável: a equipe se levanta e a run continua do início do trecho', () => {
+    const e = new GameEngine(partyState()); e.start();
+    let fell = false;
+    for (let i = 0; i < 6000 && !fell; i++) { e.tick(100); if (e.getSnapshot().monsters.some(m => m.alive)) for (const c of e.getSnapshot().characters) c.hp = 0; e.tick(100); fell = e.getSnapshot().status === 'recovering'; }
+    expect(fell).toBe(true); expect(e.getSnapshot().analyzer.defeats).toBe(1);
+    for (let i = 0; i < 80; i++) e.tick(100);
+    const s = e.getSnapshot(); expect(s.status).toBe('running'); expect(s.monsters).toHaveLength(0); expect(s.characters.every(c => c.hp > 1)).toBe(true);
+  });
+  it('end() encerra a run e start() começa outra (semente nova)', () => {
+    const e = new GameEngine(partyState()); e.start(); const seed = e.getSnapshot().run!.seed; sim(e, 3); e.end();
+    expect(e.getSnapshot().run).toBeUndefined(); expect(e.getSnapshot().status).toBe('idle');
+    e.start(); expect(e.getSnapshot().run).toBeDefined(); expect(e.getSnapshot().run!.anchor).toBeLessThan(10); void seed;
+  });
+  it('save com run: sobrevive a salvar/carregar (validação) e uma run corrompida é descartada', async () => {
+    const { validateGameState, migrateGameState } = await import('../persistence/validation');
+    const e = new GameEngine(partyState()); e.start(); sim(e, 8);
+    const raw = JSON.parse(JSON.stringify(e.getSnapshot()));
+    const ok = migrateGameState(raw) as ReturnType<typeof e.getSnapshot>; expect(validateGameState(ok)).toBe(true); expect(ok.run).toBeDefined();
+    const bad = JSON.parse(JSON.stringify(e.getSnapshot())); bad.run.anchor = 'x';
+    const fixed = migrateGameState(bad) as ReturnType<typeof e.getSnapshot>; expect(fixed.run).toBeUndefined(); expect(fixed.status).toBe('idle');
+  });
+});
+
+describe('IA configurável (Helper)', () => {
+  it('setHelper guarda e limita a IA; vazio restaura o padrão do papel e a IA muda o comportamento', async () => {
+    const { heroRole, aiOf, DEFAULT_AI } = await import('../run/world');
+    const e = new GameEngine(partyState()); const bow = e.getSnapshot().characters[1];
+    expect(heroRole(bow)).toBe('ranged'); expect(aiOf(bow).hold).toBe(DEFAULT_AI.ranged.hold);
+    expect(e.setHelper(bow.id, { ai: { hold: 99, dodge: -3 } })).toBe(true);
+    expect(aiOf(e.getSnapshot().characters[1]).hold).toBe(8); expect(aiOf(e.getSnapshot().characters[1]).dodge).toBe(0);
+    expect(e.setHelper(bow.id, { ai: undefined })).toBe(true); expect(e.getSnapshot().characters[1].helper.ai).toBeUndefined();
+    expect(e.setHelper(bow.id, { ai: { hold: NaN } })).toBe(false);
+  });
+  it('quem mantém distância fica mais longe do inimigo do que quem cola (hold alto × 0)', () => {
+    const gap = (hold: number) => {
+      const e = new GameEngine(partyState()); const bow = e.getSnapshot().characters[1]; e.setHelper(bow.id, { ai: { hold, dodge: 0, retreatAt: 0 } });
+      for (const c of e.getSnapshot().characters) e.devSetLevel(c.id, 25);
+      e.start(); let best = 0;
+      for (let i = 0; i < 3000; i++) { e.tick(100); const s = e.getSnapshot(), m = s.monsters.find(x => x.alive); if (m && s.run!.pos[bow.id]) { best = Math.max(best, Math.abs(s.run!.pos[bow.id].d - m.d!)); if (i > 1500) break; } }
+      return best;
+    };
+    expect(gap(6)).toBeGreaterThan(gap(0));
+  });
+});

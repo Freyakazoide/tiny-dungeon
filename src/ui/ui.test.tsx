@@ -257,3 +257,14 @@ describe('Helper auto-buy', () => {
     expect(gameStore.getSnapshot().autoBuy?.enabled).toBe(true);
   });
 });
+
+describe('Helper: movimentação no corredor', () => {
+  it('mostra os controles de IA do personagem e grava no helper', async () => {
+    const { HelperPanel } = await import('./HelperPanel');
+    const state = gameStore.getSnapshot();
+    render(<HelperPanel state={state} character={state.characters[1]} />);
+    expect(screen.getByLabelText('Movimentação')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Distância que mantém do inimigo'), { target: { value: '6' } });
+    expect(gameStore.getSnapshot().characters[1].helper.ai?.hold).toBe(6);
+  });
+});

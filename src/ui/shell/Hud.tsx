@@ -1,3 +1,4 @@
+import { CHUNK_LEN } from '../../game/run/plan';
 import { useEffect, useState } from 'react';
 import type { GameState, HuntStatus } from '../../game/core/types';
 import { huntRiskInfo } from '../../game/systems/huntInfo';
@@ -40,6 +41,11 @@ const STATUS: Record<HuntStatus, { label: string; icon: string; tone?: 'ok' | 'w
 
 /** Progresso da wave (0 a 1): monstros derrotados sobre o total (contando os que ainda vão entrar nas levas). */
 export function waveProgress(state: GameState) {
+  if (state.run) {   // corredor: durante um encontro, quem já caiu; entre encontros, o quanto falta para o fim do trecho
+    const run = state.run, left = state.monsters.filter(m => m.alive).length + run.queue.reduce((n, q) => n + q.ids.length, 0), total = state.waveInfo?.total ?? 0;
+    if (run.open && total) return Math.max(0, Math.min(1, (total - left) / total));
+    return (run.anchor % CHUNK_LEN) / CHUNK_LEN;
+  }
   const total = state.waveInfo?.total ?? state.monsters.length;
   if (!total || state.status === 'idle') return 0;
   if (state.status === 'transition') return 1;
@@ -55,8 +61,8 @@ export function Hud({ state }: { state: GameState }) {
   return <header className="hud">
     <div className="brand"><b>TD</b><span>Tiny Dungeon</span></div>
     <div className="hunt-title"><strong>{hunt.name}</strong><small>Nível rec. {hunt.recommendedLevel} · <span className={`risk-${risk.toLowerCase()}`}>{risk}</span> · ciclo {state.cycle + 1}{pending && <> · <span title="Troca no fim do ciclo">⏭ Próxima: {pending.name}</span></>}</small></div>
-    <div className="wave"><div className="wave-top"><span>Wave {state.wave + 1}/{huntWaves(state.huntId).length}</span><span>{tier && info ? `${TIER_NAMES[tier]} · ${info.total} inimigos` : ''}</span></div>
-      <div className="bar" role="progressbar" aria-label="Progresso da wave" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(waveProgress(state) * 100)}><i style={{ width: `${waveProgress(state) * 100}%` }} /></div></div>
+    <div className="wave"><div className="wave-top"><span>{state.run ? `Trecho ${Math.floor(state.run.anchor / CHUNK_LEN) + 1} · ${Math.floor(state.run.anchor)} m` : `Wave ${state.wave + 1}/${huntWaves(state.huntId).length}`}</span><span>{tier && info ? `${TIER_NAMES[tier]} · ${info.total} inimigos` : ''}</span></div>
+      <div className="bar" role="progressbar" aria-label={state.run ? "Progresso do trecho" : "Progresso da wave"} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(waveProgress(state) * 100)}><i style={{ width: `${waveProgress(state) * 100}%` }} /></div></div>
     <Chip tone={status.tone} className="hide-s"><Icon name={status.icon} size={24} /> {status.label}</Chip>
     <Chip className="hide-s" title="Ouro"><Icon name="stat_gold" size={24} /> <b>{state.gold.toLocaleString('pt-BR')}</b></Chip>
     <Chip tone={potionTone(potions)} className="hide-s" title="Estoque de poções de vida"><Icon name="stat_hp" size={24} /> Poções: {potions}%</Chip>

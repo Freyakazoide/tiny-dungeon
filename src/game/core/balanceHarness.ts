@@ -1,7 +1,7 @@
 import { GameEngine } from './GameEngine';
 import { partyState } from './testing';
 import { HUNT_BY_ID } from '../data/hunts';
-import { WAVE_CONFIG } from '../data/balance';
+import { RUN_CONFIG, WAVE_CONFIG } from '../data/balance';
 import { GEAR_SETS, gearId } from '../data/gear';
 import { autoSpend } from './talentBuild';
 import { POTION_STOCK } from '../data/shop';
@@ -120,4 +120,34 @@ export function daysToGate(totalTries: number, triesPerSecond: number, activeHou
 /** Dias para chegar ao nível `target` dado o XP/h da hunt e as horas ativas por dia. */
 export function daysToLevel(xpNeeded: number, xpPerHour: number, activeHoursPerDay: number) {
   return xpNeeded / (xpPerHour * activeHoursPerDay);
+}
+
+export interface RunMetrics { huntId: string; level: number; minutes: number; distance: number; kills: number; bossKills: number; defeats: number; xpPerHour: number; goldPerHour: number; potionCostPerHour: number; minHpFraction: number; deepestChunk: number; encounters: number }
+/** Harness do corredor: roda `minutes` de jogo simulado com o grupo de referência e mede o ritmo (XP/h, ouro/h, poções, quedas, chefes). */
+export function simulateRun(huntId: string, options: { minutes?: number; level?: number; seed?: number; talents?: boolean } = {}): RunMetrics {
+  const hunt = HUNT_BY_ID[huntId], level = options.level ?? hunt.recommendedLevel, minutes = options.minutes ?? 30;
+  const restore: (() => void)[] = [];
+  const previousRun = RUN_CONFIG.enabled; RUN_CONFIG.enabled = true; restore.push(() => { RUN_CONFIG.enabled = previousRun; });
+  const previousWaves = WAVE_CONFIG.enabled; WAVE_CONFIG.enabled = true; restore.push(() => { WAVE_CONFIG.enabled = previousWaves; });
+  const original = Math.random; Math.random = mulberry32(options.seed ?? 1); restore.push(() => { Math.random = original; });
+  try {
+    const state0 = partyState(); state0.huntId = huntId; state0.characters.forEach(c => { c.profile.level = level; });
+    let engine = new GameEngine(state0);
+    buildReference(engine, huntId, level, options.talents ?? true);
+    const state = engine.getSnapshot();
+    state.inventory.supply = POTION_STOCK.filter(p => p.unlockLevel <= level).map(p => ({ itemId: p.itemId, quantity: 1e6 }));
+    state.inventory.capacity.supply = 1e9;
+    engine = new GameEngine(state);
+    for (const c of state.characters) { const s = characterStats(c, state); c.hp = s.maxHp; c.mana = s.maxMana; }
+    engine.start();
+    let minHp = 1, deepest = 0;
+    for (let i = 0; i < minutes * 600; i++) {
+      engine.tick(100);
+      if (i % 5) continue;
+      const s = engine.getSnapshot(); deepest = Math.max(deepest, Math.floor((s.run?.anchor ?? 0) / 24));
+      for (const c of s.characters) minHp = Math.min(minHp, c.hp / characterStats(c, s).maxHp);
+    }
+    const s = engine.getSnapshot(), a = s.analyzer, hours = a.activeMs / 3_600_000;
+    return { huntId, level, minutes, distance: Math.round(s.run?.deepest ?? 0), kills: Object.values(a.kills).reduce((x, y) => x + y, 0), bossKills: a.bosses, defeats: a.defeats, xpPerHour: hours ? a.xp / hours : 0, goldPerHour: hours ? a.gold / hours : 0, potionCostPerHour: hours ? a.suppliesValue / hours : 0, minHpFraction: minHp, deepestChunk: deepest, encounters: Math.max(0, (s.run?.lastTrigger ?? 0)) };
+  } finally { for (const undo of restore.reverse()) undo(); }
 }

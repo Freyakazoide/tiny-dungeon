@@ -96,7 +96,7 @@ export function HuntSelector({ state }: { state: GameState }) {
   return <section className="hunt-selector hn-layout" aria-label="Hunts" style={{ flex: 1 }}>
     <div className="hn-left">
       <div className="pk-panel hn-now"><span className={running ? 'pk-tag ok' : 'pk-tag afim'}>{running ? '● Em caçada' : '■ Parada'}</span>
-        <div><b className="pk-serif">{current.name}</b><br /><small className="muted">ciclo {state.cycle + 1} · wave {state.wave + 1}/{current.waves.length}{tier ? ` · ${tier}` : ''}</small></div>
+        <div><b className="pk-serif">{current.name}</b><br /><small className="muted">ciclo {state.cycle + 1} · {state.run ? `trecho ${Math.floor(state.run.anchor / 24) + 1}` : `wave ${state.wave + 1}/${current.waves.length}`}{tier ? ` · ${tier}` : ''}</small></div>
         {pending ? <span className="hn-queue">⏭ Próxima: {pending.name}<button type="button" className="pk-btn sm" onClick={() => gameStore.cancelQueuedHunt()}>Cancelar</button></span> : <span />}</div>
       <div className="hn-tools"><h4 className="pk-sec" style={{ margin: 0, flex: 1 }}>Mapas <small>{HUNTS.length} hunts · nenhuma é bloqueada por nível</small></h4>
         <div className="hn-sort" role="group" aria-label="Ordenar">{SORTS.map(([id, label]) => <button type="button" key={id} className={`pk-btn ${sort === id ? 'on' : ''}`} aria-pressed={sort === id} onClick={() => setSort(id)}>{label}</button>)}</div></div>

@@ -40,7 +40,7 @@ export interface MonsterDef { id: string; name: string; hp: number; attack: numb
 export interface MonsterStatuses { burn?: { stacks: number; remaining: number; power: number; source: string; acc: number }; frozen?: number; stunned?: number;
   poison?: { stacks: number; remaining: number; power: number; source: string; acc: number }; bleed?: { remaining: number; perSec: number; source: string; acc: number };
   armor?: { pct: number; remaining: number }; confused?: { remaining: number; source: string }; }
-export interface MonsterRuntime { uid: string; defId: string; hp: number; maxHp: number; cooldown: number; alive: boolean; statuses?: MonsterStatuses; /** posição no corredor (modo corredor): d = distância, y = linha */ d?: number; y?: number; /** multiplicador de ataque pela profundidade */ atkMul?: number; }
+export interface MonsterRuntime { uid: string; defId: string; hp: number; maxHp: number; cooldown: number; alive: boolean; statuses?: MonsterStatuses; /** posição no corredor (modo corredor): d = distância, y = linha */ d?: number; y?: number; /** multiplicadores pela profundidade: ataque do monstro e XP/ouro que ele dá */ atkMul?: number; rewardMul?: number; }
 /** Estado da run no corredor procedural: tudo o que não dá para regenerar da semente. */
 export interface RunState { seed: number; /** posição do grupo (a "âncora" da formação) */ anchor: number; pos: Record<string, { d: number; y: number }>; /** último chunk cujo encontro já disparou */ lastTrigger: number; /** encontro em andamento (aberto até todos morrerem) */ open: boolean; queue: { chunk: number; ids: string[]; waited: number }[]; deepest: number; }
 export interface WaveDef { name: string; monsters: string[]; }

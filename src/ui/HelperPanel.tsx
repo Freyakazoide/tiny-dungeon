@@ -8,6 +8,7 @@ import { ItemIcon } from './items/ItemIcon';
 import { viewFromItem } from './items/itemView';
 import { compact } from './format';
 import { uiStore } from './uiStore';
+import { aiOf, heroRole } from '../game/run/world';
 
 const PCT: { key: 'hpPotionAt' | 'manaPotionAt' | 'defensiveAmuletAt' | 'emergencyAt'; label: string; help: string; icon: string; bar?: 'hp' | 'mp' }[] = [
   { key: 'hpPotionAt', label: 'Usar poção de vida abaixo de', help: 'Quando a vida cai até este %, o personagem toma a poção mais barata que cobre o déficit.', icon: 'stat_hp', bar: 'hp' },
@@ -54,6 +55,25 @@ function AutoBuy({ state }: { state: GameState }) {
   </div>;
 }
 
+const ROLE_LABEL = { tank: 'Tanque', melee: 'Corpo a corpo', ranged: 'À distância', healer: 'Curandeiro' } as const;
+const AI_ROWS = [
+  { key: 'hold' as const, label: 'Distância que mantém do inimigo', help: 'Em células. Quem luta à distância tenta ficar assim longe; 0 cola no inimigo.', min: 0, max: 8, step: .5, fmt: (v: number) => `${v.toFixed(1)} cél.` },
+  { key: 'leash' as const, label: 'Quanto pode se afastar do tanque', help: 'Em células à frente do tanque: mais alto = mais solto.', min: 1, max: 8, step: .5, fmt: (v: number) => `${v.toFixed(1)} cél.` },
+  { key: 'dodge' as const, label: 'Foge de monstro a menos de', help: 'Em células. 0 = nunca foge.', min: 0, max: 4, step: .25, fmt: (v: number) => v ? `${v.toFixed(2)} cél.` : 'nunca' },
+  { key: 'retreatAt' as const, label: 'Recua quando a vida cair abaixo de', help: '0% = nunca recua.', min: 0, max: .8, step: .05, fmt: (v: number) => v ? `${Math.round(v * 100)}%` : 'nunca' },
+];
+/** Movimentação no corredor: só configuração; a IA do personagem faz o resto (nunca há ordem ao vivo). */
+function Movement({ character }: { character: Character }) {
+  const role = heroRole(character), ai = aiOf(character, role), custom = !!character.helper.ai;
+  const set = (key: 'hold' | 'leash' | 'dodge' | 'retreatAt', v: number) => gameStore.setHelper(character.id, { ai: { ...character.helper.ai, [key]: v } });
+  return <div className="pk-panel he-card" aria-label="Movimentação">
+    <h4 className="pk-sec">Movimentação de {character.name} <small>{ROLE_LABEL[role]}{custom ? ' · personalizada' : ' · padrão do papel'}</small></h4>
+    {AI_ROWS.map(r => <label className="he-slider" key={r.key} title={r.help}><span className="he-lab">{r.label}</span>
+      <input type="range" min={r.min} max={r.max} step={r.step} aria-label={r.label} value={ai[r.key]} onChange={e => set(r.key, +e.target.value)} /><b className="he-val">{r.fmt(ai[r.key])}</b></label>)}
+    <div className="he-chips"><button type="button" className="pk-btn sm" disabled={!custom} onClick={() => gameStore.setHelper(character.id, { ai: undefined })}>Restaurar padrão do papel</button></div>
+    <p className="muted pk-tiny">O papel vem do tanque marcado, da arma e das magias de cura. A IA só segue estes números: não existe comando ao vivo.</p></div>;
+}
+
 /** Helper (padrão pixel-kit): automação de poções por personagem, regras do grupo e compra automática. */
 export function HelperPanel({ state, character }: { state: GameState; character: Character }) {
   const set = (patch: Partial<HelperConfig>) => gameStore.setHelper(character.id, patch);
@@ -66,6 +86,7 @@ export function HelperPanel({ state, character }: { state: GameState; character:
           <input type="range" min={0} max={100} step={5} aria-label={p.label} value={h[p.key]} onChange={e => set({ [p.key]: +e.target.value })} />
           <b className="he-val">{h[p.key]}%</b></label>)}
         <p className="muted pk-tiny">Dica: o custo de poções é o sinal real de dificuldade. Suba os limites em hunts perigosas e desça nas fáceis.</p></div>
+      <Movement character={character} />
       <div className="pk-panel he-card"><h4 className="pk-sec">Grupo</h4>
         <Switch checked={state.autoAdvance} onChange={v => gameStore.setAutoAdvance(v)} label="Avanço automático da wave" />
         <Switch checked={h.healAllies} onChange={healAllies => set({ healAllies })} label="Curar aliados" />
