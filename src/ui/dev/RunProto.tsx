@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { BAND, CHUNK_LEN } from '../../game/run/plan';
+import { BAND, CHUNK_LEN, floorInChunk } from '../../game/run/plan';
 import { RunSim, type HeroSpec } from '../../game/run/sim';
 import { MONSTERS } from '../../game/data/monsters';
 import { HUNT_BY_ID } from '../../game/data/hunts';
 
 /** Protótipo do corredor procedural (abre em #/proto): o grupo anda da direita para a esquerda, a IA reage sozinha. Só para aprovar o conceito. */
-const CELL = 44, W = 1100, H = 10 * CELL + 40, HERO_X = W * .74;
+const CELL = 40, W = 1100, H = 14 * CELL + 30, HERO_X = W * .74;
 const TIER_COLOR: Record<string, string> = { normal: '#8d95a0', light: '#e5ca91', reinforced: '#e0a05c', horde: '#d8554f', invasion: '#c45f9c' };
 const ROLE_COLOR: Record<string, string> = { tank: '#5f8fb8', melee: '#d8554f', ranged: '#7cc08a', healer: '#e5ca91' };
 const team = (p: number): HeroSpec[] => [
@@ -23,17 +23,20 @@ export function RunProto() {
     let raf = 0, last = performance.now(), acc = 0;
     const draw = () => {
       const s = sim.current, ctx = canvas.current?.getContext('2d'); if (!ctx) return;
-      const sx = (d: number) => HERO_X - (d - s.anchor) * CELL, sy = (y: number) => 20 + y * CELL;
+      const sx = (d: number) => HERO_X - (d - s.anchor) * CELL, cy = s.plan.floorAtD(s.anchor) + BAND / 2, sy = (y: number) => H / 2 - 10 + (y - cy) * CELL;
       ctx.fillStyle = '#0b1016'; ctx.fillRect(0, 0, W, H);
-      const first = s.depth - 2, last = s.depth + Math.ceil(HERO_X / CELL / CHUNK_LEN) + 2;
-      for (let i = Math.max(0, first); i <= last; i++) {
-        const c = s.plan.chunk(i), x1 = sx(c.start + CHUNK_LEN), w = CHUNK_LEN * CELL;
-        ctx.fillStyle = c.encounter?.boss ? '#241a1a' : i % 2 ? '#19212b' : '#1c2531'; ctx.fillRect(x1, sy(c.floor), w, BAND * CELL);
-        ctx.strokeStyle = '#2b3644'; ctx.lineWidth = 1;
-        for (let k = 0; k <= CHUNK_LEN; k++) { ctx.beginPath(); ctx.moveTo(x1 + k * CELL, sy(c.floor)); ctx.lineTo(x1 + k * CELL, sy(c.floor + BAND)); ctx.stroke(); }
+      const first = Math.max(0, s.depth - 2), lastI = s.depth + Math.ceil(HERO_X / CELL / CHUNK_LEN) + 2;
+      for (let i = first; i <= lastI; i++) {
+        const c = s.plan.chunk(i);
+        for (let k = 0; k < CHUNK_LEN; k++) {
+          const top = floorInChunk(c, k), x = sx(c.start + k + 1);
+          if (x > W + CELL || x < -CELL) continue;
+          ctx.fillStyle = c.encounter?.boss ? '#2a1c1c' : (i + k) % 2 ? '#19212b' : '#1c2531'; ctx.fillRect(x, sy(top), CELL, BAND * CELL);
+          ctx.fillStyle = '#3a4656'; ctx.fillRect(x, sy(top) - 3, CELL, 3); ctx.fillRect(x, sy(top + BAND), CELL, 3);   // paredes: mostram a subida e a descida
+        }
         for (const o of c.obstacles) { const x = sx(c.start + o.c + 1); ctx.fillStyle = o.kind === 'a' ? '#5a4b3a' : '#4a4f58'; ctx.fillRect(x + 3, sy(o.r) + 3, CELL - 6, CELL - 6); ctx.strokeStyle = '#0b1016'; ctx.strokeRect(x + 3, sy(o.r) + 3, CELL - 6, CELL - 6); }
-        ctx.fillStyle = '#6a727d'; ctx.font = '10px monospace'; ctx.fillText(`chunk ${i}`, x1 + 4, sy(c.floor) - 4);
-        if (c.encounter) { const e = c.encounter, x = sx(c.start + e.at); ctx.fillStyle = TIER_COLOR[e.tier]; ctx.fillRect(x - 2, sy(c.floor) - 16, 4, BAND * CELL + 16); ctx.font = '11px monospace'; ctx.fillText(`${e.boss ? '☠ CHEFE ' + e.bossPower : e.tier} ${e.monsters.length}`, x + 5, sy(c.floor) - 6); }
+        ctx.fillStyle = '#6a727d'; ctx.font = '10px monospace'; ctx.fillText(`chunk ${i}`, sx(c.start + CHUNK_LEN) + 4, 12);
+        if (c.encounter) { const e = c.encounter, x = sx(c.start + e.at), top = floorInChunk(c, e.at); ctx.fillStyle = TIER_COLOR[e.tier]; ctx.fillRect(x - 2, sy(top) - 16, 4, BAND * CELL + 16); ctx.font = '11px monospace'; ctx.fillText(`${e.boss ? '☠ CHEFE ' + e.bossPower : e.tier} ${e.monsters.length}`, x + 5, sy(top) - 6); }
       }
       for (const f of s.foes) { const sz = f.boss ? CELL * 1.4 : CELL * .62; ctx.fillStyle = f.boss ? '#8a2a2a' : MONSTERS[f.defId]?.color ? `#${MONSTERS[f.defId].color.toString(16).padStart(6, '0')}` : '#b04040'; ctx.fillRect(sx(f.d) - sz / 2, sy(f.y) - sz / 2, sz, sz); ctx.fillStyle = '#000a'; ctx.fillRect(sx(f.d) - sz / 2, sy(f.y) - sz / 2 - 6, sz, 3); ctx.fillStyle = '#d8554f'; ctx.fillRect(sx(f.d) - sz / 2, sy(f.y) - sz / 2 - 6, sz * f.hp / f.maxHp, 3); }
       for (const h of s.heroes) { if (!h.alive) continue; ctx.fillStyle = ROLE_COLOR[h.role]; ctx.fillRect(sx(h.d) - 12, sy(h.y) - 12, 24, 24); ctx.fillStyle = '#0b1016'; ctx.font = 'bold 12px monospace'; ctx.fillText(h.role[0].toUpperCase(), sx(h.d) - 4, sy(h.y) + 4); ctx.fillStyle = '#000a'; ctx.fillRect(sx(h.d) - 12, sy(h.y) - 19, 24, 3); ctx.fillStyle = '#7cc08a'; ctx.fillRect(sx(h.d) - 12, sy(h.y) - 19, 24 * h.hp / h.maxHp, 3); }

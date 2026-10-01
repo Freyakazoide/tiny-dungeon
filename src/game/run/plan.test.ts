@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BAND, BOSS_EVERY, CHUNK_LEN, RunPlan, bossIdOf, depthScale, generateChunk, floorAt } from './plan';
+import { BOSS_EVERY, BAND, CHUNK_LEN, RunPlan, bossIdOf, depthScale, generateChunk } from './plan';
 import { HUNT_BY_ID } from '../data/hunts';
 
 const params = { seed: 12345, huntId: 'catacumbas' };
@@ -13,11 +13,13 @@ describe('Run procedural — plano do corredor', () => {
     expect(JSON.stringify(generateChunk({ ...params, seed: 999 }, 7))).not.toBe(JSON.stringify(generateChunk(params, 7)));
   });
 
-  it('a faixa sobe e desce no máximo 1 linha por chunk e fica dentro dos limites', () => {
-    let prev = floorAt(params.seed, 0);
-    for (let i = 1; i < 300; i++) { const f = floorAt(params.seed, i); expect(Math.abs(f - prev)).toBeLessThanOrEqual(1); expect(f).toBeGreaterThanOrEqual(0); expect(f).toBeLessThanOrEqual(4); prev = f; }
-    const floors = new Set(Array.from({ length: 300 }, (_, i) => floorAt(params.seed, i)));
-    expect(floors.size).toBeGreaterThan(2);   // realmente varia
+  it('a faixa sobe e desce de verdade: rampas de vários andares, dentro dos limites, contínua entre chunks', () => {
+    const plan = new RunPlan(params), tops: number[] = [];
+    for (let i = 0; i < 300; i++) { const c = plan.chunk(i); expect(c.floorStart).toBe(i ? plan.chunk(i - 1).floorEnd : c.floorStart); tops.push(c.floorEnd); expect(c.floorEnd).toBeGreaterThanOrEqual(0); expect(c.floorEnd).toBeLessThanOrEqual(16); }
+    expect(Math.max(...tops) - Math.min(...tops)).toBeGreaterThanOrEqual(10);                       // amplitude grande
+    expect(Math.max(...tops.slice(1).map((v, i) => Math.abs(v - tops[i])))).toBeGreaterThanOrEqual(3);   // rampas de pelo menos 3 andares
+    let slope = 0; for (let d = 0; d < 300 * CHUNK_LEN - 1; d++) slope = Math.max(slope, Math.abs(plan.floorAtD(d + 1) - plan.floorAtD(d)));
+    expect(slope).toBeLessThanOrEqual(1);                                                          // nunca um degrau de 2 linhas entre colunas
   });
 
   it('sempre existe um caminho livre de ponta a ponta (busca em largura sobre 200 chunks)', () => {
