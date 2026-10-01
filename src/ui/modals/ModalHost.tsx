@@ -3,7 +3,6 @@ import type { Character, GameState } from '../../game/core/types';
 import { gameStore } from '../../game/core/GameStore';
 import { AnalyzerPanel } from '../AnalyzerPanel';
 import { CharacterPanel } from '../CharacterPanel';
-import { ClassesPanel } from '../ClassesPanel';
 import { GroupPanel } from '../GroupPanel';
 import { HelperPanel } from '../HelperPanel';
 import { HuntSelector } from '../HuntSelector';
@@ -30,14 +29,15 @@ export interface ModalCtx { state: GameState; character: Character; tab: string;
 export interface ModalDef {
   title: string; subtitle: string; icon: string; tabs: readonly string[];
   /** mostra o seletor de personagem no cabeçalho */
-  who?: boolean; gold?: boolean; bodyClass?: string; tabIcons?: Record<string, string>; tabBadges?: (ctx: ModalCtx) => Record<string, TabBadge | undefined>; size?: (tab: string) => ModalSize; render: (ctx: ModalCtx) => ReactNode;
+  who?: boolean; gold?: boolean; bodyClass?: string | ((tab: string) => string | undefined); tabIcons?: Record<string, string>; tabBadges?: (ctx: ModalCtx) => Record<string, TabBadge | undefined>; size?: (tab: string) => ModalSize; render: (ctx: ModalCtx) => ReactNode;
 }
 
 /** Definição de cada menu: abas, tamanho e o painel que o preenche (os painéis são os componentes de sempre, agora dentro de modais). */
 export const MODALS: Record<Exclude<ModalId, 'bemvindo'>, ModalDef> = {
-  personagem: { title: 'Personagem', subtitle: 'Ficha, proficiências, magias e talentos', icon: 'personagem', who: true, tabs: CHARACTER_TABS,
-    tabIcons: { Ficha: 'personagem', 'Proficiências': 'prof_melee', Magias: 'stat_magic', Talentos: 'stat_xp' },
-    tabBadges: ({ character }) => { const free = talentPointsAvailable(character), equipped = character.spellSlots.length; return { Magias: { value: equipped, title: `${equipped} magias equipadas` }, ...(free > 0 ? { Talentos: { value: free, gold: true, title: `${free} pontos de talento livres` } } : {}) }; }, size: tab => tab === 'Talentos' ? 'xl' : 'md',
+  personagem: { title: 'Personagem', subtitle: 'Ficha, proficiências, magias, talentos e classes', icon: 'personagem', who: true, tabs: CHARACTER_TABS,
+    bodyClass: tab => tab === 'Classes' ? 'cl-body' : undefined,
+    tabIcons: { Ficha: 'personagem', 'Proficiências': 'prof_melee', Magias: 'stat_magic', Talentos: 'stat_xp', Classes: 'classes' },
+    tabBadges: ({ character }) => { const free = talentPointsAvailable(character), equipped = character.spellSlots.length; const ready = groupClasses(character).ready.length; return { Magias: { value: equipped, title: `${equipped} magias equipadas` }, ...(ready > 0 ? { Classes: { value: ready, gold: true, title: `${ready} classes prontas para evoluir` } } : {}), ...(free > 0 ? { Talentos: { value: free, gold: true, title: `${free} pontos de talento livres` } } : {}) }; }, size: tab => tab === 'Talentos' || tab === 'Classes' ? 'xl' : 'md',
     render: ({ state, character, tab }) => <CharacterPanel state={state} selected={character.id} setSelected={uiStore.select} tab={tab as CharacterTab} /> },
   itens: { title: 'Itens', subtitle: 'Equipamento, mochila e suprimentos', icon: 'itens', who: true, gold: true, tabs: ['Equipamento', 'Mochila', 'Suprimentos'],
     tabIcons: { Equipamento: 'slot_armor', Mochila: 'itens', Suprimentos: 'stat_hp' },
@@ -45,9 +45,6 @@ export const MODALS: Record<Exclude<ModalId, 'bemvindo'>, ModalDef> = {
     render: ({ state, character, tab }) => <ItemsPanel state={state} character={character} section={tab === 'Equipamento' ? 'equipment' : tab === 'Mochila' ? 'bag' : 'supplies'} /> },
   comercio: { title: 'Comércio', subtitle: 'Loja, ferreiro e venda', icon: 'comercio', gold: true, tabs: ['Loja', 'Ferreiro', 'Vender'], tabIcons: { Loja: 'stat_hp', Ferreiro: 'slot_weapon', Vender: 'stat_gold' },
     render: ({ state, character, tab }) => <ItemsPanel state={state} character={character} section={tab === 'Loja' ? 'shop' : tab === 'Ferreiro' ? 'smith' : 'sell'} /> },
-  classes: { title: 'Classes', subtitle: 'Guia de evolução: o que treinar para o próximo passo', icon: 'classes', who: true, tabs: ['Próximo passo', 'Árvore completa'], size: () => 'xl', bodyClass: 'cl-body', tabIcons: { 'Próximo passo': 'classes', 'Árvore completa': 'hunts' },
-    tabBadges: ({ state, character }) => { const n = groupClasses(character).ready.length; void state; return n > 0 ? { 'Próximo passo': { value: n, gold: true, title: `${n} classes prontas para evoluir` } } : {}; },
-    render: ({ state, character, tab }) => <ClassesPanel state={state} character={character} section={tab === 'Próximo passo' ? 'next' : 'tree'} /> },
   grupo: { title: 'Grupo', subtitle: 'Formação, tanque e reservas', icon: 'grupo', tabs: ['Formação', 'Reservas'], size: () => 'xl', bodyClass: 'gp-body', tabIcons: { Formação: 'grupo', Reservas: 'personagem' },
     tabBadges: ({ state }) => { const alerts = groupAlerts(state).filter(a => a.kind !== 'allOk'), reserves = state.characters.length - state.team.length; return { ...(alerts.length ? { Formação: { value: alerts.length, gold: alerts.some(a => a.level === 'warn' || a.level === 'bad'), title: `${alerts.length} alertas na formação` } } : {}), ...(reserves > 0 ? { Reservas: { value: reserves, title: `${reserves} fora da equipe` } } : {}) }; },
     render: ({ state, tab }) => <GroupPanel state={state} section={tab === 'Formação' ? 'formation' : 'reserves'} /> },
@@ -86,7 +83,7 @@ export function ModalHost({ state }: { state: GameState }) {
   const def = MODALS[id], tab = ui.tab && def.tabs.includes(ui.tab) ? ui.tab : def.tabs[0];
   const chips = def.who && <div className="who" role="group" aria-label="Personagem">{state.characters.map(c =>
     <button key={c.id} type="button" className={c.id === character.id ? 'on' : ''} aria-pressed={c.id === character.id} aria-label={c.name} onClick={() => uiStore.select(c.id)}><span className="av"><Avatar character={c} /></span><span>{c.name}<small>{classLabel(c)} · Nv {c.profile.level}</small></span></button>)}</div>;
-  return <Modal key={id} bodyClass={def.bodyClass} title={def.title} subtitle={def.subtitle} icon={def.icon} size={def.size?.(tab) ?? 'md'} headerExtra={def.who || def.gold ? <>{chips}{def.gold && <GoldChip gold={state.gold} style={{ marginLeft: def.who ? 12 : 'auto' }} />}</> : undefined} onClose={uiStore.close}
+  return <Modal key={id} bodyClass={typeof def.bodyClass === 'function' ? def.bodyClass(tab) : def.bodyClass} title={def.title} subtitle={def.subtitle} icon={def.icon} size={def.size?.(tab) ?? 'md'} headerExtra={def.who || def.gold ? <>{chips}{def.gold && <GoldChip gold={state.gold} style={{ marginLeft: def.who ? 12 : 'auto' }} />}</> : undefined} onClose={uiStore.close}
     tabs={def.tabs.length > 1 ? <Tabs tabs={def.tabs} value={tab} onChange={uiStore.setTab} label={`Seções de ${def.title}`} icons={def.tabIcons} badges={def.tabBadges?.({ state, character, tab })} /> : undefined}>
     {def.render({ state, character, tab })}
   </Modal>;

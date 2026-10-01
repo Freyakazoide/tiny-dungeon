@@ -83,7 +83,7 @@ export function ProficiencyGrid({ character }: { character: Character }) {
     {trainable.length > 0 && <div className="ch-ptiles">{trainable.map(tile)}</div>}
     {blocked.length > 0 && <div className="blockedbar pk-panel flat" style={{ padding: 10, marginBottom: 16, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
       <span className="pk-tag blq">Bloqueados</span>{blocked.map(id => <span key={id} className="pk-chip"><Icon name={profIcon(id)} size={24} />{PROFICIENCIES[id].name}</span>)}
-      <button type="button" className="pk-btn sm" onClick={() => uiStore.open('classes')}>Ver afinidade</button></div>}
+      <button type="button" className="pk-btn sm" onClick={() => uiStore.openClasses()}>Ver afinidade</button></div>}
     {profile.offlineTargets.some(id => !!id && isElement(id)) && !focusReady && <p className="muted">Sem magia do foco equipada: nada treina.</p>}
     <h4 className="pk-sec">Treino offline <small>2 vagas · até 24 h por retorno, sem loot</small></h4>
     <div className="ch-sockets">{([0, 1] as const).map(slot => <Socket key={slot} character={character} slot={slot} />)}</div>

@@ -27,11 +27,11 @@ afterEach(() => { cleanup(); vi.unstubAllEnvs(); });
 const rail = () => within(screen.getByRole('navigation', { name: 'Menus do jogo' }));
 
 describe('Fase 8 — trilho e modais', () => {
-  it('o trilho renderiza os 11 ícones na ordem de RAIL_ITEMS; clicar abre o modal certo, clicar de novo fecha; o ativo tem aria-pressed', async () => {
+  it('o trilho renderiza os 10 ícones na ordem de RAIL_ITEMS; clicar abre o modal certo, clicar de novo fecha; o ativo tem aria-pressed', async () => {
     render(<App />); const user = userEvent.setup();
     const buttons = rail().getAllByRole('button');
     expect(buttons.map(b => b.getAttribute('aria-label'))).toEqual(RAIL_ITEMS.map(i => i.title));
-    expect(buttons).toHaveLength(11);
+    expect(buttons).toHaveLength(10);
     await user.click(rail().getByRole('button', { name: 'Itens' }));
     expect(screen.getByRole('dialog', { name: 'Itens' })).toBeTruthy();
     expect(rail().getByRole('button', { name: 'Itens' }).getAttribute('aria-pressed')).toBe('true');
@@ -64,7 +64,8 @@ describe('Fase 8 — trilho e modais', () => {
     await user.click(input); await user.keyboard('ik');                       // digitando: nada de trocar de menu
     expect(screen.getByRole('dialog', { name: 'Personagem' })).toBeTruthy();
     await user.keyboard('{Escape}'); expect(screen.queryByRole('dialog')).toBeNull();
-    for (const [key, title] of [['i', 'Itens'], ['l', 'Comércio'], ['k', 'Classes'], ['g', 'Grupo'], ['h', 'Hunts'], ['a', 'Analyzer'], ['p', 'Helper'], ['m', 'Progressão'], ['s', 'Sistema']] as const) {
+    await user.keyboard('k'); expect(screen.getByRole('dialog', { name: 'Personagem' })).toBeTruthy(); expect(screen.getByRole('tab', { name: /Classes/ }).getAttribute('aria-selected')).toBe('true'); await user.keyboard('k'); expect(screen.queryByRole('dialog')).toBeNull();
+    for (const [key, title] of [['i', 'Itens'], ['l', 'Comércio'], ['g', 'Grupo'], ['h', 'Hunts'], ['a', 'Analyzer'], ['p', 'Helper'], ['m', 'Progressão'], ['s', 'Sistema']] as const) {
       await user.keyboard(key); expect(screen.getByRole('dialog', { name: title }), key).toBeTruthy();
       await user.keyboard(key); expect(screen.queryByRole('dialog'), `${key} fecha`).toBeNull();
     }
@@ -106,12 +107,12 @@ describe('Fase 8 — trilho e modais', () => {
 });
 
 describe('Fase 8 — badges, HUD e relatório offline', () => {
-  it('badge do Personagem = pontos de talento livres; badge de Classes só quando alguém pode evoluir', () => {
+  it('badge do Personagem = pontos de talento livres; vira '!' pulsante quando alguém pode evoluir (Classes agora é aba do Personagem)', () => {
     const state = fresh(), c = state.characters[0];
-    expect(railBadges(state, c).personagem?.value).toBe(String(talentPointsAvailable(c))); expect(railBadges(state, c).classes).toBeUndefined();
+    expect(railBadges(state, c).personagem?.value).toBe(String(talentPointsAvailable(c))); expect(railBadges(state, c).personagem?.pulse).toBeUndefined();
     c.profile.level = 10; c.profile.proficiencies.melee.level = 25;
     expect(canEvolve(c)).toBe(true);
-    const badges = railBadges(state, c); expect(badges.classes).toMatchObject({ value: '!', tone: 'gold', pulse: true }); expect(badges.personagem?.tone).toBe('gold');
+    const badges = railBadges(state, c); expect(badges.personagem).toMatchObject({ value: '!', tone: 'gold', pulse: true });
     state.inventory.supply = []; expect(railBadges(state, c).helper).toMatchObject({ tone: 'red' });
   });
 
@@ -229,7 +230,7 @@ describe('Fase 9 C — menu Personagem', () => {
     expect(document.querySelector('.blockedbar')).toBeTruthy();
     expect(screen.queryByLabelText('Fogo')).toBeNull();
     await user.click(screen.getByRole('button', { name: 'Ver afinidade' }));
-    expect(screen.getByRole('dialog', { name: 'Classes' })).toBeTruthy();
+    expect(screen.getByRole('dialog', { name: 'Personagem' })).toBeTruthy();
   });
   it('Magias: nomes em português; condições abrem em popover', async () => {
     open('magias'); const user = userEvent.setup();

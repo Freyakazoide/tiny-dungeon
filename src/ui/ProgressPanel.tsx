@@ -38,7 +38,7 @@ export function ProgressPanel({ state, character }: { state: GameState; characte
           <span className="t">{row.label} {row.kind === 'counter' ? compact(row.need) : row.need}</span>
           <span className={`s ${row.met ? 'ok' : 'no'}`}>{row.met ? 'pronto' : row.have === null ? 'em breve' : row.kind === 'counter' ? `${compact(row.have)}/${compact(row.need)}` : `${row.have}/${row.need}${row.eta ? ` · ~${formatEta(row.eta)}` : ''}`}</span></div>)}</div>)
           : <p className="empty-state">{character.name} chegou ao fim do caminho.</p>}
-        <button className="btn" onClick={() => uiStore.open('classes')}>Ver guia de classes →</button></div>
+        <button className="btn" onClick={() => uiStore.openClasses()}>Ver guia de classes →</button></div>
       <div className="card"><h3>Talentos</h3><div className="req"><span className="t">Pontos livres</span><span className={`s ${points ? 'ok' : ''}`}>{points}</span></div>
         <button className="btn" onClick={() => uiStore.open('personagem', { tab: 'Talentos' })}>Abrir a grade de talentos →</button></div>
     </div>

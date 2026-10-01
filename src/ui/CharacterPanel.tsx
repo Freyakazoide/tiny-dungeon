@@ -7,6 +7,7 @@ import { CharacterSheet } from './CharacterSheet';
 import { ProficiencyGrid } from './RpgPanels';
 import { SpellsPanel } from './SpellsPanel';
 import { TalentsPanel } from './TalentsPanel';
+import { ClassesPanel } from './ClassesPanel';
 
 /** Menu Personagem: abas Ficha / Proficiências / Magias / Talentos (o cabeçalho e as abas vêm do Modal). */
 export function CharacterPanel({ state, selected, setSelected, tab }: { state: GameState; selected: string; setSelected: (id: string) => void; tab: CharacterTab }) {
@@ -16,5 +17,6 @@ export function CharacterPanel({ state, selected, setSelected, tab }: { state: G
     {tab === 'Proficiências' && <ProficiencyGrid character={character} />}
     {tab === 'Magias' && <SpellsPanel state={state} selected={character.id} />}
     {tab === 'Talentos' && <TalentsPanel state={state} selected={character.id} setSelected={setSelected} />}
+    {tab === 'Classes' && <ClassesPanel state={state} character={character} />}
   </section>;
 }

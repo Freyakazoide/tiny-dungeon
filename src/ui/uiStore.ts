@@ -6,7 +6,7 @@ import { MODAL_IDS, RAIL_ITEMS, type ModalId } from './navigation';
  * Só as opções persistem (localStorage, com try/catch: pode estar bloqueado).
  */
 export interface UiOptions { reduceMotion: boolean; pauseOnMenu: boolean; scale: 90 | 100 | 115; }
-export interface UiState { modal: ModalId | null; tab: string | null; selected: string | null; options: UiOptions; }
+export interface UiState { modal: ModalId | null; tab: string | null; /** sub-menu da aba (Classes: 'next' | 'tree') */ sub: 'next' | 'tree'; selected: string | null; options: UiOptions; }
 
 const OPTIONS_KEY = 'tiny-dungeon-ui';
 const DEFAULT_OPTIONS: UiOptions = { reduceMotion: false, pauseOnMenu: false, scale: 100 };
@@ -19,7 +19,7 @@ function loadOptions(): UiOptions {
   } catch { return { ...DEFAULT_OPTIONS }; }
 }
 
-let state: UiState = { modal: null, tab: null, selected: null, options: loadOptions() };
+let state: UiState = { modal: null, tab: null, sub: 'next', selected: null, options: loadOptions() };
 const listeners = new Set<() => void>();
 const set = (patch: Partial<UiState>) => { state = { ...state, ...patch }; listeners.forEach(fn => fn()); };
 
@@ -37,14 +37,17 @@ export const uiStore = {
   getState: () => state,
   subscribe: (fn: () => void) => { listeners.add(fn); return () => { listeners.delete(fn); }; },
   /** Abre (ou troca) o modal; `tab` escolhe a aba, `who` o personagem. */
-  open(id: ModalId, opts: { tab?: string; who?: string } = {}) {
+  open(id: ModalId, opts: { tab?: string; who?: string; sub?: 'next' | 'tree' } = {}) {
     if (!state.modal && typeof document !== 'undefined') returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    set({ modal: id, tab: opts.tab ?? null, ...(opts.who ? { selected: opts.who } : {}) });
+    set({ modal: id, tab: opts.tab ?? null, sub: opts.sub ?? 'next', ...(opts.who ? { selected: opts.who } : {}) });
     writeHash();
   },
   close() { if (!state.modal) return; set({ modal: null, tab: null }); writeHash(); },
   toggle(id: ModalId) { if (state.modal === id) uiStore.close(); else uiStore.open(id); },
   setTab(tab: string) { set({ tab }); writeHash(); },
+  setSub(sub: 'next' | 'tree') { set({ sub }); },
+  /** Atalho para o sub-menu de Classes dentro de Personagem (o antigo menu Classes). */
+  openClasses(sub: 'next' | 'tree' = 'next') { uiStore.open('personagem', { tab: 'Classes', sub }); },
   select(id: string) { set({ selected: id }); },
   setOption<K extends keyof UiOptions>(key: K, value: UiOptions[K]) {
     set({ options: { ...state.options, [key]: value } });
@@ -53,13 +56,14 @@ export const uiStore = {
   /** Lê `#/modal/aba` (deep link) e abre; devolve true se abriu. */
   openFromHash(hash: string, tabs: (id: ModalId) => string[] = () => []) {
     const [, id, tab] = /^#\/([a-z]+)(?:\/([a-z0-9-]+))?/.exec(hash) ?? [];
+    if (id === 'classes') { uiStore.openClasses(tab === 'arvore-completa' ? 'tree' : 'next'); return true; }   // link antigo: Classes agora é uma aba de Personagem
     if (!id || !(MODAL_IDS as readonly string[]).includes(id)) return false;
     const match = tab ? tabs(id as ModalId).find(name => slug(name) === tab) : undefined;
     uiStore.open(id as ModalId, match ? { tab: match } : {});
     return true;
   },
   /** Reinicia o estado (testes). */
-  reset() { state = { modal: null, tab: null, selected: null, options: { ...DEFAULT_OPTIONS } }; listeners.forEach(fn => fn()); },
+  reset() { state = { modal: null, tab: null, sub: 'next', selected: null, options: { ...DEFAULT_OPTIONS } }; listeners.forEach(fn => fn()); },
 };
 export const useUi = () => useSyncExternalStore(uiStore.subscribe, uiStore.getState);
 
@@ -76,6 +80,7 @@ export function handleShortcut(event: KeyboardEvent, characterIds: string[] = []
     uiStore.select(characterIds[(at + (event.key === 'ArrowRight' ? 1 : -1) + characterIds.length) % characterIds.length]);
     return true;
   }
+  if (event.key.toLowerCase() === 'k') { if (state.modal === 'personagem' && state.tab === 'Classes') uiStore.close(); else uiStore.openClasses(); return true; }
   const item = RAIL_ITEMS.find(entry => entry.key && entry.key.toLowerCase() === event.key.toLowerCase());
   if (!item) return false;
   event.preventDefault(); uiStore.toggle(item.id); return true;

@@ -1,10 +1,16 @@
 import type { Character, GameState } from '../game/core/types';
 import { NextTab } from './classes/NextTab';
 import { TreeTab } from './classes/TreeTab';
+import { uiStore, useUi } from './uiStore';
 
-/** Menu Classes: "Próximo passo" (grupos, prévia e confirmação) e "Árvore completa" (15 classes base e subclasses). */
-export function ClassesPanel({ state, character, section = 'next' }: { state: GameState; character: Character; section?: 'next' | 'tree' }) {
+const SUBS = [['next', 'Próximo passo'], ['tree', 'Árvore completa']] as const;
+
+/** Classes, dentro de Personagem: sub-menu "Próximo passo" (grupos, prévia e confirmação) e "Árvore completa" (todas as classes e especializações). */
+export function ClassesPanel({ state, character }: { state: GameState; character: Character }) {
+  const { sub } = useUi();
   return <section className="classes-panel" style={{ height: '100%' }}>
-    {section === 'next' ? <NextTab state={state} character={character} /> : <TreeTab character={character} />}
+    <div className="cl-subnav" role="tablist" aria-label="Classes">{SUBS.map(([id, label]) =>
+      <button type="button" role="tab" key={id} id={`cl-sub-${id}`} aria-selected={sub === id} className={`pk-btn sm ${sub === id ? 'on' : ''}`} onClick={() => uiStore.setSub(id)}>{label}</button>)}</div>
+    {sub === 'next' ? <NextTab state={state} character={character} /> : <TreeTab character={character} />}
   </section>;
 }

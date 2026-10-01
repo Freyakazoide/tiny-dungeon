@@ -23,7 +23,7 @@ export function railBadges(state: GameState, selected: Character | undefined): P
   const issues = groupAlerts(state).filter(a => a.level === 'bad' || a.level === 'warn');
   if (issues.length && state.characters.length) out.grupo = { value: String(issues.length), tone: issues.some(a => a.level === 'bad') ? 'red' : 'gold', why: `${issues.length} ${issues.length === 1 ? 'alerta' : 'alertas'} na formação` };
   const ready = evolvers(state);
-  if (ready.length) out.classes = { value: '!', tone: 'gold', pulse: true, why: `Pronto para evoluir: ${ready.map(c => c.name).join(', ')}` };
+  if (ready.length) out.personagem = { value: '!', tone: 'gold', pulse: true, why: `Pronto para evoluir: ${ready.map(c => c.name).join(', ')}${points > 0 ? ` · ${points} pontos de talento livres` : ''}` };
   const potions = potionPercent(state);
   if (potions < 15 && state.characters.length) out.helper = { value: '!', tone: 'red', why: `Poções acabando (${potions}% do estoque confortável)` };
   return out;

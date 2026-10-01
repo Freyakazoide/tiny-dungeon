@@ -55,7 +55,7 @@ describe('Fase 11 — Classes: Próximo passo', () => {
     await user.click(screen.getByRole('button', { name: /^Evoluir para Guerreiro/ }));
     expect(screen.getByRole('alertdialog')).toBeTruthy(); expect(spy).not.toHaveBeenCalled();
     await user.keyboard('{Escape}');
-    expect(screen.queryByRole('alertdialog')).toBeNull(); expect(screen.getByRole('dialog', { name: 'Classes' })).toBeTruthy();
+    expect(screen.queryByRole('alertdialog')).toBeNull(); expect(screen.getByRole('dialog', { name: 'Personagem' })).toBeTruthy();
     await user.click(screen.getByRole('button', { name: /^Evoluir para Guerreiro/ }));
     await user.click(screen.getByRole('button', { name: 'Confirmar evolução' }));
     expect(spy).toHaveBeenCalledTimes(1);
