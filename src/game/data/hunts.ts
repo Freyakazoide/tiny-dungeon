@@ -35,7 +35,7 @@ const waves = (names: [string, string, string, string, string, string], common: 
 };
 
 export const HUNTS: HuntDef[] = [
-  { id: 'catacumbas', refXpPerHour: 24000, refGoldPerHour: 5000, name: 'Catacumbas', map: 'catacumbas', minLevel: 1, recommendedLevel: 1, color: 0x3b3a44, rewardScale: .6, waves: CATACOMBS_WAVES },
+  { id: 'catacumbas', refXpPerHour: 24000, refGoldPerHour: 5000, name: 'Catacumbas', map: 'catacumbas', minLevel: 1, recommendedLevel: 1, color: 0x3b3a44, rewardScale: .5, waves: CATACOMBS_WAVES },
   { id: 'floresta_sombria', refXpPerHour: 28000, refGoldPerHour: 20000, name: 'Floresta Sombria', map: 'floresta_sombria', minLevel: 7, recommendedLevel: 8, color: 0x1f3b2a,
     waves: waves(['Clareira Sombria', 'Trilha das Raízes', 'Bosque Retorcido', 'Toca dos Lobos', 'Fronteira das Teias', 'Covil das Teias'], 'wolf', 'bandit', 'spider_queen') },
   { id: 'pantano_toxico', refXpPerHour: 35000, refGoldPerHour: 24000, name: 'Pântano Tóxico', map: 'pantano_toxico', minLevel: 12, recommendedLevel: 13, color: 0x3a5a1e,

@@ -13,19 +13,20 @@ import { obstacleArt } from '../data/obstacles';
 import { lookKey, type Look } from '../art/look';
 import { cellTexture, characterTexture, characterWalkAnim, ensureLookTextures, monsterTexture, obstacleTexture, type CellKind } from '../art/textures';
 import type { FxKind } from '../systems/spellFx';
-import { BAND, CHUNK_LEN, RunPlan } from '../run/plan';
+import { CHUNK_LEN, RunPlan } from '../run/plan';
+import { freeNear } from '../run/world';
 import { playAttackFx } from './effects';
 import { dominantDirection, type ArenaPoint } from './movement';
 
 /**
- * Cena do corredor procedural. Mundo em células de 64 px: o grupo anda para o lado de `d` crescente, que na tela é a ESQUERDA
- * (x do mundo = −d × 64). A câmera acompanha o grupo (x fixo à direita, y suave nas rampas). Os blocos de chão e parede são
- * criados só para o que a câmera vê e descartados atrás dela.
+ * Cena do corredor procedural. O mundo é uma grade de células de 64 px (x, y em células, y para baixo) e o mapa tem curvas de verdade: a
+ * câmera segue o grupo livremente (um pouco à frente, na direção do caminho). Chão, parede e preenchimento de pedra cobrem a tela inteira;
+ * só o que a câmera enxerga existe como objeto (reaproveitado ao andar). O tamanho do jogo acompanha a janela (modo RESIZE).
  */
-const W = 1024, H = 640, HERO_X = 760, SPRITE_PX = 32 * ART_SCALE, BAR_W = 56;
-const wx = (d: number) => -d * CELL_PX, wy = (y: number) => y * CELL_PX;
-type HeroView = { container: Phaser.GameObjects.Container; look: Look; key: string; body: Phaser.GameObjects.Sprite; name: Phaser.GameObjects.Text; direction: CharacterDirection; walking: boolean; last?: { d: number; y: number } };
-type MonsterView = { body: Phaser.GameObjects.Arc | Phaser.GameObjects.Sprite; name: Phaser.GameObjects.Text; hpBg: Phaser.GameObjects.Rectangle; hp: Phaser.GameObjects.Rectangle; art?: string; height: number; facing: CharacterDirection; barW: number; barDy: number; nameDy: number; big: boolean; last?: { d: number; y: number } };
+const SPRITE_PX = 32 * ART_SCALE, BAR_W = 56;
+type HeroView = { container: Phaser.GameObjects.Container; look: Look; key: string; body: Phaser.GameObjects.Sprite; name: Phaser.GameObjects.Text; direction: CharacterDirection; walking: boolean; last?: { x: number; y: number } };
+type MonsterView = { body: Phaser.GameObjects.Arc | Phaser.GameObjects.Sprite; name: Phaser.GameObjects.Text; hpBg: Phaser.GameObjects.Rectangle; hp: Phaser.GameObjects.Rectangle; art?: string; height: number; facing: CharacterDirection; barW: number; barDy: number; nameDy: number; big: boolean; last?: { x: number; y: number } };
+const px = (v: number) => v * CELL_PX;
 
 export class Game extends Scene {
   private heroes = new Map<string, HeroView>();
@@ -37,7 +38,7 @@ export class Game extends Scene {
   private unsubscribeFx?: () => void;
   private plan?: RunPlan;
   private planKey = '';
-  private camY = 0;
+  private cam = { x: 0, y: 0, init: false };
   private title!: Phaser.GameObjects.Text;
   private status!: Phaser.GameObjects.Text;
   private banner!: Phaser.GameObjects.Container;
@@ -48,18 +49,25 @@ export class Game extends Scene {
   constructor() { super('Game'); }
 
   create() {
-    this.cameras.main.setBackgroundColor('#090d13');
+    this.cameras.main.setBackgroundColor('#1b222b');
     this.title = this.add.text(20, 14, '', { fontFamily: 'Georgia', fontSize: '15px', color: '#f0d79a', stroke: '#0b0c0f', strokeThickness: 4 }).setScrollFactor(0).setDepth(100);
-    this.status = this.add.text(W / 2, H - 22, '', { fontSize: '14px', color: '#e7cf95', stroke: '#05070a', strokeThickness: 4, wordWrap: { width: 850 }, align: 'center' }).setOrigin(.5).setScrollFactor(0).setDepth(100);
+    this.status = this.add.text(0, 0, '', { fontSize: '14px', color: '#e7cf95', stroke: '#05070a', strokeThickness: 4, wordWrap: { width: 850 }, align: 'center' }).setOrigin(.5).setScrollFactor(0).setDepth(100);
     const bg = this.add.rectangle(0, 0, 470, 58, 0x0a0d12, .86).setStrokeStyle(2, 0xd1ad58, .8);
     this.bannerText = this.add.text(0, 0, '', { fontFamily: 'Georgia', fontSize: '19px', color: '#f1d796', align: 'center', stroke: '#050608', strokeThickness: 4 }).setOrigin(.5);
-    this.banner = this.add.container(W / 2, H / 2 - 120, [bg, this.bannerText]).setScrollFactor(0).setDepth(101).setVisible(false);
+    this.banner = this.add.container(0, 0, [bg, this.bannerText]).setScrollFactor(0).setDepth(101).setVisible(false);
+    this.layoutHud();
+    this.scale.on('resize', () => this.layoutHud());
     this.unsubscribe = gameStore.subscribe(() => this.renderState());
     this.unsubscribeFx = gameStore.onFx(fx => this.animateFx(fx));
     if (import.meta.env.DEV) { (window as unknown as { __scene?: unknown }).__scene = this; (window as unknown as { __fx?: unknown }).__fx = (kind: FxKind, a: ArenaPoint, b: ArenaPoint) => playAttackFx(this, kind, a, b); }
     this.events.once('shutdown', () => { this.unsubscribe?.(); this.unsubscribeFx?.(); this.heroes.clear(); this.enemies.clear(); this.tiles.clear(); this.props.clear(); this.floatLanes.clear(); });
     this.renderState();
     EventBus.emit('current-scene-ready', this);
+  }
+  private layoutHud() {
+    const { width, height } = this.scale;
+    this.status.setPosition(width / 2, height - 22).setWordWrapWidth(Math.min(850, width - 40));
+    this.banner.setPosition(width / 2, height / 2 - 120);
   }
 
   update(_time: number, delta: number) {
@@ -74,43 +82,40 @@ export class Game extends Scene {
     if (key !== this.planKey || !this.plan) { this.plan = new RunPlan({ seed, huntId: state.huntId }); this.planKey = key; this.clearWorld(); }
     return this.plan;
   }
-  private clearWorld() { for (const t of this.tiles.values()) t.destroy(); for (const p of this.props.values()) p.destroy(); this.tiles.clear(); this.props.clear(); }
-  /** Posição (d, y) de um herói: da run, ou a formação de parada. */
+  private clearWorld() { for (const t of this.tiles.values()) t.destroy(); for (const p of this.props.values()) p.destroy(); this.tiles.clear(); this.props.clear(); this.cam.init = false; }
+  /** Posição (x, y) de um herói: da run, ou a formação de parada na entrada. */
   private heroPos(state: GameState, c: Character, index: number) {
     const p = state.run?.pos[c.id]; if (p) return p;
-    const plan = this.planFor(state), top = plan.floorAtD(4);
-    return { d: c.row === 'back' ? 1 : 4, y: top + BAND / 2 + (index - (state.team.length - 1) / 2) * 1.4 };
+    const plan = this.planFor(state); plan.ensure(0);
+    const base = plan.pathPoint(c.row === 'back' ? 1 : 4), off = (index - (state.team.length - 1) / 2) * 1.25;
+    return freeNear(plan, { x: base.x, y: base.y + off });
   }
 
-  /** Câmera, chão, paredes e obstáculos: só o que aparece na tela. */
+  /** Câmera e blocos do que aparece na tela: chão, parede (com tocha) e pedra de preenchimento; obstáculos por cima. */
   private drawWorld(state: GameState) {
-    const plan = this.planFor(state), anchor = state.run?.anchor ?? 4, cam = this.cameras.main;
-    const top = plan.floorAtD(anchor) + BAND / 2;
-    this.camY += (top - this.camY) * .08; if (!this.camY) this.camY = top;
-    cam.setScroll(wx(anchor) - HERO_X, wy(this.camY) - H / 2);
-    const dmin = Math.floor(anchor - (W - HERO_X) / CELL_PX) - 2, dmax = Math.ceil(anchor + HERO_X / CELL_PX) + 2, huntId = state.huntId;
-    const keep = new Set<string>();
-    for (let c = Math.max(0, dmin); c <= dmax; c++) {
-      const t = plan.floorAtD(c);
-      for (let r = t - 3; r <= t + BAND + 1; r++) {
-        let kind: CellKind | undefined;
-        if (r >= t && r < t + BAND) { const h = (c * 7 + r * 13) % 10; kind = h === 0 ? 'floor1' : h === 1 ? 'floor2' : h === 2 ? 'floor3' : 'floor0'; }
-        else if (r === t - 1) kind = c % 6 === 2 ? 'torch' : 'wall';
-        else if (r === t - 2 || r === t + BAND) kind = 'top';
-        if (!kind) continue;
-        const key = `${c},${r}`; keep.add(key);
-        const have = this.tiles.get(key);
-        if (!have) this.tiles.set(key, this.add.image(wx(c + 1), wy(r), cellTexture(huntId, kind)).setOrigin(0).setScale(ART_SCALE).setDepth(0));
-        else if (have.texture.key !== cellTexture(huntId, kind)) have.setTexture(cellTexture(huntId, kind));
+    const plan = this.planFor(state), anchor = state.run?.anchor ?? 4, cam = this.cameras.main, { width, height } = this.scale;
+    plan.ensure(plan.indexAt(anchor));
+    const here = plan.pathPoint(anchor), fwd = plan.forwardAt(anchor), tx = px(here.x + fwd.x * 2.5), ty = px(here.y + fwd.y * 2.5);
+    if (!this.cam.init) { this.cam.x = tx; this.cam.y = ty; this.cam.init = true; }
+    const k = Math.min(1, .07 * (runtime.huntSpeed > 5 ? 3 : 1)); this.cam.x += (tx - this.cam.x) * k; this.cam.y += (ty - this.cam.y) * k;
+    cam.setScroll(Math.round(this.cam.x - width / 2), Math.round(this.cam.y - height / 2));
+    const huntId = state.huntId, x0 = Math.floor(cam.scrollX / CELL_PX) - 1, x1 = Math.ceil((cam.scrollX + width) / CELL_PX) + 1, y0 = Math.floor(cam.scrollY / CELL_PX) - 1, y1 = Math.ceil((cam.scrollY + height) / CELL_PX) + 1;
+    const keep = new Set<string>(), propKeep = new Set<string>();
+    for (let cx = x0; cx <= x1; cx++) for (let cy = y0; cy <= y1; cy++) {
+      const kind = plan.cellKind(cx, cy); let tex: CellKind;
+      if (kind) { const h = (cx * 7 + cy * 13) & 15; tex = h === 0 ? 'floor1' : h === 1 ? 'floor2' : h === 2 ? 'floor3' : 'floor0'; }
+      else if (plan.cellKind(cx, cy + 1)) tex = ((cx * 5 + cy) % 9 + 9) % 9 === 0 ? 'torch' : 'wall';
+      else tex = [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [1, 1]].some(([dx, dy]) => plan.cellKind(cx + dx, cy + dy)) ? 'top' : 'fill';
+      const key = `${cx},${cy}`; keep.add(key);
+      const texture = cellTexture(huntId, tex), have = this.tiles.get(key);
+      if (!have) this.tiles.set(key, this.add.image(px(cx), px(cy), texture).setOrigin(0).setScale(ART_SCALE).setDepth(0));
+      else if (have.texture.key !== texture) have.setTexture(texture);
+      if (kind === 2) {
+        propKeep.add(key);
+        if (!this.props.has(key)) { const tex2 = obstacleTexture(obstacleArt(huntId, { c: cx, r: cy })); if (this.textures.exists(tex2)) this.props.set(key, this.add.image(px(cx + .5), px(cy + 1), tex2).setOrigin(.5, 1).setScale(ART_SCALE).setDepth(4 + cy / 1000)); }
       }
     }
     for (const [key, img] of this.tiles) if (!keep.has(key)) { img.destroy(); this.tiles.delete(key); }
-    const propKeep = new Set<string>();
-    for (let i = plan.indexAt(Math.max(0, dmin)); i <= plan.indexAt(Math.max(0, dmax)); i++) for (const o of plan.chunk(i).obstacles) {
-      const d = plan.chunk(i).start + o.c; if (d < dmin || d > dmax) continue;
-      const key = `${d},${o.r}`; propKeep.add(key);
-      if (!this.props.has(key)) { const tex = obstacleTexture(obstacleArt(huntId, { c: d, r: o.r })); if (this.textures.exists(tex)) this.props.set(key, this.add.image(wx(d + .5), wy(o.r + 1), tex).setOrigin(.5, 1).setScale(ART_SCALE).setDepth(4 + o.r / 1000)); }
-    }
     for (const [key, img] of this.props) if (!propKeep.has(key)) { img.destroy(); this.props.delete(key); }
   }
 
@@ -128,19 +133,20 @@ export class Game extends Scene {
       let v = this.heroes.get(c.id); if (!v) { v = this.createHero(c); this.heroes.set(c.id, v); }
       if (v.key !== lookKey(c.look)) { v.look = ensureLookTextures(this, c.look, new Set([...this.heroes.values()].map(h => h.key))); v.key = lookKey(v.look); }
       v.name.setText(`${c.name}${c.hp <= 0 ? '  ☠' : ''}`); v.body.setAlpha(c.hp > 0 ? 1 : .25);
-      const moved = v.last ? Math.hypot(pos.d - v.last.d, (pos.y - v.last.y)) > .004 : false;
-      v.container.setPosition(wx(pos.d), wy(pos.y)).setDepth(6 + pos.y / 1000);
-      const near = [...this.nearest(state, pos)];
-      const dir: CharacterDirection = moved && v.last ? dominantDirection({ x: wx(v.last.d), y: wy(v.last.y) }, { x: wx(pos.d), y: wy(pos.y) }, 'left') : near.length ? dominantDirection({ x: wx(pos.d), y: wy(pos.y) }, { x: wx(near[0].d), y: wy(near[0].y) }, 'left') : 'left';
-      this.setDirection(v, dir, moved && c.hp > 0); v.last = { d: pos.d, y: pos.y };
+      const moved = v.last ? Math.hypot(pos.x - v.last.x, pos.y - v.last.y) > .004 : false;
+      v.container.setPosition(px(pos.x), px(pos.y)).setDepth(6 + pos.y / 1000);
+      const foe = state.monsters.filter(m => m.alive && m.x !== undefined).sort((a, b) => Math.hypot(a.x! - pos.x, a.y! - pos.y) - Math.hypot(b.x! - pos.x, b.y! - pos.y))[0];
+      const fwd = this.plan?.forwardAt(state.run?.anchor ?? 4) ?? { x: -1, y: 0 };
+      const dir: CharacterDirection = moved && v.last ? dominantDirection({ x: px(v.last.x), y: px(v.last.y) }, { x: px(pos.x), y: px(pos.y) }, v.direction) : foe ? dominantDirection({ x: px(pos.x), y: px(pos.y) }, { x: px(foe.x!), y: px(foe.y!) }, v.direction) : dominantDirection({ x: 0, y: 0 }, fwd, 'left');
+      this.setDirection(v, dir, moved && c.hp > 0); v.last = { x: pos.x, y: pos.y };
     });
 
-    const ids = new Set(state.monsters.filter(m => m.d !== undefined).map(m => m.uid));
+    const ids = new Set(state.monsters.filter(m => m.x !== undefined).map(m => m.uid));
     for (const [id, v] of this.enemies) if (!ids.has(id)) { this.destroyMonster(v); this.enemies.delete(id); }
     for (const m of state.monsters) {
-      if (m.d === undefined || m.y === undefined) continue;
+      if (m.x === undefined || m.y === undefined) continue;
       let v = this.enemies.get(m.uid); if (!v) { v = this.createMonster(m.defId); this.enemies.set(m.uid, v); }
-      const def = MONSTERS[m.defId], x = wx(m.d), y = wy(m.y), moved = v.last ? Math.hypot(m.d - v.last.d, m.y - v.last.y) > .004 : false;
+      const def = MONSTERS[m.defId], x = px(m.x), y = px(m.y) + CELL_PX * .36, moved = v.last ? Math.hypot(m.x - v.last.x, m.y - v.last.y) > .004 : false;
       this.setMonsterPos(v, x, y);
       v.hp.displayWidth = v.barW * Math.max(0, m.hp / m.maxHp);
       for (const o of [v.body, v.name, v.hpBg, v.hp]) o.setVisible(m.alive);
@@ -148,25 +154,20 @@ export class Game extends Scene {
       if (v.body instanceof GameObjects.Arc) v.body.setStrokeStyle(2, m.statuses?.frozen ? 0x8fd8ff : m.statuses?.burn ? 0xff8c3a : 0xf0e3cd);
       else if (v.art) {
         v.body.setTint(m.statuses?.frozen ? 0x9fdcff : m.statuses?.burn ? 0xffb070 : 0xffffff);
-        const hero = state.team.map(id => state.run?.pos[id]).filter(Boolean).sort((a, b) => Math.hypot(a!.d - m.d!, a!.y - m.y!) - Math.hypot(b!.d - m.d!, b!.y - m.y!))[0];
-        const dir: CharacterDirection = hero ? dominantDirection({ x, y }, { x: wx(hero.d), y: wy(hero.y) }, 'right') : 'right';
+        const hero = state.team.map(id => state.run?.pos[id]).filter((p): p is { x: number; y: number } => !!p).sort((a, b) => Math.hypot(a.x - m.x!, a.y - m.y!) - Math.hypot(b.x - m.x!, b.y - m.y!))[0];
+        const dir: CharacterDirection = hero ? dominantDirection({ x: px(m.x), y: px(m.y) }, { x: px(hero.x), y: px(hero.y) }, v.facing) : v.facing;
         v.facing = dir; v.body.setTexture(monsterTexture(v.art, dir, moved && Math.floor(this.time.now / 170) % 2 === 0 ? 2 : 1));
       }
-      v.last = { d: m.d, y: m.y };
+      v.last = { x: m.x, y: m.y };
     }
     if (state.status === 'paused' && !this.visualPaused) { this.tweens.pauseAll(); this.anims.pauseAll(); this.visualPaused = true; }
     else if (state.status !== 'paused' && this.visualPaused) { this.tweens.resumeAll(); this.anims.resumeAll(); this.visualPaused = false; }
   }
-  /** Monstros vivos do mais perto para o mais longe de uma posição. */
-  private *nearest(state: GameState, p: { d: number; y: number }) {
-    const list = state.monsters.filter(m => m.alive && m.d !== undefined).sort((a, b) => Math.hypot(a.d! - p.d, a.y! - p.y) - Math.hypot(b.d! - p.d, b.y! - p.y));
-    for (const m of list) yield { d: m.d!, y: m.y! };
-  }
 
   private createHero(c: Character): HeroView {
     const look = ensureLookTextures(this, c.look, new Set([...this.heroes.values()].map(h => h.key)));
-    const body = this.add.sprite(0, 0, characterTexture(look, 'left', 1)).setOrigin(.5, 1).setScale(ART_SCALE);
-    const name = this.add.text(0, 13, '', { fontSize: '11px', color: '#fff', stroke: '#090b0e', strokeThickness: 4, align: 'center' }).setOrigin(.5);
+    const body = this.add.sprite(0, CELL_PX * .36, characterTexture(look, 'left', 1)).setOrigin(.5, 1).setScale(ART_SCALE);
+    const name = this.add.text(0, CELL_PX * .36 + 13, '', { fontSize: '11px', color: '#fff', stroke: '#090b0e', strokeThickness: 4, align: 'center' }).setOrigin(.5);
     return { container: this.add.container(0, 0, [body, name]), look, key: lookKey(look), body, name, direction: 'left', walking: false };
   }
   private setDirection(view: HeroView, direction: CharacterDirection, walking: boolean) {
@@ -190,7 +191,7 @@ export class Game extends Scene {
     return { body, name, hpBg, hp, height: radius * 2, facing: 'right', barW, barDy: -radius - 14, nameDy: radius + 10, big };
   }
   private setMonsterPos(v: MonsterView, x: number, y: number) {
-    v.body.setPosition(x, v.art ? y : y - v.height / 2).setDepth(5 + y / 1000);
+    v.body.setPosition(x, v.art ? y : y - v.height / 2).setDepth(5 + y / 100000);
     const by = v.art ? y : y - v.height / 2;
     v.hpBg.setPosition(x - v.barW / 2, by + v.barDy).setDepth(20); v.hp.setPosition(x - v.barW / 2, by + v.barDy).setDepth(21); v.name.setPosition(x, by + v.nameDy).setDepth(21);
   }
@@ -199,7 +200,7 @@ export class Game extends Scene {
   private focusOf(body: Phaser.GameObjects.Arc | Phaser.GameObjects.Sprite, height: number) { return body instanceof GameObjects.Sprite ? { x: body.x, y: body.y - height / 2 } : { x: body.x, y: body.y }; }
   private focus(id?: string): ArenaPoint | undefined {
     if (!id) return undefined;
-    const hero = this.heroes.get(id); if (hero) return { x: hero.container.x, y: hero.container.y - SPRITE_PX / 2 };
+    const hero = this.heroes.get(id); if (hero) return { x: hero.container.x, y: hero.container.y + CELL_PX * .36 - SPRITE_PX / 2 };
     const m = this.enemies.get(id); return m ? this.focusOf(m.body, m.height) : undefined;
   }
   private entityBody(id?: string) { return id ? this.heroes.get(id)?.body ?? this.enemies.get(id)?.body : undefined; }
@@ -214,13 +215,13 @@ export class Game extends Scene {
       const hero = fx.source ? this.heroes.get(fx.source) : undefined, monster = fx.source ? this.enemies.get(fx.source) : undefined;
       if (fx.fx) { const aims = (fx.targets?.length ? fx.targets : fx.target ? [fx.target] : []).map(id => this.focus(id)).filter((p): p is ArenaPoint => !!p); aims.forEach((p, i) => this.time.delayedCall(i * 70, () => playAttackFx(this, fx.fx!, source, p))); }
       else if (target) { const projectile = this.add.circle(source.x, source.y, 5, 0xf2ce72).setDepth(10).setStrokeStyle(2, 0xffffff, .8); this.tweens.add({ targets: projectile, x: target.x, y: target.y, duration: 150, ease: 'Quad.easeIn', onComplete: () => projectile.destroy() }); }
-      const body = hero?.container ?? monster?.body;
-      if (body && target) { const dx = PhaserMath.Clamp(target.x - source.x, -8, 8); this.tweens.add({ targets: hero?.body ?? body, x: (hero?.body ?? body).x + dx, duration: 70, yoyo: true, ease: 'Sine.easeOut' }); }
+      const body = hero?.body ?? monster?.body;
+      if (body && target) { const dx = PhaserMath.Clamp(target.x - source.x, -8, 8); this.tweens.add({ targets: body, x: body.x + dx, duration: 70, yoyo: true, ease: 'Sine.easeOut' }); }
     }
     if (fx.type === 'damage' && target) { const body = this.entityBody(fx.target); if (body) { const x0 = body.x; this.tweens.add({ targets: body, x: x0 + 5, duration: 45, yoyo: true, repeat: 2, onComplete: () => body.setX(x0) }); } this.floatText(fx.target ?? '', target.x, target.y - 42, `-${fx.value ?? 0}`, '#ff7d7d'); }
     if (fx.type === 'heal' && target) { const pulse = this.add.circle(target.x, target.y, 22, 0x62dd94, .18).setStrokeStyle(3, 0x8ff0b1).setDepth(9); this.tweens.add({ targets: pulse, scale: 1.8, alpha: 0, duration: 520, onComplete: () => pulse.destroy() }); this.floatText(fx.target ?? '', target.x, target.y - 42, `+${fx.value ?? 0}`, '#82f0aa'); }
     if (fx.type === 'death' && target) { for (let i = 0; i < 7; i++) { const shard = this.add.circle(target.x, target.y, 3, 0xdcc89c).setDepth(10), angle = Math.PI * 2 / 7 * i; this.tweens.add({ targets: shard, x: target.x + Math.cos(angle) * 45, y: target.y + Math.sin(angle) * 45, alpha: 0, duration: 480, onComplete: () => shard.destroy() }); } }
-    if (fx.type === 'drop' && fx.text) { const l = this.add.text(W / 2, H - 60, fx.text, { fontFamily: 'Arial Black', fontSize: '15px', color: '#ffd36e', stroke: '#08090b', strokeThickness: 5 }).setOrigin(.5).setScrollFactor(0).setDepth(100); this.tweens.add({ targets: l, y: l.y - 30, alpha: 0, duration: 1400, onComplete: () => l.destroy() }); }
+    if (fx.type === 'drop' && fx.text) { const l = this.add.text(this.scale.width / 2, this.scale.height - 60, fx.text, { fontFamily: 'Arial Black', fontSize: '15px', color: '#ffd36e', stroke: '#08090b', strokeThickness: 5 }).setOrigin(.5).setScrollFactor(0).setDepth(100); this.tweens.add({ targets: l, y: l.y - 30, alpha: 0, duration: 1400, onComplete: () => l.destroy() }); }
     if ((fx.type === 'stairs' || fx.type === 'wave') && fx.text) { this.bannerText.setText(fx.text); this.banner.setVisible(true).setAlpha(1); this.bannerUntil = this.time.now + (fx.type === 'wave' ? 1600 : 2200); }
     if (fx.type === 'recovery') { this.bannerUntil = 0; }
   }

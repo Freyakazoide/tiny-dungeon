@@ -12,12 +12,12 @@ export const DIRECTIONS: readonly Direction[] = ['down', 'up', 'left', 'right'];
 export const MAX_LOOKS = 32;
 export const mapTexture = (huntId: string) => `art-map-${huntId}`;
 /** Células do corredor (32×32 de arte): 4 pisos, parede, parede com tocha e topo do muro. */
-export const CELL_KINDS = ['floor0', 'floor1', 'floor2', 'floor3', 'wall', 'torch', 'top'] as const;
+export const CELL_KINDS = ['floor0', 'floor1', 'floor2', 'floor3', 'wall', 'torch', 'top', 'fill'] as const;
 export type CellKind = (typeof CELL_KINDS)[number];
 export const cellTexture = (huntId: string, kind: CellKind) => `art-cell-${huntId}-${kind}`;
 const CELL_TILES: Record<CellKind, [string, string, string, string]> = {
   floor0: ['piso', 'piso', 'piso', 'piso'], floor1: ['piso', 'piso', 'piso', 'piso_rachado'], floor2: ['piso', 'piso_ossos', 'piso', 'piso'], floor3: ['piso_rachado', 'piso', 'piso', 'piso'],
-  wall: ['parede', 'parede', 'parede', 'parede'], torch: ['parede', 'parede_tocha', 'parede', 'parede'], top: ['muro_topo', 'muro_topo', 'muro_topo', 'muro_topo'],
+  wall: ['parede', 'parede', 'parede', 'parede'], torch: ['parede', 'parede_tocha', 'parede', 'parede'], top: ['muro_topo', 'muro_topo', 'muro_topo', 'muro_topo'], fill: ['piso', 'piso_rachado', 'piso', 'piso'],
 };
 export const obstacleTexture = (id: string) => `art-o-${id}`;
 export const monsterTexture = (monsterArtId: string, dir: Direction, pose: 1 | 2) => `art-m-${monsterArtId}-${dir}-${pose}`;
@@ -34,7 +34,7 @@ const addCanvas = (scene: Scene, key: string, canvas: HTMLCanvasElement) => {
 export function ensureArtTextures(scene: Scene) {
   for (const [id, grid] of Object.entries(ART.obstacles)) addCanvas(scene, obstacleTexture(id), rasterToCanvas(rasterize(outline(toPixels(grid, ART.palette)))));
   for (const hunt of HUNTS) addCanvas(scene, mapTexture(hunt.id), rasterToCanvas(mapRaster(hunt.id, hunt.color)));
-  for (const hunt of HUNTS) for (const kind of CELL_KINDS) addCanvas(scene, cellTexture(hunt.id, kind), rasterToCanvas(cellRaster(hunt.id, hunt.color, CELL_TILES[kind])));
+  for (const hunt of HUNTS) for (const kind of CELL_KINDS) addCanvas(scene, cellTexture(hunt.id, kind), rasterToCanvas(cellRaster(hunt.id, hunt.color, CELL_TILES[kind], undefined, kind === 'fill' ? .38 : 1)));
   for (const m of ART.meta.filter(m => m.tipo === 'monstro')) for (const dir of DIRECTIONS) for (const pose of [1, 2] as const)
     addCanvas(scene, monsterTexture(m.id, dir, pose), rasterToCanvas(frameRaster('monstros', m.id, dir, pose)));
 }

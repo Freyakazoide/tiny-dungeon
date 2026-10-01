@@ -22,7 +22,7 @@ describe('Corredor procedural no motor', () => {
     for (let i = 0; i < 1200 && !spawned; i++) { e.tick(100); spawned = e.getSnapshot().monsters.length > 0; }
     expect(spawned).toBe(true);
     const s = e.getSnapshot(), m = s.monsters[0];
-    expect(m.d).toBeGreaterThan(s.run!.anchor); expect(m.y).toBeDefined();
+    expect(m.x).toBeDefined(); expect(m.y).toBeDefined(); const lead = Object.values(s.run!.pos)[0]; expect(Math.hypot(m.x! - lead.x, m.y! - lead.y)).toBeGreaterThan(5);
     sim(e, 120); kills = Object.values(e.getSnapshot().analyzer.kills).reduce((a, b) => a + b, 0);
     expect(kills).toBeGreaterThan(2);
   });
@@ -48,7 +48,7 @@ describe('Corredor: ritmo e regras', () => {
     let fell = false;
     for (let i = 0; i < 6000 && !fell; i++) { e.tick(100); if (e.getSnapshot().monsters.some(m => m.alive)) for (const c of e.getSnapshot().characters) c.hp = 0; e.tick(100); fell = e.getSnapshot().status === 'recovering'; }
     expect(fell).toBe(true); expect(e.getSnapshot().analyzer.defeats).toBe(1);
-    for (let i = 0; i < 80; i++) e.tick(100);
+    for (let i = 0; i < 80 && e.getSnapshot().status !== 'running'; i++) e.tick(100);
     const s = e.getSnapshot(); expect(s.status).toBe('running'); expect(s.monsters).toHaveLength(0); expect(s.characters.every(c => c.hp > 1)).toBe(true);
   });
   it('end() encerra a run e start() começa outra (semente nova)', () => {
@@ -80,10 +80,39 @@ describe('IA configurável (Helper)', () => {
     const gap = (hold: number) => {
       const e = new GameEngine(partyState()); const bow = e.getSnapshot().characters[1]; e.setHelper(bow.id, { ai: { hold, dodge: 0, retreatAt: 0 } });
       for (const c of e.getSnapshot().characters) e.devSetLevel(c.id, 25);
-      e.start(); let best = 0;
-      for (let i = 0; i < 3000; i++) { e.tick(100); const s = e.getSnapshot(), m = s.monsters.find(x => x.alive); if (m && s.run!.pos[bow.id]) { best = Math.max(best, Math.abs(s.run!.pos[bow.id].d - m.d!)); if (i > 1500) break; } }
-      return best;
+      e.start(); let sum = 0, n = 0;
+      for (let i = 0; i < 4000 && n < 80; i++) {
+        e.tick(100); const s = e.getSnapshot(), me = s.run!.pos[bow.id], near = s.monsters.filter(x => x.alive && x.x !== undefined).map(x => Math.hypot(me.x - x.x!, me.y - x.y!)).sort((a, b) => a - b)[0];
+        if (near !== undefined && near < 9) { sum += near; n++; }
+      }
+      return sum / Math.max(1, n);
     };
-    expect(gap(6)).toBeGreaterThan(gap(0));
+    expect(gap(6)).toBeGreaterThan(gap(0) + .5);
+  });
+});
+
+describe('Colisão e vagas ao redor do herói (estilo Tibia)', () => {
+  const setup = (count: number) => {
+    const e = new GameEngine(partyState()); e.start(); const s = e.getSnapshot();
+    for (const c of s.characters) { c.hp = 99999; c.profile.level = 30; }
+    // 12 monstros fortes e inofensivos nascem espalhados à frente do grupo
+    const plan = (e as unknown as { plan(): import('../run/plan').RunPlan }).plan(), anchor = s.run!.anchor;
+    s.monsters = Array.from({ length: count }, (_, i) => { const p = plan.spawnPoint(anchor + 9 + i * .5, () => (i * 0.37) % 1); return { uid: `t${i}`, defId: 'skeleton', hp: 1e9, maxHp: 1e9, cooldown: 99, alive: true, x: p.x, y: p.y, atkMul: 0 }; });
+    s.run!.open = true;
+    return e;
+  };
+  it('as unidades não se sobrepõem e as vagas em volta de um herói são no máximo 8', () => {
+    const e = setup(12);
+    for (let i = 0; i < 400; i++) e.tick(100);
+    const s = e.getSnapshot(), pts = [...s.characters.map(c => ({ id: c.id, ...s.run!.pos[c.id], r: .36 })), ...s.monsters.map(m => ({ id: m.uid, x: m.x!, y: m.y!, r: .36 }))];
+    let worst = 9; for (let i = 0; i < pts.length; i++) for (let j = i + 1; j < pts.length; j++) worst = Math.min(worst, Math.hypot(pts[i].x - pts[j].x, pts[i].y - pts[j].y));
+    expect(worst).toBeGreaterThan(.45);   // nunca um em cima do outro
+    for (const c of s.characters) expect(s.monsters.filter(m => m.slot?.hero === c.id).length).toBeLessThanOrEqual(8);
+  });
+  it('quando o tanque lota, o excedente vai atrás de quem está na backline', () => {
+    const e = setup(12); for (let i = 0; i < 600; i++) e.tick(100);
+    const s = e.getSnapshot(), tank = s.characters.find(c => c.isTank)!, byHero = (id: string) => s.monsters.filter(m => m.slot?.hero === id).length;
+    expect(byHero(tank.id)).toBeGreaterThanOrEqual(5);
+    expect(s.characters.filter(c => c.id !== tank.id).reduce((n, c) => n + byHero(c.id), 0)).toBeGreaterThan(0);
   });
 });

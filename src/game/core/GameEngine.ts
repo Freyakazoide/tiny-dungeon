@@ -118,11 +118,11 @@ export class GameEngine {
   private planCache?:{key:string;plan:RunPlan};
   /** Plano do corredor (puro, regenerado da semente e da hunt; nada dele vai para o save). */
   private plan():RunPlan{const run=this.state.run!,key=`${run.seed}:${this.state.huntId}`;if(this.planCache?.key!==key)this.planCache={key,plan:new RunPlan({seed:run.seed,huntId:this.state.huntId})};return this.planCache.plan;}
-  private makeMonster(defId:string,index:number,chunk?:number,at?:{d:number;y:number}):MonsterRuntime{
+  private makeMonster(defId:string,index:number,chunk?:number,at?:{x:number;y:number}):MonsterRuntime{
     const scale=chunk!==undefined?depthScale(chunk):{hp:1,atk:1},def=MONSTERS[defId],power=chunk!==undefined&&def.boss?BOSS_HP_MUL[bossPowerFor(this.state.run!.seed,chunk)]:1;
     const hp=Math.round(def.hp*runtime.monsterHp*huntScale(this.state.huntId).hp*scale.hp*power);
     const m:MonsterRuntime={uid:`${this.state.cycle}-${this.state.wave}-${index}-${this.nextUid()}`,defId,hp,maxHp:hp,cooldown:1/Math.max(.1,def.speed),alive:true};
-    if(at){m.d=at.d;m.y=at.y;m.atkMul=scale.atk;m.rewardMul=(1+(chunk??0)*.025)*RUN_CONFIG.reward*(HUNT_BY_ID[this.state.huntId]?.rewardScale??1);}return m;
+    if(at){m.x=at.x;m.y=at.y;m.atkMul=scale.atk;m.rewardMul=(1+(chunk??0)*.025)*RUN_CONFIG.reward*(HUNT_BY_ID[this.state.huntId]?.rewardScale??1);}return m;
   }
   /** Encontro do corredor: registra a wave (tier, mensagem, mecânicas de início de wave) como as waves antigas faziam. */
   private startEncounter(_chunk:number,enc:{extra:number;tier:string;boss:boolean;monsters:string[]}){

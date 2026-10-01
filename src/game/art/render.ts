@@ -85,14 +85,14 @@ export function mapRaster(huntId: string, huntColor?: number, data: ArtData = AR
   return rasterize(out);
 }
 /** Célula do corredor (2×2 tiles = 32×32 de arte) montada com os tiles `names` (cima-esq, cima-dir, baixo-esq, baixo-dir), com a paleta/tingimento da hunt. */
-export function cellRaster(huntId: string, huntColor: number | undefined, names: [string, string, string, string], data: ArtData = ART): Raster {
+export function cellRaster(huntId: string, huntColor: number | undefined, names: [string, string, string, string], data: ArtData = ART, dim = 1): Raster {
   const own = data.maps[huntId], tiles = data.tiles[huntId] ?? data.tiles.catacumbas ?? {};
   const swap = own ? undefined : data.tilesets[huntId], palette: Palette = { ...data.palette, ...(swap ?? {}) };
   const tint = !own && !swap && huntId !== 'catacumbas' && huntColor !== undefined ? hexToRgb(`#${huntColor.toString(16).padStart(6, '0')}`) : undefined;
   const out = Array.from({ length: 32 }, () => Array<Rgb | null>(32).fill(null));
   names.forEach((name, i) => {
     const px = toPixels(tiles[name], palette), ox = (i % 2) * 16, oy = Math.floor(i / 2) * 16;
-    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const c = px[y][x]; out[oy + y][ox + x] = c && tint ? c.map((v, k) => Math.round(v * .55 + tint[k] * .45)) as Rgb : c; }
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const c = px[y][x]; const t = c && tint ? c.map((v, k) => Math.round(v * .55 + tint[k] * .45)) as Rgb : c; out[oy + y][ox + x] = t && dim !== 1 ? t.map(v => Math.round(v * dim)) as Rgb : t; }
   });
   return rasterize(out);
 }

@@ -1,66 +1,42 @@
-import { WAVE_EXTRAS, BOSS_EXTRAS } from '../data/balance';
+import { BOSS_EXTRAS } from '../data/balance';
 import { HUNT_BY_ID } from '../data/hunts';
 import { MONSTERS } from '../data/monsters';
 import { extrasTableFor, limitExtra, reinforcementIds, rollExtra, tierOfExtra, type WaveTier } from '../systems/waves';
-import { mix, pick, randInt, rngFor } from './rng';
+import { randInt, rngFor } from './rng';
 
 /**
- * Corredor procedural infinito. Unidades em células (1 célula = 64 px). A distância `d` cresce no sentido em que o grupo anda
- * (na tela, da direita para a esquerda). O mapa é cortado em chunks de `CHUNK_LEN` células; cada chunk é uma função pura de
- * (semente, índice), então pode ser descartado atrás do grupo e regenerado idêntico, e nada precisa ficar guardado.
+ * Corredor procedural infinito, com curvas de verdade. O mundo é uma grade de células de 64 px em coordenadas (x, y) (y cresce para baixo).
+ * O mapa é uma sequência de chunks de `CHUNK_LEN` células por `BAND` de largura; cada chunk tem um quadro (origem + eixo "ao longo" a + eixo
+ * "através" b) e a direção pode ser Oeste (esquerda), Norte (cima) ou Sul (baixo). Entre duas direções diferentes há uma sala de canto de
+ * BAND × BAND células que faz parte do primeiro trecho do chunk novo. O caminho nunca se cruza (sempre avança para o oeste entre as subidas
+ * e descidas). Cada chunk é função pura de (semente, índice); a grade do mundo só guarda a janela perto do grupo.
  */
 export const CHUNK_LEN = 24;
-export const BAND = 6;                 // largura da faixa andável (linhas)
-export const FLOOR_MIN = 0, FLOOR_MAX = 16;  // a faixa sobe e desce por este intervalo (o mapa total tem BAND + FLOOR_MAX linhas)
-export const BOSS_EVERY = 10;          // um chunk de chefe a cada N chunks (≈ a cada 4 minutos de caminhada em ritmo normal)
+export const BAND = 6;                 // largura do corredor (células)
+export const BOSS_EVERY = 10;          // um chunk de chefe a cada N chunks
+export type Heading = 'W' | 'N' | 'S';
 export type ObstacleKind = 'a' | 'b';
 export interface Obstacle { c: number; r: number; kind: ObstacleKind }
 export type BossPower = 'weak' | 'normal' | 'strong';
 export const BOSS_HP_MUL: Record<BossPower, number> = { weak: .8, normal: 1.1, strong: 1.6 };
 export interface Encounter {
-  /** posição (célula dentro do chunk) em que o grupo "ativa" o encontro: os monstros nascem à frente, fora da tela */
+  /** progresso (células desde o início do chunk) em que o grupo "ativa" o encontro: os monstros nascem à frente, fora da tela */
   at: number; tier: WaveTier; extra: number; boss: boolean; bossPower?: BossPower;
   /** ids dos monstros, na ordem em que entram (levas): primeiro o núcleo do encontro, depois os reforços */
   monsters: string[];
 }
-/** floorStart/floorEnd: linha de cima da faixa no início e no fim do chunk (a faixa faz uma rampa contínua entre as duas). */
-export interface Chunk { index: number; start: number; floorStart: number; floorEnd: number; floor: number; obstacles: Obstacle[]; encounter?: Encounter }
+/** Quadro de um chunk: ponto do mundo = (ox, oy) + a·c + b·r, com c ao longo e r através (a e b são vetores unitários dos eixos). */
+export interface Frame { ox: number; oy: number; ax: number; ay: number; bx: number; by: number }
+export interface Chunk { index: number; start: number; heading: Heading; frame: Frame; turn?: 'R' | 'L'; obstacles: Obstacle[]; encounter?: Encounter }
 
 export interface RunParams { seed: number; huntId: string }
 export const bossIdOf = (huntId: string) => { const waves = (HUNT_BY_ID[huntId] ?? HUNT_BY_ID.catacumbas).waves; return waves[waves.length - 1].monsters.find(id => MONSTERS[id]?.boss) ?? waves[waves.length - 1].monsters[0]; };
 
-/** Altura da faixa ao fim de cada chunk: ruído de valor suave (sem estado, então continua igual ao regenerar). Sobe e desce em ondas longas, com rampas de vários andares. */
-export function floorEnd(seed: number, index: number): number {
-  if (index < 0) return 8;
-  const KNOT = 4, j = Math.floor(index / KNOT), t = index / KNOT - j, k = (n: number) => rngFor(seed, 11, n)();
-  const smooth = t * t * (3 - 2 * t), v = k(j) * (1 - smooth) + k(j + 1) * smooth;
-  return Math.round(FLOOR_MIN + (index === 0 ? .5 : v) * (FLOOR_MAX - FLOOR_MIN));
-}
-export const floorAt = floorEnd;
-/** Linha de cima da faixa na coluna `c` do chunk (rampa linear entre o início e o fim). */
-export const floorInChunk = (chunk: { floorStart: number; floorEnd: number }, c: number) => Math.round(chunk.floorStart + (chunk.floorEnd - chunk.floorStart) * Math.min(1, Math.max(0, (c + .5) / CHUNK_LEN)));
-/** Linhas livres de um chunk (índices absolutos do mapa); sempre existe um caminho contínuo de ponta a ponta. */
-export const bandRows = (floor: number) => Array.from({ length: BAND }, (_, i) => floor + i);
-
-function rollObstacles(seed: number, index: number, fs: number, fe: number): Obstacle[] {
-  const rng = rngFor(seed, 23, index), out: Obstacle[] = [], ch = { floorStart: fs, floorEnd: fe };
-  // caminho garantido (em linhas absolutas): serpenteia dentro da faixa, no máximo 1 linha por coluna, e a faixa sobe/desce junto
-  let lane = floorInChunk(ch, 0) + randInt(1, BAND - 2, rng);
-  const path: number[] = [];
-  for (let c = 0; c < CHUNK_LEN; c++) {
-    const top = floorInChunk(ch, c), r = rng();
-    let next = lane + (r < .2 ? -1 : r > .8 ? 1 : 0);
-    next = Math.min(top + BAND - 2, Math.max(top + 1, next));
-    if (Math.abs(next - lane) > 1) next = lane + Math.sign(next - lane);
-    lane = next; path.push(lane);
-  }
-  const density = .05 + Math.min(.06, index * .002);
-  for (let c = 3; c < CHUNK_LEN - 1; c++) { const top = floorInChunk(ch, c); for (let r = 0; r < BAND; r++) {
-    if (Math.abs(top + r - path[c]) <= 1) continue;   // a trilha tem 3 linhas de largura
-    if (rng() < density) out.push({ c, r: top + r, kind: rng() < .5 ? 'a' : 'b' });
-  } }
-  return out;
-}
+const AXES: Record<Heading, { a: [number, number]; b: [number, number] }> = { W: { a: [-1, 0], b: [0, 1] }, N: { a: [0, -1], b: [-1, 0] }, S: { a: [0, 1], b: [1, 0] } };
+const headingOf = (ax: number, ay: number): Heading => ax === -1 ? 'W' : ay === -1 ? 'N' : 'S';
+/** Ponto do mundo de uma posição local (c ao longo, r através; valores fracionários valem). */
+export const toWorld = (f: Frame, c: number, r: number) => ({ x: f.ox + f.ax * c + f.bx * r, y: f.oy + f.ay * c + f.by * r });
+const cellKey = (cx: number, cy: number) => (cx + 1048576) * 2097152 + (cy + 1048576);
 
 /** Escala de HP e ataque dos monstros pela profundidade: a run é infinita, então a dificuldade sobe sempre (números provisórios, ajustados no balanceamento). */
 export const depthScale = (index: number) => ({ hp: 1 + index * .03, atk: 1 + index * .02 });
@@ -82,10 +58,41 @@ export function bossPowerFor(seed: number, index: number): BossPower {
   return r < .3 - depth ? 'weak' : r < .8 - depth ? 'normal' : 'strong';
 }
 
-export function generateChunk(params: RunParams, index: number): Chunk {
-  const { seed, huntId } = params, fs = floorEnd(seed, index - 1), fe = floorEnd(seed, index), floor = fs;
+
+
+/** Quadro do chunk seguinte: reto (continua), à direita (a1 = −b0, b1 = a0) ou à esquerda (a1 = b0, b1 = −a0). */
+function nextFrame(f: Frame, next: Heading): { frame: Frame; turn?: 'R' | 'L' } {
+  const L = CHUNK_LEN, B = BAND;
+  const { a, b } = AXES[next];
+  if (a[0] === f.ax && a[1] === f.ay) return { frame: { ox: f.ox + f.ax * L, oy: f.oy + f.ay * L, ax: f.ax, ay: f.ay, bx: f.bx, by: f.by } };
+  if (a[0] === -f.bx && a[1] === -f.by) return { turn: 'R', frame: { ox: f.ox + f.ax * L + f.bx * B, oy: f.oy + f.ay * L + f.by * B, ax: -f.bx, ay: -f.by, bx: f.ax, by: f.ay } };
+  void b; return { turn: 'L', frame: { ox: f.ox + f.ax * (L + B), oy: f.oy + f.ay * (L + B), ax: f.bx, ay: f.by, bx: -f.ax, by: -f.ay } };
+}
+
+function rollObstacles(seed: number, index: number, turn: boolean): Obstacle[] {
+  if (index === 0) return [];
+  const rng = rngFor(seed, 23, index), L = CHUNK_LEN, B = BAND, guard = turn ? B + 1 : 3, out = new Map<number, Obstacle>();
+  // trilha garantida: 2 linhas livres que serpenteiam (no máximo 1 linha por coluna); nenhum obstáculo cai nela
+  const lane: number[] = []; let row = randInt(0, B - 2, rng);
+  for (let c = 0; c < L; c++) { const r = rng(); row = Math.min(B - 2, Math.max(0, row + (r < .25 ? -1 : r > .75 ? 1 : 0))); lane.push(row); }
+  const onLane = (c: number, r: number) => r === lane[c] || r === lane[c] + 1;
+  // blocos: grupos de 2 a 6 células coladas (barricadas) que estreitam o corredor e forçam o grupo a se ajeitar
+  const clusters = 1 + Math.floor(rng() * 3) + (index > 6 ? 1 : 0);
+  for (let k = 0; k < clusters; k++) {
+    const size = randInt(2, 6, rng), kind: ObstacleKind = rng() < .5 ? 'a' : 'b';
+    let c = randInt(guard, L - 4, rng), r = randInt(0, B - 1, rng);
+    for (let n = 0; n < size; n++) {
+      if (c >= guard && c <= L - 4 && r >= 0 && r < B && !onLane(c, r)) out.set(c * 8 + r, { c, r, kind });
+      const d = rng(); if (d < .25) c++; else if (d < .5) c--; else if (d < .75) r++; else r--;
+    }
+  }
+  return [...out.values()];
+}
+
+export function generateChunk(params: RunParams, index: number, frame: Frame, heading: Heading, turn?: 'R' | 'L'): Chunk {
+  const { seed, huntId } = params;
   const isBossChunk = index > 0 && (index + 1) % BOSS_EVERY === 0, rng = rngFor(seed, 51, index);
-  const chunk: Chunk = { index, start: index * CHUNK_LEN, floorStart: fs, floorEnd: fe, floor, obstacles: index === 0 ? [] : rollObstacles(seed, index, fs, fe) };   // a entrada é livre
+  const chunk: Chunk = { index, start: index * CHUNK_LEN, heading, frame, turn, obstacles: rollObstacles(seed, index, !!turn) };
   if (index === 0) return chunk;                  // o primeiro chunk é só a entrada: ninguém ataca antes de a run começar
   const { common, elite } = reinforcementIds(huntId);
   const extra = limitExtra(rawExtra(params, index, isBossChunk), { avgHpFraction: 1, lastExtra: rawExtra(params, index - 1, false) });
@@ -95,31 +102,93 @@ export function generateChunk(params: RunParams, index: number): Chunk {
   const core = isBossChunk ? 3 : baseCount(index);
   for (let i = 0; i < core; i++) monsters.push(i === 0 && !isBossChunk && index > 8 && rng() < .5 ? elite : common);
   for (let i = 0; i < extra; i++) monsters.push(rng() < .15 ? elite : common);
-  // na caminhada normal a ordem é: comuns primeiro, elites no meio (já sorteado acima); o chefe entra primeiro
-  chunk.encounter = { at: randInt(6, CHUNK_LEN - 8, rng), tier: tierOfExtra(extra), extra, boss: isBossChunk, bossPower, monsters };
+  chunk.encounter = { at: randInt(turn ? BAND + 3 : 6, CHUNK_LEN - 8, rng), tier: tierOfExtra(extra), extra, boss: isBossChunk, bossPower, monsters };
   return chunk;
 }
 
-/** Janela de chunks em memória: só o que está perto do grupo; o resto é descartado e regenerado sob demanda. */
+export type Pt = { x: number; y: number };
+/**
+ * O plano da run: quadros e direções (função pura da semente, calculados em sequência e guardados), chunks e a grade de células andáveis
+ * da janela perto do grupo. `isBlocked(x, y)` consulta a grade em coordenadas de mundo.
+ */
 export class RunPlan {
+  private frames: Frame[] = []; private heads: Heading[] = []; private turns: (('R' | 'L') | undefined)[] = [];
   private cache = new Map<number, Chunk>();
-  constructor(readonly params: RunParams) {}
-  chunk(index: number): Chunk { let c = this.cache.get(index); if (!c) { c = generateChunk(this.params, Math.max(0, index)); this.cache.set(index, c); } return c; }
-  /** Garante os chunks de `from` a `to` e descarta os que ficaram bem para trás. */
-  window(from: number, to: number): Chunk[] {
-    for (const key of this.cache.keys()) if (key < from - 2 || key > to + 2) this.cache.delete(key);
-    return Array.from({ length: to - from + 1 }, (_, i) => this.chunk(from + i));
+  /** célula → 1 (chão) ou 2 (obstáculo sobre chão) */
+  private grid = new Map<number, number>();
+  private loaded = new Set<number>();
+  constructor(readonly params: RunParams) {
+    this.frames.push({ ox: 0, oy: 0, ax: -1, ay: 0, bx: 0, by: 1 }); this.heads.push('W'); this.turns.push(undefined);
   }
-  indexAt(d: number) { return Math.max(0, Math.floor(d / CHUNK_LEN)); }
-  /** Pré-calcula `count` chunks à frente (a "run" montada antes de a primeira wave começar). */
-  precompute(count: number) { for (let i = 0; i < count; i++) this.chunk(i); }
-  /** Linha de cima da faixa na posição `d`. */
-  floorAtD(d: number) { const chunk = this.chunk(this.indexAt(d)); return floorInChunk(chunk, Math.floor(d - chunk.start)); }
-  isBlocked(d: number, row: number): boolean {
-    const chunk = this.chunk(this.indexAt(d)), c = Math.floor(d - chunk.start);
-    const top = floorInChunk(chunk, c);
-    if (row < top || row >= top + BAND) return true;
-    return chunk.obstacles.some(o => o.c === c && o.r === Math.floor(row));
+  private extend(index: number) {
+    while (this.frames.length <= index) {
+      const i = this.frames.length, prevH = this.heads[i - 1], rng = rngFor(this.params.seed, 71, i);
+      let run = 1; for (let k = i - 2; k >= 0 && this.heads[k] === prevH; k--) run++;
+      const minRun = prevH === 'W' ? 3 : 2, boss = (i + 1) % BOSS_EVERY === 0 || i < 3;
+      let next: Heading = prevH;
+      if (!boss && run >= minRun && (rng() < .4 || (prevH !== 'W' && run >= 4))) next = prevH === 'W' ? (rng() < .5 ? 'N' : 'S') : 'W';
+      const { frame, turn } = nextFrame(this.frames[i - 1], next);
+      this.frames.push(frame); this.heads.push(headingOf(frame.ax, frame.ay)); this.turns.push(turn);
+    }
+  }
+  chunk(index: number): Chunk {
+    index = Math.max(0, index);
+    let c = this.cache.get(index);
+    if (!c) { this.extend(index); c = generateChunk(this.params, index, this.frames[index], this.heads[index], this.turns[index]); this.cache.set(index, c); }
+    return c;
+  }
+  private load(index: number) {
+    if (this.loaded.has(index)) return; this.loaded.add(index);
+    const chunk = this.chunk(index), blocked = new Set(chunk.obstacles.map(o => o.c * 8 + o.r));
+    for (let c = 0; c < CHUNK_LEN; c++) for (let r = 0; r < BAND; r++) {
+      const p = toWorld(chunk.frame, c + .5, r + .5);
+      this.grid.set(cellKey(Math.floor(p.x), Math.floor(p.y)), blocked.has(c * 8 + r) ? 2 : 1);
+    }
+  }
+  private unload(index: number) {
+    if (!this.loaded.delete(index)) return;
+    const chunk = this.chunk(index);
+    for (let c = 0; c < CHUNK_LEN; c++) for (let r = 0; r < BAND; r++) { const p = toWorld(chunk.frame, c + .5, r + .5); this.grid.delete(cellKey(Math.floor(p.x), Math.floor(p.y))); }
+  }
+  /** Mantém na grade os chunks de `center − 2` a `center + 5` e solta o resto (memória constante em runs longas). */
+  ensure(center: number) {
+    const lo = Math.max(0, center - 2), hi = center + 5;
+    for (const i of [...this.loaded]) if (i < lo || i > hi) this.unload(i);
+    for (let i = lo; i <= hi; i++) this.load(i);
+    for (const key of this.cache.keys()) if (key < lo - 3 || key > hi) this.cache.delete(key);
+  }
+  /** Pré-carrega `count` chunks a partir do 0. */
+  precompute(count: number) { for (let i = 0; i < count; i++) this.load(i); }
+  get loadedCount() { return this.loaded.size; }
+  /** Célula (inteira) andável? Obstáculos e paredes são bloqueados. */
+  isBlockedCell(cx: number, cy: number) { return this.grid.get(cellKey(cx, cy)) !== 1; }
+  isBlocked(x: number, y: number) { return this.isBlockedCell(Math.floor(x), Math.floor(y)); }
+  /** Existe chão (mesmo com obstáculo) na célula? Usado para desenhar. */
+  cellKind(cx: number, cy: number): 0 | 1 | 2 { return (this.grid.get(cellKey(cx, cy)) ?? 0) as 0 | 1 | 2; }
+  indexAt(progress: number) { return Math.max(0, Math.floor(progress / CHUNK_LEN)); }
+
+  /** Ponto da linha central do caminho no progresso `p` (células desde a entrada). Nos cantos a linha passa pelo centro da sala. */
+  pathPoint(p: number): Pt {
+    const i = this.indexAt(p), chunk = this.chunk(i), c = Math.max(0, p - chunk.start), mid = BAND / 2;
+    if (chunk.turn && c < BAND) {
+      const prev = this.chunk(i - 1), e = toWorld(prev.frame, CHUNK_LEN, mid), m = toWorld(chunk.frame, mid, mid), x = toWorld(chunk.frame, BAND, mid);
+      return c < mid ? { x: e.x + (m.x - e.x) * c / mid, y: e.y + (m.y - e.y) * c / mid } : { x: m.x + (x.x - m.x) * (c - mid) / mid, y: m.y + (x.y - m.y) * (c - mid) / mid };
+    }
+    return toWorld(chunk.frame, c, mid);
+  }
+  /** Direção (vetor unitário) do caminho no progresso `p`. */
+  forwardAt(p: number): Pt {
+    const i = this.indexAt(p), chunk = this.chunk(i), c = p - chunk.start;
+    if (chunk.turn && c < BAND / 2) { const prev = this.chunk(i - 1).frame; return { x: prev.ax, y: prev.ay }; }
+    return { x: chunk.frame.ax, y: chunk.frame.ay };
+  }
+  /** Ponto de nascimento à frente do progresso `p`: uma célula livre sorteada na largura do corredor (ou, no canto, na sala). */
+  spawnPoint(p: number, rng: () => number): Pt {
+    const i = this.indexAt(p), chunk = this.chunk(i), c = Math.max(0, Math.min(CHUNK_LEN - 1, Math.floor(p - chunk.start)));
+    for (let t = 0; t < 12; t++) {
+      const w = toWorld(chunk.frame, c + .5, Math.floor(rng() * BAND) + .5);
+      if (!this.isBlocked(w.x, w.y)) return w;
+    }
+    return this.pathPoint(p);
   }
 }
-export { WAVE_EXTRAS, mix, pick };

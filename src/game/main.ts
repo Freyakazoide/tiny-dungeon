@@ -15,7 +15,7 @@ const config: Phaser.Types.Core.GameConfig = {
     backgroundColor: '#14110c',
     // Arte em pixels: sem suavização. O mapa inteiro é o canvas (32×20 tiles ×2).
     render: { pixelArt: true, antialias: false },
-    scale: { mode: Scale.FIT, autoCenter: Scale.CENTER_BOTH, width: 1024, height: 640 },
+    scale: { mode: Scale.RESIZE, autoCenter: Scale.NO_CENTER, width: 1024, height: 640 },
     scene: [
         Boot,
         Preloader,

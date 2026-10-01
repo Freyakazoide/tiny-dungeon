@@ -9,7 +9,6 @@ import { Hud } from './ui/shell/Hud';
 import { IconRail } from './ui/shell/IconRail';
 import { PartyBar } from './ui/shell/PartyBar';
 import { SessionWidget } from './ui/shell/SessionWidget';
-import { RunProto } from './ui/dev/RunProto';
 import { handleShortcut, uiStore, useUi } from './ui/uiStore';
 
 function App(){
@@ -35,7 +34,6 @@ function App(){
   // O relatório offline abre sozinho, uma vez por retorno, num modal (e não empurrando o conteúdo).
   useEffect(()=>{if(state.offlineReport&&reported.current!==state.offlineReport){reported.current=state.offlineReport;uiStore.open('bemvindo');}},[state.offlineReport]);
 
-  if(location.hash==='#/proto')return <RunProto/>;
   if(!created)return <div id="app"><CreationScreen/></div>;
   return <div id="app"><div className="stage">
     <Hud state={state}/>
