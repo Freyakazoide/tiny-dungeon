@@ -3,11 +3,12 @@ import type { Character, GameState } from '../game/core/types';
 import { gameStore } from '../game/core/GameStore';
 import { CLASSES } from '../game/data/classes';
 import { CLASS_BY_ID } from '../game/rpg/classTree';
-import { CATEGORY_NAMES, EFFECTS, MECHANICS_IMPLEMENTED, TALENT_TREES, type EffectCategory, type TalentNodeDef } from '../game/data/talentTrees';
+import { CATEGORY_NAMES, EFFECTS, TALENT_TREES, type EffectCategory, type TalentNodeDef } from '../game/data/talentTrees';
 import { classLabel } from '../game/systems/progression';
 import { canBuy, effectLabel, formatEffectValue, investedPoints, nodeInPath, rankOf, talentPointsAvailable, talentRespecCost, talentTotals } from '../game/systems/talentGrid';
 import { colorHex } from './format';
 import { Icon } from './components/Icon';
+import { MECHANICS_DONE } from '../game/systems/mechanics';
 
 /** Cor de cada categoria de efeito (igual à referência: ofensa vermelho, vida verde, defesa azul, especial rosa, utilidade âmbar, treino ciano). */
 const CATEGORY_COLORS: Record<EffectCategory, string> = { offense: '#e05a5a', life: '#3fb970', guard: '#4b80e6', special: '#e05ac8', utility: '#d9a63f', train: '#3cc4c4' };
@@ -112,7 +113,7 @@ function TalentCanvas({ character, treeId, selectedId, onSelect, query }: {
 
 function NodeDetail({ character, node, gold, confirmation, setConfirmation }: { character: Character; node: TalentNodeDef; gold: number; confirmation: Confirmation; setConfirmation: (value: Confirmation) => void }) {
   const rank = rankOf(character, node.id), check = canBuy(character, node.id), totals = talentTotals(character);
-  const color = nodeColor(node), mechanicReady = !!node.mechanic && MECHANICS_IMPLEMENTED.has(node.mechanic.id);
+  const color = nodeColor(node), mechanicReady = !!node.mechanic && MECHANICS_DONE.has(node.mechanic.id);
   const confirming = confirmation?.kind === 'buy' && confirmation.id === node.id;
   const needsConfirm = node.kind === 'major' || node.kind === 'keystone';
   const buy = () => { if (needsConfirm && !confirming) setConfirmation({ kind: 'buy', id: node.id }); else { gameStore.invest(character.id, node.id); setConfirmation(null); } };

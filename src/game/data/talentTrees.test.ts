@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { AFFINITY } from '../rpg/affinity';
 import { CLASS_BY_ID, CLASS_NODES } from '../rpg/classTree';
 import { PROFICIENCY_IDS } from '../rpg/proficiencies';
-import { EFFECTS, effectCap, MECHANICS_IMPLEMENTED, pointsAt, rootIdOf, respecGold, TALENT_NODES, TALENT_TREES, type TalentTreeDef } from './talentTrees';
+import { MECHANICS_DONE } from '../systems/mechanics';
+import { EFFECTS, effectCap, pointsAt, rootIdOf, respecGold, TALENT_NODES, TALENT_TREES, type TalentTreeDef } from './talentTrees';
 
 const trees = Object.values(TALENT_TREES);
 const count = (tree: TalentTreeDef, kind: string) => tree.nodes.filter(n => n.kind === kind).length;
@@ -49,10 +50,10 @@ describe('talent-trees.json — integridade dos dados (Fase 6)', () => {
     }
   });
 
-  it('todo Major e Keystone tem mecânica com id estável; nenhuma está implementada ainda (fica "Em breve")', () => {
+  it('todo Major e Keystone tem mecânica com id estável; as implementadas estão em MECHANICS_DONE e o resto fica "Em breve"', () => {
     const mechanics = trees.flatMap(t => t.nodes.filter(n => n.kind === 'major' || n.kind === 'keystone').map(n => n.mechanic?.id));
     expect(mechanics).toHaveLength(346); expect(mechanics.every(Boolean)).toBe(true); expect(new Set(mechanics).size).toBe(346);
-    expect(MECHANICS_IMPLEMENTED.size).toBe(0);
+    expect(MECHANICS_DONE.size).toBeGreaterThan(150); for (const id of MECHANICS_DONE) expect(mechanics).toContain(id);   // só ids que existem no catálogo
   });
 
   it('custos e pontos: pointsAt, tetos e respec seguem a fórmula do documento', () => {

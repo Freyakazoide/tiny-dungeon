@@ -58,5 +58,4 @@ export const effectCap = (code: string) => EFFECT_CAPS[code] ?? (code.startsWith
 
 export const CATEGORY_NAMES: Record<EffectCategory, string> = { offense: 'Ofensa', life: 'Vida', guard: 'Defesa', special: 'Especial', utility: 'Utilidade', train: 'Treino' };
 
-/** Mecânicas de Major/Keystone com código próprio no engine (B9). Enquanto vazio, a UI mostra "Em breve". */
-export const MECHANICS_IMPLEMENTED = new Set<string>();
+
