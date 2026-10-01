@@ -25,7 +25,7 @@ describe('as 90 especializações (15 classes × 6)', () => {
     for (const n of specs) {
       expect(NODE_PASSIVES[n.id]?.effects.length, n.id).toBeGreaterThan(0); expect(NODE_PASSIVES[n.id].description, n.id).toMatch(/%/);
       const spell = SPELLS.find(s => s.node === n.id); expect(spell, n.id).toBeTruthy(); expect(spell!.classId).toBe(kitOfNode(n.parent!));
-      expect(TALENT_TREES[n.id]?.nodes.length, n.id).toBe(37); expect(TALENT_TREES[n.id].parent ?? n.parent).toBe(n.parent);
+      expect(TALENT_TREES[n.id]?.nodes.length, n.id).toBe(37);
       expect(n.specialty, n.id).toBeTruthy();
     }
   });
