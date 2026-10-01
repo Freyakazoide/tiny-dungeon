@@ -7,6 +7,7 @@ import { Icon } from './components/Icon';
 import { ItemIcon } from './items/ItemIcon';
 import { viewFromItem } from './items/itemView';
 import { compact } from './format';
+import { uiStore } from './uiStore';
 
 const PCT: { key: 'hpPotionAt' | 'manaPotionAt' | 'defensiveAmuletAt' | 'emergencyAt'; label: string; help: string; icon: string; bar?: 'hp' | 'mp' }[] = [
   { key: 'hpPotionAt', label: 'Usar poção de vida abaixo de', help: 'Quando a vida cai até este %, o personagem toma a poção mais barata que cobre o déficit.', icon: 'stat_hp', bar: 'hp' },
@@ -71,6 +72,7 @@ export function HelperPanel({ state, character }: { state: GameState; character:
         <div className="he-rule"><span className="pk-sec">Quando as poções acabarem</span>
           <div className="he-chips" role="radiogroup" aria-label="Sem poções">{([['continue', 'Continuar caçando'], ['end', 'Encerrar a caçada']] as const).map(([v, label]) =>
             <button type="button" role="radio" aria-checked={h.outOfSupplies === v} key={v} className={`pk-btn sm ${h.outOfSupplies === v ? 'on' : ''}`} onClick={() => set({ outOfSupplies: v })}>{label}</button>)}</div></div>
+        <button type="button" className="pk-btn sm" onClick={() => uiStore.openClasses('wiki')}>📖 Enciclopédia de classes</button>
         <p className="muted pk-tiny">Magias e condições de uso ficam em <b>Personagem › Magias</b>.</p></div>
     </div>
     <AutoBuy state={state} />

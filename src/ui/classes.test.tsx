@@ -103,3 +103,17 @@ describe('Fase 11 — ícones de classe', () => {
     expect([...CLASS_ICON_PNGS].sort()).toEqual(files);
   });
 });
+
+describe('Enciclopédia de classes', () => {
+  it('mostra todas as trilhas sem desbloqueio, busca por nome e abre o detalhe da especialização', async () => {
+    prep(); open('enciclopedia');
+    const trails = screen.getByRole('list', { name: 'Trilhas' }) as HTMLElement;
+    expect(within(trails).getAllByRole('listitem', { name: /›/ })).toHaveLength(90);   // 15 classes × 6 especializações
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText('Buscar classe ou especialização'), 'gladiador');
+    const hits = within(trails).getAllByRole('listitem', { name: /›/ });
+    expect(hits.length).toBeGreaterThan(0); expect(hits.every(h => /gladiador/i.test(h.getAttribute('aria-label') ?? ''))).toBe(true);
+    await user.click(hits[0]);
+    expect(screen.getByLabelText(/Detalhes: Gladiador/)).toBeTruthy();
+  });
+});

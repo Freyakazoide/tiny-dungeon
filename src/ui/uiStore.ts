@@ -6,7 +6,8 @@ import { MODAL_IDS, RAIL_ITEMS, type ModalId } from './navigation';
  * Só as opções persistem (localStorage, com try/catch: pode estar bloqueado).
  */
 export interface UiOptions { reduceMotion: boolean; pauseOnMenu: boolean; scale: 90 | 100 | 115; }
-export interface UiState { modal: ModalId | null; tab: string | null; /** sub-menu da aba (Classes: 'next' | 'tree') */ sub: 'next' | 'tree'; selected: string | null; options: UiOptions; }
+export type ClassesSub = 'next' | 'tree' | 'wiki';
+export interface UiState { modal: ModalId | null; tab: string | null; /** sub-menu da aba (Classes: ClassesSub) */ sub: ClassesSub; selected: string | null; options: UiOptions; }
 
 const OPTIONS_KEY = 'tiny-dungeon-ui';
 const DEFAULT_OPTIONS: UiOptions = { reduceMotion: false, pauseOnMenu: false, scale: 100 };
@@ -37,7 +38,7 @@ export const uiStore = {
   getState: () => state,
   subscribe: (fn: () => void) => { listeners.add(fn); return () => { listeners.delete(fn); }; },
   /** Abre (ou troca) o modal; `tab` escolhe a aba, `who` o personagem. */
-  open(id: ModalId, opts: { tab?: string; who?: string; sub?: 'next' | 'tree' } = {}) {
+  open(id: ModalId, opts: { tab?: string; who?: string; sub?: ClassesSub } = {}) {
     if (!state.modal && typeof document !== 'undefined') returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     set({ modal: id, tab: opts.tab ?? null, sub: opts.sub ?? 'next', ...(opts.who ? { selected: opts.who } : {}) });
     writeHash();
@@ -45,9 +46,9 @@ export const uiStore = {
   close() { if (!state.modal) return; set({ modal: null, tab: null }); writeHash(); },
   toggle(id: ModalId) { if (state.modal === id) uiStore.close(); else uiStore.open(id); },
   setTab(tab: string) { set({ tab }); writeHash(); },
-  setSub(sub: 'next' | 'tree') { set({ sub }); },
+  setSub(sub: ClassesSub) { set({ sub }); },
   /** Atalho para o sub-menu de Classes dentro de Personagem (o antigo menu Classes). */
-  openClasses(sub: 'next' | 'tree' = 'next') { uiStore.open('personagem', { tab: 'Classes', sub }); },
+  openClasses(sub: ClassesSub = 'next') { uiStore.open('personagem', { tab: 'Classes', sub }); },
   select(id: string) { set({ selected: id }); },
   setOption<K extends keyof UiOptions>(key: K, value: UiOptions[K]) {
     set({ options: { ...state.options, [key]: value } });
@@ -56,7 +57,7 @@ export const uiStore = {
   /** Lê `#/modal/aba` (deep link) e abre; devolve true se abriu. */
   openFromHash(hash: string, tabs: (id: ModalId) => string[] = () => []) {
     const [, id, tab] = /^#\/([a-z]+)(?:\/([a-z0-9-]+))?/.exec(hash) ?? [];
-    if (id === 'classes') { uiStore.openClasses(tab === 'arvore-completa' ? 'tree' : 'next'); return true; }   // link antigo: Classes agora é uma aba de Personagem
+    if (id === 'classes') { uiStore.openClasses(tab === 'arvore-completa' ? 'tree' : tab === 'enciclopedia' ? 'wiki' : 'next'); return true; }   // link antigo: Classes agora é uma aba de Personagem
     if (!id || !(MODAL_IDS as readonly string[]).includes(id)) return false;
     const match = tab ? tabs(id as ModalId).find(name => slug(name) === tab) : undefined;
     uiStore.open(id as ModalId, match ? { tab: match } : {});

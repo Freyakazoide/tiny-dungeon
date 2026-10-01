@@ -117,3 +117,26 @@
 .cl-subpick small{display:block;font-size:10px}.cl-subpick.sel{border-color:#e5ca91}.cl-subpick.here{box-shadow:inset 0 0 0 2px #4fae73}
 .cl-spec-detail{display:flex;flex-direction:column;gap:6px;padding:8px}
 @media (max-width:720px){.cl-specs{grid-template-columns:1fr}}
+
+/* Rolagem única: o corpo da aba rola inteiro; nenhum painel interno corta o conteúdo */
+.m-body.cl-body{overflow-y:auto;overflow-x:hidden;display:block}
+.cl-body .classes-panel,.cl-body #p-next.on,.cl-body #p-tree,.cl-body .cl-layout,.cl-body .cl-tree{flex:none;min-height:0;height:auto}
+.cl-body .cl-left,.cl-body .cl-tree>div:first-child,.cl-body .cl-subs,.cl-body .cl-prev{overflow:visible;max-height:none}
+.cl-body .cl-layout,.cl-body .cl-tree{align-items:start}
+.cl-body .cl-prev{position:sticky;top:0;max-height:calc(100vh - 260px);overflow:auto}
+
+/* Enciclopédia */
+.cl-wiki{display:flex;flex-direction:column;gap:10px}
+.cl-wiki-bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.cl-search{flex:1;min-width:200px;background:#0c1219;border:2px solid #303944;color:#f1e4c9;padding:6px 8px;font:inherit}
+.cl-wiki-grid{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:12px;align-items:start}
+.cl-trails{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.cl-trail{padding:8px}.cl-trail.sel{border-color:#e5ca91}
+.cl-trail-head{all:unset;cursor:pointer;display:flex;gap:8px;align-items:center;flex-wrap:wrap;width:100%}
+.cl-trail-head:focus-visible,.cl-trail-spec:focus-visible{outline:2px solid #86b6f4;outline-offset:2px}
+.cl-trail-specs{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:4px;margin-top:6px;padding-left:12px;border-left:2px solid #303944}
+.cl-trail-spec{all:unset;cursor:pointer;display:flex;gap:6px;align-items:center;font-size:11px;padding:3px 4px;border:1px solid #28313a;background:#10161e}
+.cl-trail-spec.sel{border-color:#e5ca91}.cl-trail-spec.here{border-color:#4fae73}
+.cl-wiki-detail{position:sticky;top:0;display:flex;flex-direction:column;gap:8px}
+.cl-crumbs{font-size:12px}
+@media (max-width:980px){.cl-wiki-grid{grid-template-columns:1fr}.cl-wiki-detail{position:static}}
