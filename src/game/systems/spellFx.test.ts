@@ -21,3 +21,12 @@ describe('forma dos ataques', () => {
     for (const f of atk) { expect(FX_KINDS).toContain(f.fx); expect(f.target).toBeTruthy(); }
   });
 });
+
+describe('ataques dos monstros', () => {
+  it('todo monstro tem forma de ataque válida e o motor a emite com a origem no monstro', async () => {
+    const { MONSTERS } = await import('../data/monsters'); const { monsterFx } = await import('../data/monsterFx');
+    for (const id of Object.keys(MONSTERS)) expect(FX_KINDS, id).toContain(monsterFx(id));
+    const e = new GameEngine(partyState()); const seen: GameFx[] = []; e.onFx?.(f => seen.push(f)); e.start?.(); for (let i = 0; i < 600; i++) e.advance?.(.1);
+    const hits = seen.filter(f => f.type === 'attack' && f.source && !f.source.startsWith('c-') && f.target); expect(hits.length).toBeGreaterThan(0);
+  });
+});

@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.tsx';
-import { initializeGameStore } from './game/core/GameStore.ts';
+import { gameStore, initializeGameStore } from './game/core/GameStore.ts';
 import './ui/styles/legacy.css';
 import './ui/styles/tokens.css';
 import './ui/styles/components.css';
@@ -21,6 +21,7 @@ import './ui/styles/skin.css';
 
 async function bootstrap(){
     await initializeGameStore();
+    if (import.meta.env.DEV) (window as unknown as { __td?: unknown }).__td = gameStore;
     ReactDOM.createRoot(document.getElementById('root')!).render(
         <React.StrictMode><App /></React.StrictMode>
     );

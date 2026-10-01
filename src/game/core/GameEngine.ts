@@ -1,3 +1,4 @@
+import { monsterFx } from '../data/monsterFx';
 import { basicFx, spellFx, type FxKind } from '../systems/spellFx';
 import { CLASSES, kitOfNode, kitsOfPath } from '../data/classes';
 import { MONSTERS } from '../data/monsters';
@@ -136,7 +137,7 @@ export class GameEngine {
     this.state.analyzer.activeMs+=ms;this.huntStat().activeMs+=ms;
     this.tickStatuses(dt);if(this.state.status!=='running')return this.emit();this.tickReinforcements(dt);
     for(const c of livingTeam(this.state)){this.updateCharacter(c,dt);if(this.state.status!=='running')break;}
-    if(this.state.status==='running')for(const m of livingMonsters(this.state)){if((m.statuses?.frozen??0)>0||(m.statuses?.stunned??0)>0)continue;m.cooldown-=dt;if(m.cooldown<=0){const targets=livingTeam(this.state);if(!targets.length){this.defeat();break;}const target=pickMonsterTarget(targets)!;const dealt=monsterHit(m,target,this.state);this.emit({type:'damage',source:m.uid,target:target.id,value:dealt});const thorns=talentValue(target,'thorns');if(thorns>0&&m.alive)this.hit(target,m,Math.max(1,Math.round(dealt*thorns)));m.cooldown+=1/MONSTERS[m.defId].speed;if(!livingTeam(this.state).length){this.defeat();break;}}}
+    if(this.state.status==='running')for(const m of livingMonsters(this.state)){if((m.statuses?.frozen??0)>0||(m.statuses?.stunned??0)>0)continue;m.cooldown-=dt;if(m.cooldown<=0){const targets=livingTeam(this.state);if(!targets.length){this.defeat();break;}const target=pickMonsterTarget(targets)!;const dealt=monsterHit(m,target,this.state);this.emit({type:'attack',source:m.uid,target:target.id,fx:monsterFx(m.defId)});this.emit({type:'damage',source:m.uid,target:target.id,value:dealt});const thorns=talentValue(target,'thorns');if(thorns>0&&m.alive)this.hit(target,m,Math.max(1,Math.round(dealt*thorns)));m.cooldown+=1/MONSTERS[m.defId].speed;if(!livingTeam(this.state).length){this.defeat();break;}}}
     this.emit();
   }
   private updateCharacter(c:Character,dt:number){

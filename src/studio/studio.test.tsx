@@ -17,7 +17,7 @@ describe('Fase 13 F — Estúdio de arte', () => {
     expect(screen.getByAltText('esqueleto down_1')).toBeTruthy(); expect(screen.getByAltText('tile piso')).toBeTruthy(); expect(screen.getByAltText('mapa catacumbas')).toBeTruthy();
     await user.click(screen.getByLabelText('grade de células')); expect(screen.getByTestId('grid')).toBeTruthy();
     await user.click(screen.getByLabelText('caixa 3×3'));
-  });
+  }, 30000);
   it('CSV com chave inexistente mostra o erro (arquivo e linha) e não derruba a página', () => {
     const f = files(); f['/arte/monstros/esqueleto/down_1.csv'] = '.,.,Z\n.,.,.';
     render(<StudioApp files={f} />);

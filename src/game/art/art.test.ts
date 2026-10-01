@@ -107,7 +107,7 @@ describe('integridade dos dados entregues (arte/)', () => {
     for (const h of HUNTS) expect(mapRaster(h.id, h.color).width).toBe(512);
     const missing = Object.keys(MONSTERS).filter(id => !data.meta.some(m => m.monstroId === id));
     if (missing.length) console.info(`monstros ainda sem arte: ${missing.join(', ')}`);
-    expect(data.meta.filter(m => m.monstroId).map(m => m.monstroId).sort()).toEqual(['bone_king', 'ghoul', 'skeleton']);
+    expect(missing, 'todo monstro do jogo tem arte').toEqual([]);
   });
 });
 
