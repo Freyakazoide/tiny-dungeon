@@ -1,0 +1,23 @@
+import { describe, expect, it } from 'vitest';
+import { GameEngine } from '../core/GameEngine';
+import type { GameFx } from '../core/GameEngine';
+import { partyState } from '../core/testing';
+import { SPELLS } from '../data/spells';
+import { FX_KINDS, basicFx, spellFx } from './spellFx';
+import { FX_PALETTE } from '../scenes/effects';
+
+describe('forma dos ataques', () => {
+  it('básico: corpo a corpo = corte; arco = flecha', () => { expect(basicFx('melee')).toBe('slash'); expect(basicFx('ranged')).toBe('arrow'); });
+  it('toda magia de dano tem uma forma conhecida; elementos usam o próprio elemento', () => {
+    for (const s of SPELLS.filter(x => x.kind === 'damage')) expect(FX_KINDS, s.id).toContain(spellFx(s));
+    expect(spellFx(SPELLS.find(s => s.id === 'pyro_fireball')!)).toBe('fire'); expect(spellFx(SPELLS.find(s => s.id === 'basic_ice')!)).toBe('ice');
+    expect(spellFx(SPELLS.find(s => s.id === 'hunter_volley')!)).toBe('arrow'); expect(spellFx(SPELLS.find(s => s.id === 'knight_cleave')!)).toBe('slash');
+  });
+  it('todas as formas têm paleta', () => { for (const k of FX_KINDS) expect(FX_PALETTE[k]).toBeTruthy(); });
+  it('o motor emite o fx do ataque com o alvo', () => {
+    const e = new GameEngine(partyState()); const seen: GameFx[] = []; e.onFx?.(f => seen.push(f));
+    e.start?.(); for (let i = 0; i < 400; i++) e.advance?.(.1);
+    const atk = seen.filter(f => f.type === 'attack'); expect(atk.length).toBeGreaterThan(0);
+    for (const f of atk) { expect(FX_KINDS).toContain(f.fx); expect(f.target).toBeTruthy(); }
+  });
+});

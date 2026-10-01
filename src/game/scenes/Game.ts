@@ -12,6 +12,8 @@ import { ART } from '../art/data';
 import { ART_SCALE, ARENA, BOSS_CELL, CANVAS_H, cellCenter, cellKey, engagementSlots, entranceCells, formationCells, inArena, spawnCells, stairCells, unitAnchor, type Cell } from '../art/geometry';
 import { lookKey, type Look } from '../art/look';
 import { characterTexture, characterWalkAnim, ensureLookTextures, mapTexture, monsterTexture } from '../art/textures';
+import type { FxKind } from '../systems/spellFx';
+import { playAttackFx } from './effects';
 import { dominantDirection, type ArenaPoint } from './movement';
 
 const BAR_W=56,SPRITE_PX=32*ART_SCALE;
@@ -72,6 +74,7 @@ export class Game extends Scene {
     this.transitionBanner=this.add.container(width/2,CANVAS_H/2,[bannerBg,this.transitionText]).setDepth(12).setVisible(false);
 
     this.unsubscribe=gameStore.subscribe(()=>this.renderState());
+    if(import.meta.env.DEV)(window as unknown as {__fx?:unknown}).__fx=(kind:FxKind,a:ArenaPoint,b:ArenaPoint)=>playAttackFx(this,kind,a,b);
     this.unsubscribeFx=gameStore.onFx(fx=>this.animateFx(fx));
     this.events.once('shutdown',()=>{this.unsubscribe?.();this.unsubscribeFx?.();this.cancelAllHeroMovement();this.heroes.clear();this.enemies.clear();this.floatLanes.clear();});
     this.renderState();
@@ -302,7 +305,8 @@ export class Game extends Scene {
       const hero=fx.source?this.heroes.get(fx.source):undefined,monster=fx.source?this.enemies.get(fx.source):undefined;
       if(hero&&target)this.setDirection(hero,dominantDirection({x:hero.container.x,y:hero.container.y-SPRITE_PX/2},target,hero.direction),hero.walking);
       if(monster?.art&&target&&monster.body instanceof GameObjects.Sprite){const dir=dominantDirection(source,target,'down');monster.facing=dir;monster.body.setTexture(monsterTexture(monster.art,dir,1));}
-      if(target){const projectile=this.add.circle(source.x,source.y,5,0xf2ce72).setDepth(10).setStrokeStyle(2,0xffffff,.8);this.tweens.add({targets:projectile,x:target.x,y:target.y,duration:150,ease:'Quad.easeIn',onComplete:()=>projectile.destroy()});}
+      if(fx.fx){const aims=(fx.targets?.length?fx.targets:fx.target?[fx.target]:[]).map(id=>this.focus(id)).filter((p):p is ArenaPoint=>!!p);aims.forEach((p,i)=>this.time.delayedCall(i*70,()=>playAttackFx(this,fx.fx!,source,p)));}
+      else if(target){const projectile=this.add.circle(source.x,source.y,5,0xf2ce72).setDepth(10).setStrokeStyle(2,0xffffff,.8);this.tweens.add({targets:projectile,x:target.x,y:target.y,duration:150,ease:'Quad.easeIn',onComplete:()=>projectile.destroy()});}
       const attackBody=hero?.body??monster?.body;if(attackBody){const dx=target?PhaserMath.Clamp(target.x-source.x,-8,8):0;const dy=target?PhaserMath.Clamp(target.y-source.y,-8,8):-8;
         this.tweens.add({targets:attackBody,x:attackBody.x+dx,y:attackBody.y+dy,duration:70,yoyo:true,ease:'Sine.easeOut'});}
     }
