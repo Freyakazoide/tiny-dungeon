@@ -2,6 +2,7 @@ import { WAVE_CONFIG } from '../data/balance';
 import { MONSTERS } from '../data/monsters';
 import { BAND, CHUNK_LEN, RunPlan, bossPowerFor, BOSS_HP_MUL, depthScale, type RunParams } from './plan';
 import { rngFor, type Rng } from './rng';
+import { moveToward } from './world';
 
 /**
  * Simulação do corredor (protótipo do overhaul): heróis e monstros têm posição (d = distância no corredor, y = linha).
@@ -68,40 +69,7 @@ export class RunSim {
     this.queue = this.queue.filter(q => q.ids.length);
   }
 
-  private free(d: number, y: number) { return !this.plan.isBlocked(d, y); }
-  /** Caminho curto (busca em largura em células, 8 direções, sem cortar quina) até a célula do alvo; devolve o primeiro passo. Janela pequena: barato. */
-  private waypoint(u: { d: number; y: number }, tx: number, ty: number): [number, number] | null {
-    const sx = Math.floor(u.d), sy = Math.floor(u.y), gx0 = Math.floor(tx), gy0 = Math.floor(ty);
-    const lo = Math.min(sx, gx0) - 4, hi = Math.max(sx, gx0) + 4, key = (x: number, y: number) => (x - lo) * 40 + y;
-    const prev = new Map<number, number>([[key(sx, sy), -1]]); const queue: [number, number][] = [[sx, sy]];
-    let best: [number, number] = [sx, sy], bestDist = Math.hypot(gx0 - sx, gy0 - sy);
-    for (let qi = 0; qi < queue.length && qi < 600; qi++) {
-      const [x, y] = queue[qi], dist = Math.hypot(gx0 - x, gy0 - y);
-      if (dist < bestDist) { bestDist = dist; best = [x, y]; if (dist === 0) break; }
-      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
-        const nx = x + dx, ny = y + dy; if (nx < lo || nx > hi || ny < 0 || ny > 36 || prev.has(key(nx, ny)) || this.plan.isBlocked(nx + .5, ny + .5)) continue;
-        if (dx && dy && (this.plan.isBlocked(x + dx + .5, y + .5) || this.plan.isBlocked(x + .5, y + dy + .5))) continue;
-        prev.set(key(nx, ny), key(x, y)); queue.push([nx, ny]);
-      }
-    }
-    let cur = key(best[0], best[1]), step = best;
-    if (cur === key(sx, sy)) return null;
-    while (true) { const p = prev.get(cur)!; if (p === key(sx, sy)) break; cur = p; step = [Math.floor(cur / 40) + lo, cur % 40]; }
-    return [step[0] + .5, step[1] + .5];
-  }
-  /** Anda até (tx, ty) no máximo `step`; em linha reta quando o trecho está livre, senão segue o caminho da busca. */
-  private moveToward(u: { d: number; y: number }, tx: number, ty: number, step: number) {
-    if (Math.abs(tx - u.d) > 10) tx = u.d + Math.sign(tx - u.d) * 10;   // metas longas viram etapas de 10 células (a busca tem janela curta)
-    const dx = tx - u.d, dy = ty - u.y, dist = Math.hypot(dx, dy);
-    if (dist < 1e-6) return;
-    const clear = (len: number) => { if (!this.free(u.d + dx * Math.min(1, step / dist), u.y + dy * Math.min(1, step / dist))) return false; for (let l = Math.min(step, len); l < len + .25; l += .25) { const m = Math.min(l, len); if (!this.free(u.d + dx / dist * m, u.y + dy / dist * m)) return false; } return true; };
-    const k = Math.min(1, step / dist);
-    if (clear(Math.min(dist, 6))) { u.d += dx * k; u.y += dy * k; return; }
-    const w = this.waypoint(u, tx, ty); if (!w) return;
-    const wx = w[0] - u.d, wy = w[1] - u.y, wd = Math.hypot(wx, wy) || 1, kk = Math.min(1, step / wd);
-    const nd = u.d + wx * kk, ny = u.y + wy * kk;
-    if (this.free(nd, ny)) { u.d = nd; u.y = ny; }
-  }
+  private moveToward(u: { d: number; y: number }, tx: number, ty: number, step: number) { moveToward(this.plan, u, tx, ty, step); }
 
   step(dt: number) {
     if (this.over) return;

@@ -12,7 +12,7 @@ export type ItemKind = 'equipment' | 'loot' | 'supply';
 
 export interface Stats { maxHp: number; maxMana: number; attack: number; defense: number; attackSpeed: number; crit: number; resistance: number; magicPower: number; }
 export interface SpellCondition { hpBelow?: number; minEnemies?: number; allyInjured?: boolean; manaAbove?: number; }
-export interface HelperConfig { hpPotionAt: number; manaPotionAt: number; healAllies: boolean; autoSupplies: boolean; defensiveAmuletAt: number; emergencyAt: number; outOfSupplies: 'continue' | 'end'; }
+export interface HelperConfig { hpPotionAt: number; manaPotionAt: number; healAllies: boolean; autoSupplies: boolean; defensiveAmuletAt: number; emergencyAt: number; outOfSupplies: 'continue' | 'end'; /** IA de movimento no corredor (só configuração): distância que tenta manter, quanto se afasta do tanque, vida em que recua e distância em que foge */ ai?: { hold?: number; leash?: number; retreatAt?: number; dodge?: number }; }
 /** Um exemplar de equipamento de classe: o item base (catálogo Fase 7) + a classificação e os atributos aleatórios sorteados. */
 export interface ItemInstance { uid: string; baseId: string; classification: Classification; attrs: { code: string; level: number }[]; /** recém-obtido: limpo ao selecionar na mochila */ fresh?: true; }
 import type { Look } from '../art/look';
@@ -40,7 +40,9 @@ export interface MonsterDef { id: string; name: string; hp: number; attack: numb
 export interface MonsterStatuses { burn?: { stacks: number; remaining: number; power: number; source: string; acc: number }; frozen?: number; stunned?: number;
   poison?: { stacks: number; remaining: number; power: number; source: string; acc: number }; bleed?: { remaining: number; perSec: number; source: string; acc: number };
   armor?: { pct: number; remaining: number }; confused?: { remaining: number; source: string }; }
-export interface MonsterRuntime { uid: string; defId: string; hp: number; maxHp: number; cooldown: number; alive: boolean; statuses?: MonsterStatuses; }
+export interface MonsterRuntime { uid: string; defId: string; hp: number; maxHp: number; cooldown: number; alive: boolean; statuses?: MonsterStatuses; /** posição no corredor (modo corredor): d = distância, y = linha */ d?: number; y?: number; /** multiplicador de ataque pela profundidade */ atkMul?: number; }
+/** Estado da run no corredor procedural: tudo o que não dá para regenerar da semente. */
+export interface RunState { seed: number; /** posição do grupo (a "âncora" da formação) */ anchor: number; pos: Record<string, { d: number; y: number }>; /** último chunk cujo encontro já disparou */ lastTrigger: number; /** encontro em andamento (aberto até todos morrerem) */ open: boolean; queue: { chunk: number; ids: string[]; waited: number }[]; deepest: number; }
 export interface WaveDef { name: string; monsters: string[]; }
 export interface SpellDef { id: string; classId: ClassId; name: string; level: number; mana: number; cooldown: number; target: 'enemy' | 'allEnemies' | 'self' | 'ally' | 'allAllies'; power: number; kind: 'damage' | 'heal' | 'regen' | 'shield' | 'buff'; duration?: number; description: string; element?: ProficiencyId; universal?: boolean;
   /** Combustão aplicada por acerto, e segundos de congelamento/atordoamento. */
@@ -68,6 +70,8 @@ export interface GameState {
   /** Mochila de equipamento de classe (instâncias com atributos próprios). */
   gearBag: ItemInstance[];
   autoBuy?: AutoBuyConfig;
+  /** Run no corredor procedural (ausente = modo antigo de waves). */
+  run?: RunState;
   /** ids de itens simples (bp) recém-obtidos, limpos ao selecionar */
   freshItems?: string[];
   /** presets de formação (3 vagas) e hunt programada para o fim do ciclo */

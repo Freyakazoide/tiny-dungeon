@@ -53,3 +53,16 @@ export const WAVE_CONFIG = {
   /** Levas: com `minTotal`+ monstros nascem só `maxAlive` de uma vez; o resto entra em grupos de `batch` quando houver menos de `below` vivos, a cada `intervalS`. */
   batches: true, minTotal: 9, maxAlive: 8, batch: 4, below: 6, intervalS: 3,
 };
+
+/** Modo "corredor" (overhaul): o grupo anda por um mapa procedural infinito e luta por alcance. Os testes de engine antigos rodam com `enabled: false` (ver test-setup.ts). */
+export const RUN_CONFIG = {
+  enabled: true,
+  /** células por segundo: caminhada do grupo, monstros e heróis em combate */
+  walk: 1.4, foeSpeed: .9, heroSpeed: 2.4,
+  /** alcances em células: golpe de monstro, arma corpo a corpo, arma à distância e magia ofensiva */
+  foeReach: 1.5, meleeReach: 1.7, rangedReach: 5.5, spellReach: 6.5,
+  /** monstros nascem tantas células à frente do grupo (fora da tela) */
+  spawnAhead: 14, rear: 3,
+  /** o grupo para de andar quando há inimigo a menos de tantas células à frente */
+  engage: 9,
+};
