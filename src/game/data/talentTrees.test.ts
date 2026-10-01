@@ -53,7 +53,7 @@ describe('talent-trees.json — integridade dos dados (Fase 6)', () => {
   it('todo Major e Keystone tem mecânica com id estável; as implementadas estão em MECHANICS_DONE e o resto fica "Em breve"', () => {
     const mechanics = trees.flatMap(t => t.nodes.filter(n => n.kind === 'major' || n.kind === 'keystone').map(n => n.mechanic?.id));
     expect(mechanics).toHaveLength(346); expect(mechanics.every(Boolean)).toBe(true); expect(new Set(mechanics).size).toBe(346);
-    expect(MECHANICS_DONE.size).toBeGreaterThan(150); for (const id of MECHANICS_DONE) expect(mechanics).toContain(id);   // só ids que existem no catálogo
+    expect(MECHANICS_DONE.size).toBe(346); for (const id of mechanics) expect(MECHANICS_DONE.has(id as string), String(id)).toBe(true);   // todas implementadas
   });
 
   it('custos e pontos: pointsAt, tetos e respec seguem a fórmula do documento', () => {

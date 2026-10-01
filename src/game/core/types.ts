@@ -37,7 +37,9 @@ export interface MonsterDef { id: string; name: string; hp: number; attack: numb
   /** Afinidade elemental (bloco 8): dano de magia do elemento ×1,30 se fraco, ×0,70 se resiste. */
   element?: ProficiencyId; weak?: ProficiencyId[]; resist?: ProficiencyId[]; hunt?: string; }
 /** Status ativos (segundos restantes); Combustão empilha até 5 e guarda quem aplicou, para creditar o dano contínuo. */
-export interface MonsterStatuses { burn?: { stacks: number; remaining: number; power: number; source: string; acc: number }; frozen?: number; stunned?: number; }
+export interface MonsterStatuses { burn?: { stacks: number; remaining: number; power: number; source: string; acc: number }; frozen?: number; stunned?: number;
+  poison?: { stacks: number; remaining: number; power: number; source: string; acc: number }; bleed?: { remaining: number; perSec: number; source: string; acc: number };
+  armor?: { pct: number; remaining: number }; confused?: { remaining: number; source: string }; }
 export interface MonsterRuntime { uid: string; defId: string; hp: number; maxHp: number; cooldown: number; alive: boolean; statuses?: MonsterStatuses; }
 export interface WaveDef { name: string; monsters: string[]; }
 export interface SpellDef { id: string; classId: ClassId; name: string; level: number; mana: number; cooldown: number; target: 'enemy' | 'allEnemies' | 'self' | 'ally' | 'allAllies'; power: number; kind: 'damage' | 'heal' | 'regen' | 'shield' | 'buff'; duration?: number; description: string; element?: ProficiencyId; universal?: boolean;

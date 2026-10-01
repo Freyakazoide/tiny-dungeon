@@ -6,7 +6,7 @@ import { TALENT_NODES } from '../data/talentTrees';
  * o motor (core/mech.ts) executa os efeitos nos ganchos de combate. Texto sem entrada aqui continua "Em breve".
  */
 export type Eff =
-  | { k: 'dmg'; vs: 'boss' | 'bossElite' | 'low' | 'full' | 'ctrl' | 'critBoss' | 'basic' | 'spell' | 'goldScaled'; pct: number; thr?: number }
+  | { k: 'dmg'; vs: 'boss' | 'bossElite' | 'low' | 'full' | 'ctrl' | 'critBoss' | 'basic' | 'basicArmed' | 'spell' | 'goldScaled' | 'element' | 'crit'; pct: number; thr?: number; el?: string }
   | { k: 'firstBoss'; mult: number }
   | { k: 'firstStrike'; mult: number }
   | { k: 'bossForceCrit'; n: number }
@@ -14,7 +14,7 @@ export type Eff =
   | { k: 'lostHp'; per: number; step: number; max: number }
   | { k: 'streak'; on: 'hit' | 'kill' | 'crit' | 'cast'; dmg?: number; aspd?: number; per: number; max: number; dur: number }
   | { k: 'killBurst'; n: number; window: number; aspd: number; dur: number }
-  | { k: 'taken'; pct: number; below?: number }
+  | { k: 'taken'; pct: number; below?: number; tank?: boolean }
   | { k: 'takenStack'; per: number; max: number; dur: number }
   | { k: 'teamTaken'; pct: number; below?: number; row?: 'back' | 'same' }
   | { k: 'dodge'; chance?: number; quiet?: number }
@@ -22,7 +22,7 @@ export type Eff =
   | { k: 'once'; when: 'lowhp' | 'avgLow' | 'start' | 'firstHit' | 'fatal' | 'noMana'; below?: number; do: 'shield' | 'heal' | 'invuln' | 'surviveFatal' | 'absorbHit' | 'teamHeal' | 'revive' | 'mana' | 'regen' | 'buff' | 'takenBuff' | 'volley'; pct?: number; dur?: number; dmg?: number }
   | { k: 'onKill'; heal?: number; mana?: number; cd?: number; critOnly?: boolean; bossBuff?: { dmg: number; dur: number }; bossGold?: number; bossDrop?: number; goldMult?: number; extraGold?: number }
   | { k: 'onCrit'; heal?: number; volley?: number; burn?: boolean; double?: number; buff?: { aspd?: number; dmg?: number; dur: number; max: number } }
-  | { k: 'every'; n: number; on: 'basic' | 'cast'; do: 'volley' | 'crit' | 'strike' | 'stun' | 'haste' | 'doubleNext'; pct?: number }
+  | { k: 'every'; n: number; on: 'basic' | 'cast'; do: 'volley' | 'crit' | 'strike' | 'stun' | 'haste' | 'doubleNext' | 'mana'; pct?: number }
   | { k: 'proc'; chance: number; do: 'repeat' | 'second' | 'volley' | 'freeCast' | 'castAgain' | 'castReset'; pct?: number; noCd?: boolean }
   | { k: 'echo'; pct: number }
   | { k: 'cleave'; targets: number; pct: number }
@@ -39,9 +39,74 @@ export type Eff =
   | { k: 'potionSave'; chance: number }
   | { k: 'basicStat'; stat: 'magicPower' | 'defense'; pct: number }
   | { k: 'ctrlMana'; pct: number }
-  | { k: 'ignoreResist' }
+  | { k: 'ignoreResist'; pct?: number; element?: string }
   | { k: 'teamDmgFirst'; pct: number }
-  | { k: 'teamDmgBoss'; pct: number };
+  | { k: 'teamDmgBoss'; pct: number }
+  | { k: 'passive' }
+  | { k: 'noHitStreak'; n: number; dmg: number; dur: number; max: number }
+  | { k: 'elemLeech'; element: string; heal?: number; mana?: number; ally?: boolean; critOnly?: boolean }
+  | { k: 'stealth'; sec: number }
+  | { k: 'poisonOnHit'; stacks: number; doubleAt?: number }
+  | { k: 'burnOnHit'; chance: number }
+  | { k: 'ignoreDef'; chance: number; crit?: boolean }
+  | { k: 'trainFocus'; pct: number }
+  | { k: 'buffsTeam' }
+  | { k: 'buffCdr'; pct: number }
+  | { k: 'missFirst'; chance: number }
+  | { k: 'dotDur'; pct: number }
+  | { k: 'dotBoost'; pct: number }
+  | { k: 'cursedLeech'; pct: number }
+  | { k: 'dotSpread'; on: 'expire' | 'death' | 'tick'; n: number }
+  | { k: 'dotAll' }
+  | { k: 'dotCross' }
+  | { k: 'deathBlast'; pct: number }
+  | { k: 'aoeAgain'; chance: number }
+  | { k: 'potion'; share?: number; buff?: number }
+  | { k: 'transmute'; kind: 'strong' | 'weak' }
+  | { k: 'lootGold'; pct: number }
+  | { k: 'ctrlExtra'; chance: number; n: number }
+  | { k: 'ccResist'; pct: number }
+  | { k: 'confuse'; on: 'control' | 'crit' | 'periodic'; every?: number; dur: number; element?: string }
+  | { k: 'regenMult'; pct: number }
+  | { k: 'regenDef' }
+  | { k: 'healRegen'; dur: number; pct: number }
+  | { k: 'stunClear' }
+  | { k: 'elemStun'; element: string; chance: number; dur: number }
+  | { k: 'pendingHit'; pct: number }
+  | { k: 'focusSwap'; dmg: number; dur: number }
+  | { k: 'bleed'; on: 'crit' | 'hit'; pct: number; dur: number }
+  | { k: 'elemCount'; level: number; per: number }
+  | { k: 'aoeStun'; dur: number }
+  | { k: 'bossKillStack'; per: number }
+  | { k: 'decoy'; chance: number }
+  | { k: 'summon'; every: number; pct: number; target: 'first' | 'all' | 'strong' | 'low'; window?: number }
+  | { k: 'skeletons'; pct: number; max: number }
+  | { k: 'skeletonHeal'; pct: number }
+  | { k: 'turrets'; n: number; pct: number }
+  | { k: 'turretRate'; pct: number }
+  | { k: 'armorBreak'; on: 'aoe' | 'hit' | 'poisoned' | 'crit'; pct: number; dur: number; max?: number; element?: string }
+  | { k: 'debuffRandom'; every: number }
+  | { k: 'dmgPerStack'; vs: 'boss'; per: number }
+  | { k: 'teamAspd'; pct: number }
+  | { k: 'buffHalfCost' }
+  | { k: 'manaShield' }
+  | { k: 'basicOrb'; pct: number; heal: number }
+  | { k: 'onCastBuff'; dmg: number; dur: number }
+  | { k: 'hpScale'; per: number; step: number }
+  | { k: 'heavyHit'; dmg: number }
+  | { k: 'teamSpellDmg'; pct: number }
+  | { k: 'shieldExpire'; mana: number }
+  | { k: 'shieldShare'; pct: number }
+  | { k: 'shieldDur'; pct: number }
+  | { k: 'glyph'; pct: number; delay: number }
+  | { k: 'stunExtra'; sec: number }
+  | { k: 'groundFire' }
+  | { k: 'teamThorns'; pct: number }
+  | { k: 'healedBarrier'; pct: number }
+  | { k: 'buffMana'; pct: number }
+  | { k: 'firstSpellCrit' }
+  | { k: 'shareBuffs' }
+  | { k: 'bossCtrl' };
 
 const T = (text: string, ...effects: Eff[]): [string, Eff[]] => [text, effects];
 
@@ -92,7 +157,7 @@ const TEXT_EFFECTS: Record<string, Eff[]> = Object.fromEntries([
   T('A cada 6 ataques, uma salva atinge todos os inimigos com 80% do dano.', { k: 'every', n: 6, on: 'basic', do: 'volley', pct: .8 }),
   T('Mísseis de proteção reduzem em 10% o dano da linha de trás.', { k: 'teamTaken', pct: .1, row: 'back' }),
   T('Críticos causam uma explosão de fogo em área.', { k: 'onCrit', volley: .4 }),
-  T('Uma torreta ataca junto com a equipe (30% do dano do Artilheiro).', { k: 'echo', pct: .3 }),
+  T('Uma torreta ataca junto com a equipe (30% do dano do Artilheiro).', { k: 'turrets', n: 1, pct: .3 }),
   T('A cada 20 s, uma barragem de mísseis atinge todos os inimigos (250% do dano).', { k: 'periodic', every: 20, do: 'volley', pct: 2.5 }),
   // ---------------------------------------------------------------- Tier 2 (entregues)
   T('Ataques básicos atingem todos os inimigos.', { k: 'every', n: 1, on: 'basic', do: 'volley', pct: .5 }),
@@ -135,9 +200,10 @@ const TEXT_EFFECTS: Record<string, Eff[]> = Object.fromEntries([
   T('Críticos aumentam a velocidade de ataque em 10% por 5 s.', { k: 'onCrit', buff: { aspd: .1, dur: 5, max: 1 } }),
   T('Ao cair abaixo de 30% de HP, entra em forma primal (+40% de dano por 8 s).', { k: 'once', when: 'lowhp', below: .3, do: 'buff', dmg: .4, dur: 8 }),
   T('Uma vez por wave, uma árvore ancestral cura e protege a equipe por 10 s.', { k: 'once', when: 'avgLow', do: 'teamHeal', pct: .3 }),
-  T('Duas torretas autônomas atacam no chão (30% do dano cada).', { k: 'echo', pct: .6 }),
-  T('Até 4 torretas ao mesmo tempo, com 40% do dano cada.', { k: 'echo', pct: 1 }),
+  T('Duas torretas autônomas atacam no chão (30% do dano cada).', { k: 'turrets', n: 2, pct: .3 }),
+  T('Até 4 torretas ao mesmo tempo, com 40% do dano cada.', { k: 'turrets', n: 4, pct: .4 }),
   T('Dispara mísseis em todos os inimigos a cada 8 s.', { k: 'periodic', every: 8, do: 'volley', pct: .8 }),
+  T('Mísseis perseguem alvos abaixo de 30% de HP.', { k: 'summon', every: 3, pct: 1.5, target: 'low' }),
   T('Uma vez por wave, o traje sobrecarrega e absorve 50% do dano por 5 s.', { k: 'once', when: 'lowhp', below: .4, do: 'takenBuff', pct: .5, dur: 5 }),
   // ---------------------------------------------------------------- Majors das grades novas (por efeito dominante)
   T('Golpes corpo a corpo têm 15% de chance de acertar duas vezes.', { k: 'proc', chance: .15, do: 'repeat' }),
@@ -189,7 +255,118 @@ const TEXT_EFFECTS: Record<string, Eff[]> = Object.fromEntries([
   T('Críticos explodem e atingem inimigos próximos.', { k: 'onCrit', volley: .5 }),
   T('Contra chefes, o primeiro tiro de cada wave causa o triplo.', { k: 'firstBoss', mult: 3 }),
   T('Cada tiro seguido aumenta a velocidade em 2% (até 30%).', { k: 'streak', on: 'hit', aspd: 1, per: .02, max: 15, dur: 4 }),
+  // ---------------------------------------------------------------- restante do catálogo
+  T('Conclui o treino básico: bônus permanentes de HP, defesa e dano corpo a corpo.', { k: 'passive' }),
+  T('Críticos causam dano devastador; +25% contra chefes.', { k: 'dmg', vs: 'crit', pct: .2 }, { k: 'dmg', vs: 'critBoss', pct: .25 }),
+  T('Como Tanque, recebe 75% dos golpes e −10% de dano recebido.', { k: 'taken', pct: .1, tank: true }),
+  T('A cada 10 golpes sem sofrer dano: +10% de dano por 8 s (acumula até 3×).', { k: 'noHitStreak', n: 10, dmg: .1, dur: 8, max: 3 }),
+  T('Como Tanque, recebe 75% dos golpes (em vez de 65%).', { k: 'passive' }),
+  T('Dano Sagrado cura o aliado com menos HP.', { k: 'elemLeech', element: 'holy', heal: .25, ally: true }),
+  T('Dano Sagrado crítico cura o aliado com menos HP.', { k: 'elemLeech', element: 'holy', heal: .5, ally: true, critOnly: true }),
+  T('Após abater um monstro, o Ladino some do radar por 2 s.', { k: 'stealth', sec: 2 }),
+  T('Ataques aplicam veneno cumulativo.', { k: 'poisonOnHit', stacks: 1 }),
+  T('Críticos à distância atravessam a armadura.', { k: 'ignoreDef', chance: 1, crit: true }),
+  T('+10% de dano nas demais magias elementais equipadas.', { k: 'dmg', vs: 'spell', pct: .1 }),
+  T('O treino do elemento em foco rende +40% de tries.', { k: 'trainFocus', pct: 40 }),
+  T('Buffs de ataque e defesa afetam toda a equipe.', { k: 'buffsTeam' }),
+  T('Buffs ativos reduzem a recarga das magias da equipe em 10%.', { k: 'buffCdr', pct: .1 }),
+  T('Monstros têm 10% de chance de errar o primeiro ataque.', { k: 'missFirst', chance: .1 }),
+  T('Uma vez por wave, a equipe ganha todos os buffs ativos do Bardo por 8 s.', { k: 'shareBuffs' }),
+  T('Combos completos restauram mana.', { k: 'every', n: 5, on: 'basic', do: 'mana', pct: .05 }),
+  T('Efeitos contínuos duram +30%.', { k: 'dotDur', pct: .3 }),
+  T('Cura 20% mais ao roubar vida de alvos amaldiçoados.', { k: 'cursedLeech', pct: .2 }),
+  T('Dano de Morte cura 10% do dano causado e restaura mana.', { k: 'elemLeech', element: 'death', heal: .1, mana: .01 }),
+  T('Maldições se espalham para 1 alvo adjacente ao expirar.', { k: 'dotSpread', on: 'expire', n: 1 }),
+  T('15% de chance de o acerto em área explodir de novo.', { k: 'aoeAgain', chance: .15 }),
+  T('Poções repassam 25% do efeito aos aliados.', { k: 'potion', share: .25 }),
+  T('Alvos envenenados têm −10% de defesa.', { k: 'armorBreak', on: 'poisoned', pct: .1, dur: 1 }),
+  T('Uma vez por wave, transmuta o inimigo mais forte (−30% de HP, +100% de ouro).', { k: 'transmute', kind: 'strong' }),
+  T('15% de chance de o controle afetar +1 alvo.', { k: 'ctrlExtra', chance: .15, n: 1 }),
+  T('Efeitos de controle sofridos duram −30%.', { k: 'ccResist', pct: .3 }),
+  T('Monstros controlados atacam os próprios aliados.', { k: 'confuse', on: 'control', dur: 3 }),
+  T('A regeneração da equipe rende +50%; magias de Terra curam 10% do dano.', { k: 'regenMult', pct: .5 }, { k: 'elemLeech', element: 'earth', heal: .1 }),
+  T('Magias de Terra têm 15% de chance de enraizar por 1,5 s.', { k: 'elemStun', element: 'earth', chance: .15, dur: 1.5 }),
+  T('Magias de área atingem também os inimigos da fila de espera.', { k: 'pendingHit', pct: .25 }),
+  T('Trocar o elemento em foco concede +15% de dano por 8 s.', { k: 'focusSwap', dmg: .15, dur: 8 }),
+  T('Trocar o elemento em foco concede +20% de dano por 10 s.', { k: 'focusSwap', dmg: .2, dur: 10 }),
+  T('Críticos aplicam sangramento por 4 s.', { k: 'bleed', on: 'crit', pct: .25, dur: 4 }),
+  T('Dano elemental aumenta 3% para cada elemento acima do nível 20.', { k: 'elemCount', level: 20, per: .03 }),
+  T('Ataques físicos têm 10% de chance de ignorar a defesa do alvo.', { k: 'ignoreDef', chance: .1 }),
+  T('Pisões atordoam todos os inimigos por 1 s.', { k: 'aoeStun', dur: 1 }),
+  T('Veneno acumula até 10 vezes e dobra o dano no último acúmulo.', { k: 'poisonOnHit', stacks: 1, doubleAt: 10 }),
+  T('Tiros ignoram a defesa do alvo.', { k: 'ignoreDef', chance: 1 }),
+  T('Invoca um pet tanque que absorve 30% dos golpes.', { k: 'decoy', chance: .3 }),
+  T('O pet e o caçador atacam em conjunto com bônus de dano em área.', { k: 'summon', every: 4, pct: .35, target: 'all' }),
+  T('Uma vez por wave, invoca uma segunda fera por 15 s.', { k: 'summon', every: 2, pct: .6, target: 'first', window: 15 }),
+  T('Cada chefe diferente abatido concede +2% de dano permanente.', { k: 'bossKillStack', per: .02 }),
+  T('Potencializa dano de terra.', { k: 'dmg', vs: 'element', el: 'earth', pct: .1 }),
+  T('Dano Sagrado aplica um debuff de −15% de defesa.', { k: 'armorBreak', on: 'hit', pct: .15, dur: 6, element: 'holy' }),
+  T('Potencializa dano sagrado.', { k: 'dmg', vs: 'element', el: 'holy', pct: .1 }),
+  T('A primeira magia de cada wave sempre acerta crítico.', { k: 'firstSpellCrit' }),
+  T('Curas feitas em você também dão barreira aos aliados.', { k: 'healedBarrier', pct: .3 }),
+  T('Barreiras de equipe duram 40% mais.', { k: 'shieldDur', pct: .4 }),
+  T('Aumenta a velocidade de ataque e de conjuração de toda a equipe.', { k: 'teamAspd', pct: .1 }),
+  T('Buffs renovados pela metade do custo de mana.', { k: 'buffHalfCost' }),
+  T('Todos os buffs do Bardo afetam a equipe inteira sem limite.', { k: 'buffsTeam' }),
+  T('Debuffs aleatórios em área a cada 10 s.', { k: 'debuffRandom', every: 10 }),
+  T('Críticos psíquicos confundem o alvo.', { k: 'confuse', on: 'crit', dur: 3, element: 'psychic' }),
+  T('A cada 20 s, todos os inimigos ficam confusos por 3 s.', { k: 'confuse', on: 'periodic', every: 20, dur: 3 }),
+  T('Inimigos controlados recebem 15% mais dano.', { k: 'dmg', vs: 'ctrl', pct: .15 }),
+  T('Curas em grupo também concedem regeneração por 5 s.', { k: 'healRegen', dur: 5, pct: .02 }),
+  T('Potencializa dano psíquico.', { k: 'dmg', vs: 'element', el: 'psychic', pct: .1 }),
+  T('Curas em grupo também removem atordoamentos dos aliados.', { k: 'stunClear' }),
+  T('Ataques disparam projéteis de energia com roubo de vida.', { k: 'basicOrb', pct: .4, heal: .3 }),
+  T('Mana cheia converte o excedente em escudo.', { k: 'manaShield' }),
+  T('Gastar mana concede dano extra por 4 s.', { k: 'onCastBuff', dmg: .1, dur: 4 }),
+  T('O dano escala com o HP máximo (+1% de dano para cada 5% de HP máx. bônus).', { k: 'hpScale', per: .05, step: .01 }),
+  T('Golpes reduzem a defesa do alvo em 5% (acumula 4×).', { k: 'armorBreak', on: 'hit', pct: .05, dur: 6, max: .2 }),
+  T('Ao sofrer um golpe crítico, o próximo ataque causa +100% de dano.', { k: 'heavyHit', dmg: 1 }),
+  T('Potencializa dano físico (magia).', { k: 'dmg', vs: 'element', el: 'physical', pct: .1 }),
+  T('Armas equipadas concedem +10% de dano aos golpes desarmados.', { k: 'dmg', vs: 'basicArmed', pct: .1 }),
+  T('Invoca esqueletos dos monstros derrotados (30% do dano do Bruxo).', { k: 'skeletons', pct: .3, max: 3 }),
+  T('Esqueletos curam o Bruxo ao causar dano.', { k: 'skeletonHeal', pct: .15 }),
+  T('Até 6 esqueletos ao mesmo tempo, com 60% do dano do Bruxo.', { k: 'skeletons', pct: .6, max: 6 }),
+  T('Pragas contagiam os alvos vizinhos ao morrer.', { k: 'dotSpread', on: 'death', n: 2 }),
+  T('Chefes sofrem +2% de dano por acúmulo de peste (até 10).', { k: 'dmgPerStack', vs: 'boss', per: .02 }),
+  T('Todo inimigo da wave recebe a praga do primeiro alvo contaminado.', { k: 'dotAll' }),
+  T('Potencializa dano de morte.', { k: 'dmg', vs: 'element', el: 'death', pct: .1 }),
+  T('Magias de morte ignoram 20% da resistência do alvo.', { k: 'ignoreResist', pct: .2, element: 'death' }),
+  T('Potencializa dano de veneno.', { k: 'dmg', vs: 'element', el: 'poison', pct: .1 }),
+  T('O dano contínuo cresce com o poder mágico.', { k: 'dotBoost', pct: .3 }),
+  T('Dano contínuo se espalha para inimigos próximos.', { k: 'dotSpread', on: 'tick', n: 1 }),
+  T('Explosões quebram a armadura (−20% de defesa).', { k: 'armorBreak', on: 'aoe', pct: .2, dur: 8 }),
+  T('Bombas críticas explodem duas vezes.', { k: 'onCrit', double: 1 }),
+  T('Poções concedem um buff de atributos de 20 s.', { k: 'potion', buff: .1 }),
+  T('Loot comum é transmutado em ouro extra.', { k: 'lootGold', pct: .3 }),
+  T('Uma vez por wave, transmuta um inimigo em ouro (exceto chefes).', { k: 'transmute', kind: 'weak' }),
+  T('Curas deixam uma regeneração de 3 s nos aliados.', { k: 'healRegen', dur: 3, pct: .02 }),
+  T('Quando um inimigo morre com veneno, explode causando dano aos vizinhos.', { k: 'deathBlast', pct: 1.2 }),
+  T('Dano de fogo e veneno se somam como dano contínuo.', { k: 'dotCross' }),
+  T('Golpes pesados quebram a defesa do alvo em 20% por 5 s.', { k: 'armorBreak', on: 'crit', pct: .2, dur: 5 }),
+  T('Aplica um elemento fraco ao grupo (+10% de dano elemental).', { k: 'teamSpellDmg', pct: .1 }),
+  T('Escudos expirados devolvem 20% do valor como mana.', { k: 'shieldExpire', mana: .2 }),
+  T('Escudos são compartilhados com toda a equipe (50% do valor).', { k: 'shieldShare', pct: .5 }),
+  T('Magias deixam um glifo que explode 3 s depois.', { k: 'glyph', pct: .5, delay: 3 }),
+  T('Inimigos atordoados ficam 1 s a mais sob efeito.', { k: 'stunExtra', sec: 1 }),
+  T('Runas de fogo deixam o chão em chamas por 4 s.', { k: 'groundFire' }),
+  T('Clones explodem ao expirar, causando dano psíquico em área.', { k: 'periodic', every: 12, do: 'volley', pct: 1.2 }),
+  T('Monstros afetados atacam uns aos outros.', { k: 'confuse', on: 'control', dur: 3 }),
+  T('O controle atinge +2 alvos.', { k: 'ctrlExtra', chance: 1, n: 2 }),
+  T('Chefes sofrem metade da duração de controle, mas ficam vulneráveis (+15% de dano).', { k: 'dmg', vs: 'boss', pct: .15 }, { k: 'bossCtrl' }),
+  T('Inimigos atordoados recebem 25% mais dano psíquico.', { k: 'dmg', vs: 'ctrl', pct: .25 }),
+  T('Buffs de equipe também restauram um pouco de mana.', { k: 'buffMana', pct: .05 }),
+  T('Magias psíquicas têm 20% de chance de atordoar com choque.', { k: 'elemStun', element: 'psychic', chance: .2, dur: 1.5 }),
+  T('Ataques causam sangramento (dano contínuo).', { k: 'bleed', on: 'hit', pct: .15, dur: 4 }),
+  T('Curas contínuas na equipe (2% do HP por segundo por 6 s).', { k: 'healRegen', dur: 6, pct: .02 }),
+  T('A regeneração aumenta com a defesa.', { k: 'regenDef' }),
+  T('Curas deixam uma regeneração que dura 6 s.', { k: 'healRegen', dur: 6, pct: .02 }),
+  T('A cada 8 s uma fera invocada ataca o inimigo mais forte.', { k: 'summon', every: 8, pct: 1.8, target: 'strong' }),
+  T('Inimigos que atacam o grupo sofrem dano de espinhos.', { k: 'teamThorns', pct: .15 }),
+  T('Veneno se espalha ao matar um inimigo.', { k: 'dotSpread', on: 'death', n: 2 }),
+  T('Torretas disparam +30% mais rápido.', { k: 'turretRate', pct: .3 }),
+  T('Tiros de fogo aplicam combustão que se acumula.', { k: 'burnOnHit', chance: .35 }),
 ]);
+
 
 /** Mecânica (id do nó) → efeitos. Montada a partir do catálogo de talentos. */
 export const MECHANIC_EFFECTS = new Map<string, Eff[]>();

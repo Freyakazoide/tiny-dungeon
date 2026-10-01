@@ -9,6 +9,7 @@ import { PROFICIENCIES, type ProficiencyId } from '../rpg/proficiencies';
 import { itemById } from '../data/items';
 import { CHARMS } from '../data/charms';
 import { talentTotals, talentValue } from './talentGrid';
+import { effectsOf } from './mechanics';
 import { gearBonus } from './gear';
 import { ARM_DEFENSE, PROFICIENCY_LEVEL_DAMAGE } from '../data/balance';
 import { affinityFor } from '../rpg/affinity';
@@ -24,7 +25,8 @@ export function gainExperience(character: Character, amount: number) {
 export const triesBonusPct = (character: Character, id: ProficiencyId) => {
   const totals = talentTotals(character);
   const items = Object.values(character.equipment).reduce((sum, itemId) => sum + (itemId ? itemById(itemId)?.trainBonus?.[id] ?? 0 : 0), 0);
-  return (totals[`t_${id}`] ?? 0) + (id === elementFocus(character) ? totals.t_focus ?? 0 : 0) + items;
+  const focus = id === elementFocus(character);
+  return (totals[`t_${id}`] ?? 0) + (focus ? totals.t_focus ?? 0 : 0) + items + (focus ? effectsOf(character).reduce((n, e) => n + (e.k === 'trainFocus' ? e.pct : 0), 0) : 0);
 };
 /** Multiplicador total de tries de uma proficiência: afinidade da classe × (1 + talento). 0 = bloqueada. */
 export const trainMultiplier = (character: Character, id: ProficiencyId) => affinityFor(character.profile, id) * (1 + triesBonusPct(character, id) / 100);

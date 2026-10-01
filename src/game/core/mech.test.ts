@@ -23,7 +23,7 @@ const damageOf = (e: GameEngine, c: Character, t: { hp: number }, crit = false) 
 
 describe('catálogo de mecânicas', () => {
   it('cada mecânica implementada vira efeitos para um nó real; comprar o nó liga o efeito no personagem', () => {
-    expect(MECHANICS_DONE.size).toBeGreaterThan(150);
+    expect(MECHANICS_DONE.size).toBe(346);
     const e = new GameEngine(partyState()); const c = e.getSnapshot().characters[0];
     const nodeId = [...TALENT_NODES.values()].find(({ node }) => node.mechanic?.id === 'berserker.keystone')!.node.id;
     expect(effectsOf(c)).toEqual([]); c.talentRanks[nodeId] = 1;
