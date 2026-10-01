@@ -19,6 +19,8 @@ import { groupAlerts } from '../../game/systems/group';
 import { groupClasses } from '../../game/systems/guide';
 import { potionPercent } from '../badges';
 import { GEAR_BAG_CAPACITY } from '../../game/data/balance';
+import { slotsUsed } from '../../game/systems/loot';
+import { gearSlots } from '../../game/systems/gear';
 import { GoldChip } from '../items/parts';
 import { classLabel } from '../../game/systems/progression';
 import { CHARACTER_TABS, type CharacterTab, type ModalId } from '../navigation';
@@ -39,7 +41,7 @@ export const MODALS: Record<Exclude<ModalId, 'bemvindo'>, ModalDef> = {
     render: ({ state, character, tab }) => <CharacterPanel state={state} selected={character.id} setSelected={uiStore.select} tab={tab as CharacterTab} /> },
   itens: { title: 'Itens', subtitle: 'Equipamento, mochila e suprimentos', icon: 'itens', who: true, gold: true, tabs: ['Equipamento', 'Mochila', 'Suprimentos'],
     tabIcons: { Equipamento: 'slot_armor', Mochila: 'itens', Suprimentos: 'stat_hp' },
-    tabBadges: ({ state }) => { const hp = potionPercent(state); const used = state.inventory.bp.reduce((n, x) => n + x.quantity, 0) + state.inventory.loot.reduce((n, x) => n + x.quantity, 0) + state.gearBag.length; return { Mochila: { value: `${used}/${state.inventory.capacity.bp + GEAR_BAG_CAPACITY}`, title: 'Ocupação da mochila' }, ...(hp < 40 ? { Suprimentos: { value: '!', gold: true, title: `Poções de vida em ${hp}% do estoque confortável` } } : {}) }; },
+    tabBadges: ({ state }) => { const hp = potionPercent(state); const used = slotsUsed(state.inventory.bp) + slotsUsed(state.inventory.loot) + gearSlots(state.gearBag); return { Mochila: { value: `${used}/${state.inventory.capacity.bp + GEAR_BAG_CAPACITY}`, title: 'Ocupação da mochila' }, ...(hp < 40 ? { Suprimentos: { value: '!', gold: true, title: `Poções de vida em ${hp}% do estoque confortável` } } : {}) }; },
     render: ({ state, character, tab }) => <ItemsPanel state={state} character={character} section={tab === 'Equipamento' ? 'equipment' : tab === 'Mochila' ? 'bag' : 'supplies'} /> },
   comercio: { title: 'Comércio', subtitle: 'Loja, ferreiro e venda', icon: 'comercio', gold: true, tabs: ['Loja', 'Ferreiro', 'Vender'], tabIcons: { Loja: 'stat_hp', Ferreiro: 'slot_weapon', Vender: 'stat_gold' },
     render: ({ state, character, tab }) => <ItemsPanel state={state} character={character} section={tab === 'Loja' ? 'shop' : tab === 'Ferreiro' ? 'smith' : 'sell'} /> },

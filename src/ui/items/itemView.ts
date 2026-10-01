@@ -28,6 +28,8 @@ export interface ItemView {
   mechanic?: { text: string; soon: boolean };
   value: number;
   quantity: number;
+  /** Equipamento de classe empilhado: uids de todas as peças da pilha (a de maior valor primeiro). */
+  uids?: string[];
   equipped?: boolean; fresh?: boolean;
   reason?: string;
   /** para o ícone */

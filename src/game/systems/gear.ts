@@ -3,6 +3,7 @@ import { CLASSIFICATIONS, CLASSIFICATION_NAMES, classItem, ITEM_CONFIG, itemsFor
 import { BOSS_BIS_MULTIPLIER, CLASSIFICATION_VALUE, CLASSIFICATION_WEIGHTS, QUALITY_VALUE, QUALITY_WEIGHTS, SMITH_MARKUP } from '../data/gearDrops';
 import { EFFECTS, TALENT_TREES } from '../data/talentTrees';
 import { AFFINITY } from '../rpg/affinity';
+import { GEAR_BAG_CAPACITY, STACK_MAX } from '../data/balance';
 import { PROFICIENCY_IDS, type ProficiencyId } from '../rpg/proficiencies';
 
 /** Equipamento de classe (Fase 7): instâncias com classificação e atributos aleatórios sobre um item base do catálogo. */
@@ -60,6 +61,18 @@ export function createInstance(baseId: string, classification: Classification = 
 
 const SLOT_FACTOR = { w1: 1.2, w2: 1.5 } as const;
 /** Valor de venda de uma instância. */
+/** Pilha de equipamento de classe: mesmo item e mesma raridade dividem 1 espaço (os atributos sorteados continuam individuais). */
+export const gearKey = (g: ItemInstance) => `${g.baseId}|${g.classification}`;
+export interface GearGroup { key: string; items: ItemInstance[]; best: ItemInstance }
+/** Agrupa a mochila por pilha; dentro do grupo o melhor item (maior valor) vem primeiro. Pilhas passam de STACK_MAX viram mais de um espaço. */
+export function groupGear(bag: readonly ItemInstance[]): GearGroup[] {
+  const map = new Map<string, ItemInstance[]>();
+  for (const g of bag) { const list = map.get(gearKey(g)); if (list) list.push(g); else map.set(gearKey(g), [g]); }
+  return [...map].map(([key, items]) => { items.sort((a, b) => gearValue(b) - gearValue(a)); return { key, items, best: items[0] }; });
+}
+export const gearSlots = (bag: readonly ItemInstance[]) => groupGear(bag).reduce((n, g) => n + Math.ceil(g.items.length / STACK_MAX), 0);
+export const gearFits = (bag: readonly ItemInstance[], extra: readonly ItemInstance[]) => gearSlots([...bag, ...extra]) <= GEAR_BAG_CAPACITY;
+
 export function gearValue(instance: ItemInstance): number {
   const base = classItem(instance.baseId);
   if (!base) return 0;

@@ -4,7 +4,7 @@ import { gameStore } from '../../game/core/GameStore';
 import { classItem } from '../../game/data/classItems';
 import { itemById } from '../../game/data/items';
 import { compareEquip } from '../../game/systems/equipment';
-import { gearBase, handsConflict } from '../../game/systems/gear';
+import { gearBase, groupGear, handsConflict } from '../../game/systems/gear';
 import { characterStats } from '../../game/systems/progression';
 import { statNames, statValue } from '../format';
 import { Icon } from '../components/Icon';
@@ -27,7 +27,7 @@ export function equipmentBonus(state: GameState, character: Character) {
 function candidatesFor(state: GameState, character: Character, slot: Slot) {
   const list: { view: ItemView; cmp: ReturnType<typeof compareEquip> }[] = [];
   for (const stack of state.inventory.bp) { const item = itemById(stack.itemId); if (item?.kind === 'equipment' && item.slot === slot) { const view = viewFromItem(item, stack.quantity, 'bp', character); list.push({ view, cmp: compareEquip(state, character, view.candidate!) }); } }
-  for (const g of state.gearBag) if (classItem(g.baseId)?.slot === slot) { const view = viewFromGear(g, character); list.push({ view, cmp: compareEquip(state, character, view.candidate!) }); }
+  for (const group of groupGear(state.gearBag)) if (classItem(group.best.baseId)?.slot === slot) { const view = { ...viewFromGear(group.best, character), quantity: group.items.length, uids: group.items.map(x => x.uid) }; list.push({ view, cmp: compareEquip(state, character, view.candidate!) }); }
   return list.sort((a, b) => Number(b.cmp.ok) - Number(a.cmp.ok) || (b.cmp.deltas[0]?.diff ?? 0) - (a.cmp.deltas[0]?.diff ?? 0));
 }
 

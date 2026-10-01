@@ -122,7 +122,7 @@ export function validateGameState(value:unknown):value is GameState{
   if(value.reinforceS!==undefined&&!finite(value.reinforceS))return false;
   if(value.waveInfo!==undefined&&(!record(value.waveInfo)||!finite(value.waveInfo.extra)||!finite(value.waveInfo.total)||!finite(value.waveInfo.goldStart)))return false;
   if(value.formationPresets!==undefined){const p=value.formationPresets;if(!Array.isArray(p)||p.length>3||!p.every(e=>e===null||(record(e)&&typeof e.name==='string'&&e.name.length<=18&&Array.isArray(e.team)&&e.team.length<=4&&e.team.every(x=>typeof x==='string')&&record(e.rows)&&(e.tank===undefined||typeof e.tank==='string'))))return false;}
-  {const seen=new Set<string>();if(!Array.isArray(value.gearBag)||value.gearBag.length>GEAR_BAG_CAPACITY)return false;for(const g of value.gearBag){if(!validInstance(g)||seen.has((g as {uid:string}).uid))return false;seen.add((g as {uid:string}).uid);}for(const raw of characters)if(!validGear(raw as Record<string,unknown>,seen))return false;}
+  {const seen=new Set<string>();if(!Array.isArray(value.gearBag)||value.gearBag.length>GEAR_BAG_CAPACITY*99)return false;for(const g of value.gearBag){if(!validInstance(g)||seen.has((g as {uid:string}).uid))return false;seen.add((g as {uid:string}).uid);}for(const raw of characters)if(!validGear(raw as Record<string,unknown>,seen))return false;}
   return record(value.analyzer)&&record(value.analyzer.suppliesUsed)&&record(value.codex)&&Array.isArray(value.history)&&value.history.every(entry=>record(entry)&&record(entry.suppliesUsed))&&Array.isArray(value.equippedCharms)&&Array.isArray(value.unlockedCharms)&&typeof value.autoAdvance==='boolean'&&typeof value.message==='string';
 }
 

@@ -20,7 +20,7 @@ import { addCounter, COUNTER_IDS, createProfile, OFFLINE_HISTORY_MAX, type Count
 import { TRIES_PER_SECOND } from '../rpg/curves';
 import { defaultRow, STARTER_ELEMENTS, STARTER_OFFHAND, STARTER_WEAPONS, type CharacterSpec } from '../data/starter';
 import { MANA_REGEN, MELEE_BACK_ROW_DAMAGE, PROFICIENCY_LEVEL_DAMAGE, STATUS } from '../data/balance';
-import { createInstance, gearBase, gearBlockReason, gearValue, gearLevels, handsConflict, quiverWith2H, rollGearDrop, smithPrice } from '../systems/gear';
+import { createInstance, gearFits, gearBase, gearBlockReason, gearValue, gearLevels, handsConflict, quiverWith2H, rollGearDrop, smithPrice } from '../systems/gear';
 import { classItem, CLASSIFICATIONS, type Classification } from '../data/classItems';
 import { GEAR_DROP_CHANCE } from '../data/gearDrops';
 import { GEAR_BAG_CAPACITY } from '../data/balance';
@@ -348,7 +348,7 @@ export class GameEngine {
     if(inTeam&&this.state.status!=='idle'){this.state.message='Encerre a caçada para dispensar alguém da equipe.';this.emit();return false;}
     const simple=Object.values(c.equipment).filter((x):x is string=>!!x),gear=Object.values(c.gear);
     const probe={...this.state,inventory:structuredClone(this.state.inventory),freshItems:[...(this.state.freshItems??[])]} as GameState;
-    const fits=simple.every(itemId=>addItem(probe,itemId,1)===1)&&this.state.gearBag.length+gear.length<=GEAR_BAG_CAPACITY;
+    const fits=simple.every(itemId=>addItem(probe,itemId,1)===1)&&gearFits(this.state.gearBag,gear);
     if(!fits){this.state.message='Libere espaço na mochila para guardar o equipamento.';this.emit();return false;}
     for(const itemId of simple)addItem(this.state,itemId,1);
     for(const g of gear){g.fresh=true;this.state.gearBag.push(g);}
@@ -515,7 +515,7 @@ export class GameEngine {
   /** Arma de 2 mãos de classe equipada (sem Aljava) bloqueia itens antigos na mão secundária. */
   private offhandBlocked(c:Character){const weapon=gearBase(c,'weapon');return !!weapon&&weapon.hands===2;}
   /** Guarda uma instância na mochila de equipamento; sem espaço ela é vendida na hora (devolve false). */
-  private stashGear(instance:ItemInstance){if(this.state.gearBag.length<GEAR_BAG_CAPACITY){instance.fresh=true;this.state.gearBag.push(instance);return true;}this.state.gold+=gearValue(instance);this.state.message=`Mochila de equipamento cheia: ${classItem(instance.baseId)?.name} vendido por ${gearValue(instance)} ouro.`;return false;}
+  private stashGear(instance:ItemInstance){if(gearFits(this.state.gearBag,[instance])){instance.fresh=true;this.state.gearBag.push(instance);return true;}this.state.gold+=gearValue(instance);this.state.message=`Mochila de equipamento cheia: ${classItem(instance.baseId)?.name} vendido por ${gearValue(instance)} ouro.`;return false;}
   /** Classes sorteáveis nos drops: as jogáveis do Tier 1 e as do caminho da equipe. */
   private gearDropClasses(){const set=new Set<string>(Object.values(CLASS_BY_ID).filter(n=>n.tier===1&&isPlayable(n.id)).map(n=>n.id));for(const id of this.state.team){const c=this.state.characters.find(x=>x.id===id);for(const node of c?.profile.classPath??[])if(CLASS_BY_ID[node]?.tier===1)set.add(node);}return [...set];}
   private dropGear(def:MonsterDef){
@@ -540,12 +540,12 @@ export class GameEngine {
     if(slot==='offhand'){const weapon=gearBase(c,'weapon');const reason=handsConflict(weapon,base);if(reason){this.state.message=reason;this.emit();return false;}}
     take(slot);
     if(slot==='weapon'&&base.hands===2){const off=gearBase(c,'offhand');if(c.gear.offhand||c.equipment.offhand){if(!(off&&quiverWith2H(base,off)))take('offhand');}}
-    if(bag.length-1+back.length>GEAR_BAG_CAPACITY||!legacyBack.every(id=>addItem(this.state,id,1))){revert();this.state.message='Sem espaço para guardar o item trocado.';this.emit();return false;}
+    if(!gearFits([...bag.slice(0,index),...bag.slice(index+1)],back)||!legacyBack.every(id=>addItem(this.state,id,1))){revert();this.state.message='Sem espaço para guardar o item trocado.';this.emit();return false;}
     bag.splice(index,1);bag.push(...back);c.gear[slot]=instance;
     const stats=characterStats(c,this.state);c.hp=Math.min(c.hp,stats.maxHp);c.mana=Math.min(c.mana,stats.maxMana);
     this.emit();return true;
   }
-  unequipGear(characterId:string,slot:Slot){const c=this.state.characters.find(x=>x.id===characterId);const g=c?.gear[slot];if(!c||!g||this.state.gearBag.length>=GEAR_BAG_CAPACITY)return false;delete c.gear[slot];this.state.gearBag.push(g);const stats=characterStats(c,this.state);c.hp=Math.min(c.hp,stats.maxHp);c.mana=Math.min(c.mana,stats.maxMana);this.emit();return true;}
+  unequipGear(characterId:string,slot:Slot){const c=this.state.characters.find(x=>x.id===characterId);const g=c?.gear[slot];if(!c||!g||!gearFits(this.state.gearBag,[g]))return false;delete c.gear[slot];this.state.gearBag.push(g);const stats=characterStats(c,this.state);c.hp=Math.min(c.hp,stats.maxHp);c.mana=Math.min(c.mana,stats.maxMana);this.emit();return true;}
   /** Limpa a marca de "novo" de um item (`bp:<id>` ou `gear:<uid>`). */
   markSeen(key:string){const [kind,id]=[key.slice(0,key.indexOf(':')),key.slice(key.indexOf(':')+1)];if(kind==='gear'){const g=this.state.gearBag.find(x=>x.uid===id);if(!g?.fresh)return;delete g.fresh;}else{const list=this.state.freshItems;if(!list?.includes(id))return;this.state.freshItems=list.filter(x=>x!==id);}this.emit();}
   /** Bônus de venda da equipe (talentos), como fração. */
@@ -554,7 +554,7 @@ export class GameEngine {
   /** Vende de uma vez os itens da mochila até a classificação dada (ex.: só os Comuns, sem atributos). */
   sellGearUpTo(maxClassification:Classification){const limit=Math.min(CLASSIFICATIONS.indexOf(maxClassification),CLASSIFICATIONS.indexOf('rare'));let total=0,count=0;this.state.gearBag=this.state.gearBag.filter(g=>{if(CLASSIFICATIONS.indexOf(g.classification)>limit)return true;total+=Math.round(gearValue(g)*(1+this.teamBest('sell')));count++;return false;});this.state.gold+=total;if(count)this.state.message=`${count} equipamentos vendidos por ${total} ouro.`;this.emit();return total;}
   /** Ferreiro de classe: só itens Padrão, sempre Comuns (sem atributos). */
-  buyGear(baseId:string){const price=smithPrice(baseId);if(!Number.isFinite(price)||this.state.gold<price||this.state.gearBag.length>=GEAR_BAG_CAPACITY)return false;const instance=createInstance(baseId,'common');if(!instance)return false;instance.fresh=true;this.state.gold-=price;this.state.gearBag.push(instance);this.state.message=`${classItem(baseId)?.name} comprado por ${price} ouro.`;this.emit();return true;}
+  buyGear(baseId:string){const price=smithPrice(baseId);if(!Number.isFinite(price)||this.state.gold<price)return false;const instance=createInstance(baseId,'common');if(!instance||!gearFits(this.state.gearBag,[instance]))return false;instance.fresh=true;this.state.gold-=price;this.state.gearBag.push(instance);this.state.message=`${classItem(baseId)?.name} comprado por ${price} ouro.`;this.emit();return true;}
   unequip(characterId:string,slot:keyof Character['equipment']){const c=this.state.characters.find(x=>x.id===characterId);const old=c?.equipment[slot];if(!c||!old||!addItem(this.state,old,1))return false;delete c.equipment[slot];this.emit();return true;}
   useSupply(characterId:string,itemId:string){const c=this.state.characters.find(x=>x.id===characterId);const item=itemById(itemId);if(!c||!item?.supply||!this.state.inventory.supply.some(x=>x.itemId===itemId))return false;if(!this.mech.potionSaved(c))removeItem(this.state.inventory.supply,itemId);const stats=characterStats(c,this.state);const potency=1+talentValue(c,'potion');if(item.supply==='health')c.hp=Math.min(stats.maxHp,c.hp+(item.amount??0)*potency);else c.mana=Math.min(stats.maxMana,c.mana+(item.amount??0)*potency);this.mech.onPotion(c,item.supply,item.amount??0);this.trackSupply(item.id,item.value,c);this.emit();return true;}
   sell(container:'bp'|'loot'|'supply',itemId:string){const list=this.state.inventory[container] as InventoryStack[];const item=itemById(itemId);if(!item||!removeItem(list,itemId))return false;this.state.gold+=Math.round(item.value*(1+this.teamBest('sell')));this.emit();return true;}

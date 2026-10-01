@@ -1,11 +1,16 @@
+import { STACK_MAX } from '../data/balance';
 import { itemById } from '../data/items';
 import type { GameState, InventoryStack, ItemDef, MonsterDef } from '../core/types';
 
 export const randomInt=(min:number,max:number,rng=Math.random)=>Math.floor(rng()*(max-min+1))+min;
 export function containerFor(item: ItemDef) { return item.kind==='supply'?'supply':item.kind==='loot'?'loot':'bp' as const; }
+/** Espaços ocupados: cada pilha usa ceil(quantidade / STACK_MAX). */
+export const slotsUsed=(list:InventoryStack[])=>list.reduce((n,x)=>n+Math.ceil(x.quantity/STACK_MAX),0);
 export function addItem(state:GameState,itemId:string,qty:number) {
   const item=itemById(itemId); if(!item) return 0; const container=containerFor(item); const list=state.inventory[container];
-  const stack=list.find(x=>x.itemId===itemId); const used=list.reduce((n,x)=>n+x.quantity,0); const accepted=Math.max(0,Math.min(qty,state.inventory.capacity[container]-used));
+  const stack=list.find(x=>x.itemId===itemId);
+  // bp e loot: a capacidade é em espaços (itens iguais empilham); suprimentos continuam contando unidades
+  const accepted=container==='supply'?Math.max(0,Math.min(qty,state.inventory.capacity[container]-list.reduce((n,x)=>n+x.quantity,0))):Math.max(0,Math.min(qty,(stack?Math.ceil(stack.quantity/STACK_MAX)*STACK_MAX-stack.quantity:0)+(state.inventory.capacity[container]-slotsUsed(list))*STACK_MAX));
   if(!accepted) return 0; if(stack) stack.quantity+=accepted; else list.push({itemId,quantity:accepted});
   if(container==='bp'){const fresh=state.freshItems??(state.freshItems=[]);if(!fresh.includes(itemId))fresh.push(itemId);}
   return accepted;

@@ -6,7 +6,7 @@ import { CLASSIFICATIONS, CLASSIFICATION_NAMES, itemsForClass, SLOT_GROUP_NAMES,
 import { itemById } from '../../game/data/items';
 import { BUY_QUANTITIES, shopStock, type ShopEntry } from '../../game/data/shop';
 import { GEAR_BAG_CAPACITY } from '../../game/data/balance';
-import { gearValue, smithPrice } from '../../game/systems/gear';
+import { gearSlots, gearValue, smithPrice } from '../../game/systems/gear';
 import { TRAIN_ITEMS, TRAIN_PIECES, TRAIN_SET_BONUS } from '../../game/data/trainItems';
 import { PROFICIENCIES, PROFICIENCY_IDS, type ProficiencyId } from '../../game/rpg/proficiencies';
 import { gateSkillOf, GOAL_NODES } from '../../game/rpg/goals';
@@ -63,7 +63,7 @@ export function SmithTab({ state, character }: { state: GameState; character: Ch
   const order = [...tier1Classes].sort((a, b) => Number(b.id === own) - Number(a.id === own));
   const [picked, setPicked] = useState<string | null>(null);
   const cls = picked && order.some(n => n.id === picked) ? picked : own ?? order[0].id;
-  const stock = shopStock(state.huntId, bestLevel(state)), full = state.gearBag.length >= GEAR_BAG_CAPACITY;
+  const stock = shopStock(state.huntId, bestLevel(state)), full = gearSlots(state.gearBag) >= GEAR_BAG_CAPACITY;
   const items = itemsForClass(cls).filter(i => i.quality === 'standard');
   return <div>
     {character.profile.classId === 'aprendiz' && <TrainingShop state={state} character={character} />}

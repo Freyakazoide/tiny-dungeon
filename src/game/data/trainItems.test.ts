@@ -23,3 +23,21 @@ describe('equipamento de treino do Aprendiz', () => {
     expect(equipBlockReason(c, itemById(trainPieceId('fire', 'boots'))!)).toBeUndefined();
   });
 });
+
+import { addItem, slotsUsed } from '../systems/loot';
+import { gearSlots, groupGear } from '../systems/gear';
+import { createInstance } from '../systems/gear';
+
+describe('itens iguais empilham (1 espaço)', () => {
+  it('20 espadas iguais ocupam 1 espaço; raridades diferentes ficam em pilhas separadas', () => {
+    const e = new GameEngine(partyState()); const s = e.getSnapshot(); s.inventory.bp = [];
+    expect(addItem(s, 'rusty_sword', 20)).toBe(20); expect(slotsUsed(s.inventory.bp)).toBe(1); expect(addItem(s, 'iron_sword', 5)).toBe(5); expect(slotsUsed(s.inventory.bp)).toBe(2);
+    s.inventory.capacity.bp = 2; expect(addItem(s, 'rusty_sword', 10)).toBe(10);   // cabe na pilha existente
+    expect(addItem(s, 'oak_bow', 1)).toBe(0);                                      // sem espaço novo
+    expect(addItem(s, 'rusty_sword', 100)).toBe(99 - 30 + 0 > 0 ? 69 : 0);        // enche o resto da pilha de 99... e mais uma pilha não cabe
+  });
+  it('equipamento de classe: mesmo item e raridade = 1 espaço; comum e incomum separam', () => {
+    const bag = [createInstance('guerreiro.espada_longa', 'common')!, createInstance('guerreiro.espada_longa', 'common')!, createInstance('guerreiro.espada_longa', 'uncommon')!, createInstance('guerreiro.espada_longa', 'uncommon')!, createInstance('guerreiro.espada_longa', 'uncommon')!];
+    expect(groupGear(bag).map(g => g.items.length).sort()).toEqual([2, 3]); expect(gearSlots(bag)).toBe(2);
+  });
+});

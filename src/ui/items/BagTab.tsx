@@ -2,9 +2,10 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import type { Character, GameState } from '../../game/core/types';
 import { gameStore } from '../../game/core/GameStore';
 import { GEAR_BAG_CAPACITY } from '../../game/data/balance';
+import { slotsUsed } from '../../game/systems/loot';
 import { itemById } from '../../game/data/items';
 import { compareEquip } from '../../game/systems/equipment';
-import { gearValue } from '../../game/systems/gear';
+import { gearSlots, gearValue, groupGear } from '../../game/systems/gear';
 import { Icon } from '../components/Icon';
 import { CompareList, EmptyTile, ItemDetail, ItemTile } from './parts';
 import { RARITY_ORDER, viewFromGear, viewFromItem, type ItemView } from './itemView';
@@ -23,7 +24,7 @@ export function bagViews(state: GameState, character: Character): ItemView[] {
   const views: ItemView[] = [];
   for (const stack of state.inventory.bp) { const item = itemById(stack.itemId); if (item && item.kind !== 'supply') views.push({ ...viewFromItem(item, stack.quantity, 'bp', character), fresh: fresh.has(item.id) }); }
   for (const stack of state.inventory.loot) { const item = itemById(stack.itemId); if (item) views.push(viewFromItem(item, stack.quantity, 'loot')); }
-  for (const g of state.gearBag) views.push(viewFromGear(g, character));
+  for (const group of groupGear(state.gearBag)) views.push({ ...viewFromGear(group.best, character), quantity: group.items.length, uids: group.items.map(x => x.uid), fresh: group.items.some(x => x.fresh) });
   return views;
 }
 export const freshCount = (state: GameState) => (state.freshItems ?? []).filter(id => state.inventory.bp.some(s => s.itemId === id)).length + state.gearBag.filter(g => g.fresh).length;
@@ -55,19 +56,19 @@ export function BagTab({ state, character }: { state: GameState; character: Char
     event.preventDefault(); const next = shown[target]; select(next); refs.current.get(next.key)?.focus();
   };
   const tabbable = view?.key ?? shown[0]?.key;
-  const usedBp = state.inventory.bp.reduce((n, s) => n + s.quantity, 0) + state.inventory.loot.reduce((n, s) => n + s.quantity, 0);
+  const usedBp = slotsUsed(state.inventory.bp) + slotsUsed(state.inventory.loot);
   const commons = state.gearBag.filter(g => g.classification === 'common'), commonValue = commons.reduce((n, g) => n + gearValue(g), 0);
   const cmp = view?.candidate ? compareEquip(state, character, view.candidate) : undefined;
   const legendary = view?.source === 'gear' && (view.rarity === 'legendary' || view.rarity === 'mythic');
   const sellOne = (v: ItemView) => {
-    if (v.source === 'gear') gameStore.sellGear(v.key.slice(5)); else gameStore.sell(v.key.startsWith('loot:') ? 'loot' : 'bp', v.key.slice(v.key.indexOf(':') + 1));
+    if (v.source === 'gear') gameStore.sellGear((v.uids ?? [v.key.slice(5)])[0]); else gameStore.sell(v.key.startsWith('loot:') ? 'loot' : 'bp', v.key.slice(v.key.indexOf(':') + 1));
     setSelected(null);
   };
   const tiles = Math.max(MIN_TILES, Math.ceil(shown.length / 5) * 5);
   return <div>
     <div className="it-bagtop">
       <div className="it-filters" role="group" aria-label="Filtro">{FILTERS.map(([id, label, icon]) => <button type="button" key={id} className={`pk-btn ${filter === id ? 'on' : ''}`} aria-pressed={filter === id} onClick={() => setFilter(id)}><Icon name={icon} size={24} />{label}</button>)}</div>
-      <div className="it-caps"><Capacity label="Mochila" used={usedBp} cap={state.inventory.capacity.bp} /><Capacity label="Equip. de classe" used={state.gearBag.length} cap={GEAR_BAG_CAPACITY} /></div>
+      <div className="it-caps"><Capacity label="Mochila" used={usedBp} cap={state.inventory.capacity.bp} /><Capacity label="Equip. de classe" used={gearSlots(state.gearBag)} cap={GEAR_BAG_CAPACITY} /></div>
     </div>
     <div className="it-bag">
       <div>
@@ -85,7 +86,8 @@ export function BagTab({ state, character }: { state: GameState; character: Char
             {view.kind === 'equipment' && (legendary && !confirm
               ? <button type="button" className="pk-btn" onClick={() => setConfirm(true)}>Vender ({sale(view)})</button>
               : legendary ? <button type="button" className="pk-btn" style={{ borderColor: 'var(--danger)' }} onClick={() => sellOne(view)}>Confirmar venda de {view.rarityLabel}</button>
-              : <button type="button" className="pk-btn" onClick={() => sellOne(view)}>Vender ({sale(view)})</button>)}
+              : <button type="button" className="pk-btn" onClick={() => sellOne(view)}>Vender {view.uids && view.uids.length > 1 ? '1 ' : ''}({sale(view)})</button>)}
+            {view.kind === 'equipment' && view.source === 'gear' && view.uids && view.uids.length > 1 && !legendary && <button type="button" className="pk-btn" onClick={() => { for (const uid of view.uids!) gameStore.sellGear(uid); setSelected(null); }}>Vender todos ({view.uids.length}× · {Math.round(state.gearBag.filter(g => view.uids!.includes(g.uid)).reduce((n, g) => n + gearValue(g), 0) * (1 + bonus))})</button>}
             {view.kind === 'loot' && <><button type="button" className="pk-btn" onClick={() => gameStore.sell('loot', view.key.slice(5))}>Vender 1</button>
               <button type="button" className="pk-btn" onClick={() => { for (let i = 0; i < view.quantity; i++) gameStore.sell('loot', view.key.slice(5)); setSelected(null); }}>Vender todos ({view.quantity})</button></>}
           </ItemDetail>

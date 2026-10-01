@@ -22,6 +22,8 @@ export const ARM_DEFENSE = 0.5;
 export const PROFICIENCY_LEVEL_DAMAGE = 0.012;
 /** Instâncias de equipamento de classe que cabem na mochila de equipamento (o excedente é vendido na hora). */
 export const GEAR_BAG_CAPACITY = 80;
+/** Itens iguais (e da mesma raridade) dividem 1 espaço da mochila até este tanto. */
+export const STACK_MAX = 99;
 
 /** Waves com reforços aleatórios (Fase 7): a wave do HuntDef é o núcleo; a cada nascimento somam-se `extra` monstros. */
 export interface ExtraRow { extra: number; pct: number; }
