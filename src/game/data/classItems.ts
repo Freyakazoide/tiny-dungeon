@@ -1,4 +1,5 @@
 import raw from './items-tier1.json';
+import raw2 from './items-tier2.json';
 import type { Slot } from '../core/types';
 import type { ProficiencyId } from '../rpg/proficiencies';
 
@@ -30,7 +31,10 @@ interface ClassItemsFile {
 
 const file = raw as unknown as ClassItemsFile;
 export const ITEM_CONFIG = file.config;
-export const CLASS_ITEMS: readonly ClassItemDef[] = file.items;
+/** Tier 1 (675, 15 classes × 9 slots × 5) + Tier 2 (540, 90 especializações × 6), gerado por tools/items/gen_tier2_items.py. */
+export const TIER1_ITEMS: readonly ClassItemDef[] = file.items;
+export const TIER2_ITEMS: readonly ClassItemDef[] = (raw2 as unknown as { items: ClassItemDef[] }).items;
+export const CLASS_ITEMS: readonly ClassItemDef[] = [...TIER1_ITEMS, ...TIER2_ITEMS];
 export const CLASS_ITEM_BY_ID: ReadonlyMap<string, ClassItemDef> = new Map(CLASS_ITEMS.map(item => [item.id, item]));
 export const classItem = (id: string) => CLASS_ITEM_BY_ID.get(id);
 /** Itens que um nó de classe pode usar (o dono e os compartilhados). */

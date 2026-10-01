@@ -1,6 +1,7 @@
 import { HUNTS } from './hunts';
 import { GEAR_PIECES, GEAR_SETS, gearId } from './gear';
 import { itemById } from './items';
+import { TRAIN_ITEMS } from './trainItems';
 
 /** Poções à venda, com o nível (do personagem de maior nível da party) que libera cada tier. */
 export const POTION_STOCK: { itemId: string; unlockLevel: number }[] = [
@@ -28,5 +29,7 @@ export function shopStock(huntId: string, bestLevel: number) {
   return {
     potions: POTION_STOCK.map(({ itemId, unlockLevel }): ShopEntry => ({ itemId, price: buyPrice(itemId), unlockLevel, unlocked: bestLevel >= unlockLevel })),
     smith: smithStock(huntId).map((itemId): ShopEntry => ({ itemId, price: buyPrice(itemId), unlockLevel: 1, unlocked: true })),
+    /** Equipamento de treino do Aprendiz: sempre à venda (5 peças × 13 proficiências). */
+    training: TRAIN_ITEMS.map((item): ShopEntry => ({ itemId: item.id, price: buyPrice(item.id), unlockLevel: 1, unlocked: true })),
   };
 }

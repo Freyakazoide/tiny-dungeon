@@ -7,6 +7,9 @@ import { itemById } from '../../game/data/items';
 import { BUY_QUANTITIES, shopStock, type ShopEntry } from '../../game/data/shop';
 import { GEAR_BAG_CAPACITY } from '../../game/data/balance';
 import { gearValue, smithPrice } from '../../game/systems/gear';
+import { TRAIN_ITEMS, TRAIN_PIECES, TRAIN_SET_BONUS } from '../../game/data/trainItems';
+import { PROFICIENCIES, PROFICIENCY_IDS, type ProficiencyId } from '../../game/rpg/proficiencies';
+import { gateSkillOf, GOAL_NODES } from '../../game/rpg/goals';
 import { Icon } from '../components/Icon';
 import { slotNames, statLine } from '../format';
 import { gearLines } from '../GearPanel';
@@ -39,6 +42,22 @@ export function ShopTab({ state }: { state: GameState }) {
   </div>;
 }
 
+/** Equipamento de treino do Aprendiz: 5 peças por proficiência; o foco inicial é a porta da classe-alvo do personagem. */
+function TrainingShop({ state, character }: { state: GameState; character: Character }) {
+  const goalGate = character.goal ? gateSkillOf(GOAL_NODES.find(n => n.id === character.goal)!) : undefined;
+  const [picked, setPicked] = useState<ProficiencyId | null>(null);
+  const prof = picked ?? goalGate ?? character.profile.trainingFocus ?? 'melee';
+  const stock = shopStock(state.huntId, 0).training, pieces = TRAIN_PIECES.map(piece => stock.find(e => e.itemId === TRAIN_ITEMS.find(i => i.slot === piece.slot && i.trainBonus?.[prof])?.id)!).filter(Boolean);
+  return <div>
+    <h4 className="pk-sec">Equipamento de treino do Aprendiz <small>5 peças = +{TRAIN_SET_BONUS}% de tries na habilidade</small></h4>
+    <p className="muted pk-tiny">Itens de classe não se compram: se conquistam. Estas peças só aceleram o treino da habilidade que a sua classe-alvo exige{goalGate ? ` (${PROFICIENCIES[goalGate].name})` : ''}.</p>
+    <div className="it-classes" role="group" aria-label="Habilidade a treinar">{PROFICIENCY_IDS.map(id => <button type="button" key={id} className={`pk-btn sm ${id === prof ? 'on' : ''}`} aria-pressed={id === prof} onClick={() => setPicked(id)}>{PROFICIENCIES[id].name}</button>)}</div>
+    <div className="it-shop">{pieces.map(entry => { const item = itemById(entry.itemId)!, view = viewFromItem(item, 1, 'bp'), owned = Object.values(character.equipment).includes(item.id) || state.inventory.bp.some(b => b.itemId === item.id);
+      return <ProductCard key={entry.itemId} icon={<ItemIcon view={view} size={48} />} name={item.name} rarity={item.rarity} sub={`${item.slot ? slotNames[item.slot] : ''} · +${item.trainBonus?.[prof]}% de tries em ${PROFICIENCIES[prof].name}${item.stats ? ` · ${statLine(item.stats)}` : ''}`} price={entry.price}>
+        <button type="button" className="pk-btn sm primary" disabled={state.gold < entry.price || owned} title={owned ? 'Você já tem esta peça.' : undefined} onClick={() => gameStore.buy(entry.itemId, 1)}>{owned ? 'Já tem' : 'Comprar'}</button></ProductCard>; })}</div>
+  </div>;
+}
+
 export function SmithTab({ state, character }: { state: GameState; character: Character }) {
   const own = tier1Classes.find(n => character.profile.classPath.includes(n.id))?.id;
   const order = [...tier1Classes].sort((a, b) => Number(b.id === own) - Number(a.id === own));
@@ -47,7 +66,8 @@ export function SmithTab({ state, character }: { state: GameState; character: Ch
   const stock = shopStock(state.huntId, bestLevel(state)), full = state.gearBag.length >= GEAR_BAG_CAPACITY;
   const items = itemsForClass(cls).filter(i => i.quality === 'standard');
   return <div>
-    <h4 className="pk-sec">Conjunto da hunt anterior</h4>
+    {character.profile.classId === 'aprendiz' && <TrainingShop state={state} character={character} />}
+    <h4 className="pk-sec" style={{ marginTop: character.profile.classId === 'aprendiz' ? 14 : 0 }}>Conjunto da hunt anterior</h4>
     {stock.smith.length
       ? <div className="it-shop">{stock.smith.map(entry => { const item = itemById(entry.itemId)!, view = viewFromItem(item, 1, 'bp');
         return <ProductCard key={entry.itemId} icon={<ItemIcon view={view} size={48} />} name={item.name} rarity={item.rarity} sub={`${item.slot ? slotNames[item.slot] : ''} · ${statLine(item.stats)}`} price={entry.price}>

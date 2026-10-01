@@ -259,7 +259,7 @@ export class GameEngine {
     const item=itemById(itemId);
     if(!item||!Number.isInteger(qty)||qty<1)return false;
     const best=Math.max(0,...this.state.team.map(id=>this.state.characters.find(c=>c.id===id)?.profile.level??0));
-    const stock=shopStock(this.state.huntId,best),entry=[...stock.potions,...stock.smith].find(e=>e.itemId===itemId);
+    const stock=shopStock(this.state.huntId,best),entry=[...stock.potions,...stock.smith,...stock.training].find(e=>e.itemId===itemId);
     if(!entry||!entry.unlocked)return false;
     const cost=buyPrice(itemId)*qty;
     if(this.state.gold<cost)return false;
