@@ -6,3 +6,23 @@
 .goal-detail p{margin:4px 0}
 /* body tem overflow:hidden (shell do jogo): a criação rola por conta própria */
 .creation-screen{position:fixed;inset:0;overflow-y:auto;place-items:start center;align-content:start}
+
+/* ---- Criação de personagens (pixel-kit) ---- */
+.cr-screen{position:fixed;inset:0;overflow-y:auto;background:radial-gradient(circle at 40% -10%,#27313f 0,#111722 38%,#080c12 78%)}
+.cr-wrap{max-width:1180px;margin:0 auto;padding:18px 16px 28px;display:flex;flex-direction:column;gap:12px}
+.cr-head{display:flex;gap:14px;align-items:center;padding:14px 16px}.cr-head h1{font-size:26px}.cr-head p{margin:4px 0 0;font-size:13px}
+.cr-body{display:grid;grid-template-columns:240px 1fr;gap:12px;align-items:start}
+.cr-steps{display:flex;flex-direction:column;gap:8px;position:sticky;top:12px}
+.cr-step{display:flex;align-items:center;gap:8px;text-align:left;padding:8px;cursor:pointer;color:inherit}.cr-step small{display:block;color:#8d95a0;font-size:11px}
+.cr-step.sel{box-shadow:0 0 0 2px #e5ca91}.cr-step img{image-rendering:pixelated;height:48px}.cr-step span:nth-child(2){flex:1;min-width:0}
+.cr-main{padding:12px;min-height:420px}.cr-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.cr-sec{display:flex;flex-direction:column;gap:14px}.cr-field{display:flex;flex-direction:column;gap:6px}
+.cr-input{background:#0c1219;border:2px solid #303944;color:#f1e4c9;padding:8px 10px;font:inherit;font-size:15px;max-width:360px}.cr-input:focus{outline:none;border-color:#e5ca91}
+.cr-weapons{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:8px}
+.cr-weapon{display:flex;gap:8px;align-items:center;text-align:left;padding:8px;color:inherit;cursor:pointer}.cr-weapon small{display:block;color:#8d95a0;font-size:11px}.cr-weapon.sel{box-shadow:0 0 0 2px #e5ca91}
+.cr-seg,.cr-elems{display:flex;gap:6px;flex-wrap:wrap}
+.cr-foot{display:flex;gap:12px;align-items:center;padding:10px 12px}.cr-nav{display:flex;gap:6px}.cr-msg{flex:1;font-size:13px}.cr-go{min-width:200px}
+.cc{display:grid;grid-template-columns:minmax(220px,300px) 1fr;gap:10px;align-items:start}
+.cc-tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.cc-detail{padding:10px;display:flex;flex-direction:column;gap:8px}.cc-pick{margin-left:auto}.cc-path{font-size:13px}.cc-path small{display:block;margin-top:4px}
+@media (max-width:860px){.cr-body{grid-template-columns:1fr}.cr-steps{position:static;flex-direction:row;overflow-x:auto}.cc{grid-template-columns:1fr}}
