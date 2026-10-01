@@ -4,3 +4,5 @@
 .goal-chip.on{border-color:#e5ca91;color:#e5ca91;background:#2a2418}
 .goal-detail{border:1px solid #303944;padding:8px;font-size:13px;line-height:1.4}
 .goal-detail p{margin:4px 0}
+/* body tem overflow:hidden (shell do jogo): a criação rola por conta própria */
+.creation-screen{position:fixed;inset:0;overflow-y:auto;place-items:start center;align-content:start}
