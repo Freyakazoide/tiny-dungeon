@@ -25,10 +25,10 @@ describe('classProgress / groupClasses', () => {
     expect(classProgress(c, counted).untracked).toBe(true);
   });
 
-  it('seções: prontas, em progresso (ratio decrescente), prontas sem kit, em breve; Tier 1 cobre as 15 classes', () => {
+  it('seções: prontas, em progresso (ratio decrescente); as 15 classes de Tier 1 têm kit', () => {
     const { e, id } = make(); const c = ch(e, id); c.profile.level = 10; c.profile.proficiencies.melee.level = 25; c.profile.proficiencies.magic.level = 13;
     const g = groupClasses(c);
-    expect(g.ready.map(s => s.node.id)).toEqual(['guerreiro']);
+    expect(g.ready.map(s => s.node.id).sort()).toEqual(['guerreiro', 'ladino', 'mercenario']);   // Melee 25 abre as três
     expect(g.ready.length + g.progress.length + g.readySoon.length + g.soon.length).toBe(15);
     for (const s of g.progress) expect(s.playable).toBe(true);
     for (const s of [...g.readySoon, ...g.soon]) expect(s.playable).toBe(false);
@@ -64,8 +64,8 @@ describe('previewEvolution', () => {
       for (const s of pv.stats) expect(after[s.key], `${t2.id} ${s.key}`).toBeCloseTo(s.after, 6);
     }
   });
-  it('sem kit: sem atributos nem magias, só afinidade', () => {
-    const { e, id } = make(); const pv = previewEvolution(e.getSnapshot(), ch(e, id), 'ladino');
+  it('sem kit (Tier 2 ainda não liberado): sem atributos nem magias, só afinidade', () => {
+    const { e, id } = make(); const pv = previewEvolution(e.getSnapshot(), ch(e, id), 'gladiador');
     expect(pv.playable).toBe(false); expect(pv.stats).toEqual([]); expect(pv.kitSpells).toEqual([]); expect(Object.keys(pv.affinity)).toHaveLength(13);
   });
 });

@@ -25,21 +25,20 @@ afterEach(cleanup);
 describe('Fase 11 — Classes: Próximo passo', () => {
   it('seções na ordem certa; o Guerreiro vem primeiro, selecionado por padrão; sem textos longos antigos', () => {
     prep(); open();
-    const groups = screen.getAllByRole('group').filter(g => ['Prontas para evoluir', 'Em progresso', 'Requisitos cumpridos, kit em breve', 'Em breve'].includes(g.getAttribute('aria-label') ?? ''));
-    expect(groups.map(g => g.getAttribute('aria-label'))).toEqual(['Prontas para evoluir', 'Em progresso', 'Requisitos cumpridos, kit em breve', 'Em breve']);
+    const groups = screen.getAllByRole('group').filter(g => ['Prontas para evoluir', 'Em progresso'].includes(g.getAttribute('aria-label') ?? ''));
+    expect(groups.map(g => g.getAttribute('aria-label'))).toEqual(['Prontas para evoluir', 'Em progresso']);   // as 15 classes de Tier 1 têm kit
     expect(screen.getByRole('option', { name: /^Guerreiro, pronta/ }).getAttribute('aria-selected')).toBe('true');
     expect(document.body.textContent).not.toMatch(/Sem kit pronto|Treino: Especialista em/);
     expect(document.querySelector('select, details')).toBeNull();
   });
 
-  it('selecionar não evolui; classes sem kit têm "Kit em breve" desabilitado; em progresso "Faltam requisitos"', async () => {
+  it('selecionar não evolui; nenhuma classe de Tier 1 mostra "Kit em breve"; em progresso "Faltam requisitos"', async () => {
     prep(); open(); const user = userEvent.setup(); const spy = vi.spyOn(gameStore, 'evolve');
     await user.click(screen.getByRole('option', { name: /^Mago/ }));
     expect(spy).not.toHaveBeenCalled();
     const need = screen.getByRole('button', { name: 'Faltam requisitos' }); expect((need as HTMLButtonElement).disabled).toBe(true);
     await user.click(screen.getByRole('option', { name: /^Ladino/ }));
-    expect((screen.getByRole('button', { name: 'Kit em breve' }) as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.queryByRole('button', { name: /^Evoluir para/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Kit em breve' })).toBeNull();
   });
 
   it('o preview mostra os valores de previewEvolution', async () => {
@@ -91,7 +90,7 @@ describe('Fase 11 — Classes: Árvore completa', () => {
   it('o toggle mostra só as classes prontas; Guerreiro destacado "você está aqui" no Tier 2', async () => {
     prep(); open('arvore-completa'); const user = userEvent.setup();
     await user.click(screen.getByRole('checkbox', { name: /só as que posso evoluir agora/ }));
-    expect(within(screen.getByRole('listbox', { name: 'Classes base' })).getAllByRole('option').map(o => o.getAttribute('aria-label')?.split(',')[0])).toEqual(['Guerreiro']);
+    expect(within(screen.getByRole('listbox', { name: 'Classes base' })).getAllByRole('option').map(o => o.getAttribute('aria-label')?.split(',')[0])).toEqual(['Guerreiro', 'Ladino', 'Mercenário']);
   });
 });
 

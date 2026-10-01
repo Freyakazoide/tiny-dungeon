@@ -146,7 +146,7 @@ describe('D — itens, loja e guia de classes', () => {
   it('equipBlockReason explica nível, classe e itens que não são equipamento', () => {
     const c = createCharacter('squire', 'X');
     expect(equipBlockReason(c, itemById('iron_sword')!)).toMatch(/nível 3/);
-    c.profile.level = 10; expect(equipBlockReason(c, itemById('arcane_staff')!)).toMatch(/Necromancer/);
+    c.profile.level = 10; expect(equipBlockReason(c, itemById('arcane_staff')!)).toMatch(/Bruxo/);
     expect(equipBlockReason(c, itemById('bone')!)).toMatch(/equipamento/);
     expect(equipBlockReason(c, itemById('rusty_sword')!)).toBeUndefined();
   });

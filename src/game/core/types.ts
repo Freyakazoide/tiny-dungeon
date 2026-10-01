@@ -1,7 +1,9 @@
 import type { ProficiencyId } from '../rpg/proficiencies';
 import type { ProgressProfile } from '../rpg/profile';
 import type { Classification } from '../data/classItems';
-export type ClassId = 'squire' | 'hunter' | 'mage' | 'knight' | 'monk' | 'paladin' | 'necromancer' | 'druid';
+/** Kits de combate: um por classe Tier 1 (o Tier 2 herda o do pai). Os ids antigos foram mantidos: paladin = Clérigo, necromancer = Bruxo, monk = Monge, druid = Druida. */
+export type ClassId = 'squire' | 'hunter' | 'mage' | 'knight' | 'monk' | 'paladin' | 'necromancer' | 'druid'
+  | 'guardian' | 'rogue' | 'bard' | 'alchemist' | 'mercenary' | 'runemaster' | 'illusionist' | 'gunner';
 export type CharacterRow = 'front' | 'back';
 export type Slot = 'helmet' | 'armor' | 'legs' | 'boots' | 'weapon' | 'offhand' | 'amulet' | 'ring';
 export type Rarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
