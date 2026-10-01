@@ -3,29 +3,21 @@ import type { Character } from '../../game/core/types';
 import { CLASS_NODES, CLASS_BY_ID, childrenOf, isPlayable, type ClassNode } from '../../game/rpg/classTree';
 import { groupClasses, requirementRows } from '../../game/systems/guide';
 import { ClassIcon } from './ClassIcon';
-import { reqNeed, subclassKind } from './parts';
+import { reqNeed } from './parts';
+import { ClassPerks } from './ClassPerks';
+import { SpecBrowser } from './SpecBrowser';
 
 const bases = CLASS_NODES.filter(n => n.tier === 1);
 
 function SubclassPanel({ character, node, mine, gone }: { character: Character; node: ClassNode; mine: boolean; gone: boolean }) {
-  const kids = childrenOf(node.id), pure = kids.filter(k => subclassKind(k) === 'Pura'), other = kids.filter(k => subclassKind(k) !== 'Pura');
   const entry = requirementRows(character, node).map(reqNeed).join(' + ');
-  const sub = (kid: ClassNode) => {
-    const here = character.profile.classPath.includes(kid.id);
-    return <div key={kid.id} className={`cl-sub ${isPlayable(kid.id) ? '' : 'soon'}`} style={here ? { boxShadow: 'inset 0 0 0 2px #4fae73' } : undefined}>
-      <b>{kid.name}</b>
-      <div className="cl-chips">{requirementRows(character, kid).map(r => <span key={r.key} className={`cl-chip ${r.met ? 'ok' : ''}`}>{reqNeed(r)}</span>)}</div>
-      <span className={`pk-tag ${isPlayable(kid.id) ? 'ok' : ''}`} style={isPlayable(kid.id) ? undefined : { ['--tc' as string]: '#e0a05c' }}>{isPlayable(kid.id) ? 'Jogável' : '🔒 Em breve'}</span>
-      {here && <div className="pk-tiny" style={{ color: 'var(--ok)' }}>você está aqui</div>}
-    </div>;
-  };
   return <aside className="cl-subs pk-panel" aria-label={`Subclasses de ${node.name}`}>
     <div className="cl-phead"><ClassIcon node={node} size="big" /><div><div className="cl-name" style={{ fontSize: 18 }}>{node.name}</div><div className="cl-spec">{node.specialty}</div><div className="cl-spec">Entrada: {entry}</div>
       <div className="cl-tags">{mine && <span className="pk-tag ok">Seu caminho</span>}{gone && <span className="pk-tag blq">Descartada · só leitura</span>}</div></div></div>
-    <h4 className="pk-sec">Subclasses <small>{kids.length}</small></h4>
-    {pure.length > 0 && <><h4 className="pk-sec">Puras <small>{pure.length}</small></h4><div className="cl-subgrid">{pure.map(sub)}</div></>}
-    {other.length > 0 && <><h4 className="pk-sec">Híbridas e com contador <small>{other.length}</small></h4><div className="cl-subgrid">{other.map(sub)}</div></>}
-    <p className="cl-note">Todas exigem nível 25. Híbridas pedem duas proficiências no mesmo nível; as "com contador" pedem também um contador vitalício.</p>
+    <ClassPerks nodeId={node.id} />
+    <h4 className="pk-sec">Especializações <small>{childrenOf(node.id).length}</small></h4>
+    <SpecBrowser key={node.id} base={node} character={character} />
+    <p className="cl-note">Todas exigem nível 25. Você pode ver tudo, mesmo o que ainda está bloqueado, para planejar o caminho.</p>
   </aside>;
 }
 

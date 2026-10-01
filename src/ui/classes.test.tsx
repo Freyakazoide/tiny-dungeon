@@ -74,17 +74,18 @@ describe('Fase 11 — Classes: Próximo passo', () => {
 });
 
 describe('Fase 11 — Classes: Árvore completa', () => {
-  it('15 classes; escolher Guerreiro descarta as outras 14; Mago lista 9 + 9; descartada é só leitura', async () => {
+  it('15 classes; escolher Guerreiro descarta as outras 14; Mago lista as 6; descartada é só leitura', async () => {
     prep(c => { c.profile.classId = 'guerreiro'; c.profile.classPath = ['aprendiz', 'guerreiro']; }); open('arvore-completa'); const user = userEvent.setup();
     const tiles = within(screen.getByRole('listbox', { name: 'Classes base' })).getAllByRole('option'); expect(tiles).toHaveLength(15);
     expect(document.querySelectorAll('.cl-tile.gone')).toHaveLength(14); expect(document.querySelectorAll('.cl-tile.mine')).toHaveLength(1);
     await user.click(screen.getByRole('option', { name: /^Mago/ }));
     const panel = screen.getByRole('complementary', { name: /Subclasses de Mago/ });
-    expect(panel.querySelectorAll('.cl-sub')).toHaveLength(childrenOf('mago').length);
+    expect(panel.querySelectorAll('.cl-subpick')).toHaveLength(childrenOf('mago').length);   // todas as 6 visíveis, mesmo bloqueadas
     expect(within(panel).queryAllByRole('button')).toHaveLength(0);
+    await user.click(within(panel).getByRole('option', { name: /Polímata/ })); expect(within(panel).getByLabelText('Detalhes: Polímata').textContent).toMatch(/Elementos no nível 25 5/);
     expect(document.querySelector('select, details')).toBeNull();
     await user.click(screen.getByRole('option', { name: /^Guerreiro/ }));
-    expect(document.querySelector('.cl-sub')).toBeTruthy();
+    expect(document.querySelector('.cl-subpick')).toBeTruthy();
   });
 
   it('o toggle mostra só as classes prontas; Guerreiro destacado "você está aqui" no Tier 2', async () => {

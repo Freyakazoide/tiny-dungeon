@@ -107,7 +107,7 @@ describe('Fase 8 — trilho e modais', () => {
 });
 
 describe('Fase 8 — badges, HUD e relatório offline', () => {
-  it('badge do Personagem = pontos de talento livres; vira '!' pulsante quando alguém pode evoluir (Classes agora é aba do Personagem)', () => {
+  it('badge do Personagem = pontos de talento livres; vira ! pulsante quando alguém pode evoluir (Classes agora é aba do Personagem)', () => {
     const state = fresh(), c = state.characters[0];
     expect(railBadges(state, c).personagem?.value).toBe(String(talentPointsAvailable(c))); expect(railBadges(state, c).personagem?.pulse).toBeUndefined();
     c.profile.level = 10; c.profile.proficiencies.melee.level = 25;

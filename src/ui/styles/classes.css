@@ -110,3 +110,10 @@
 .cl-subs{display:flex;flex-wrap:wrap;gap:4px}
 
 .cl-subnav{display:flex;gap:6px;margin-bottom:10px}
+
+.cl-specs{display:grid;grid-template-columns:minmax(180px,.8fr) 1.4fr;gap:10px;align-items:start}
+.cl-speclist{display:flex;flex-direction:column;gap:4px}
+.cl-subpick{display:flex;gap:8px;align-items:center;text-align:left;padding:5px 8px;border:2px solid #303944;background:#171c23;color:inherit}
+.cl-subpick small{display:block;font-size:10px}.cl-subpick.sel{border-color:#e5ca91}.cl-subpick.here{box-shadow:inset 0 0 0 2px #4fae73}
+.cl-spec-detail{display:flex;flex-direction:column;gap:6px;padding:8px}
+@media (max-width:720px){.cl-specs{grid-template-columns:1fr}}
