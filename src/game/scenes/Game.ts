@@ -7,15 +7,15 @@ import type { GameFx } from '../core/GameEngine';
 import type { Character, HuntStatus } from '../core/types';
 import { MONSTERS } from '../data/monsters';
 import { bossIdOf, huntWaves } from '../data/hunts';
-import { characterStats } from '../systems/progression';
+import { aggroShares } from '../systems/combat';
 import { ART } from '../art/data';
-import { ART_SCALE, ARENA, BACK_ROW, BOSS_CELL, CANVAS_H, cellCenter, cellKey, engagementSlots, entranceCells, formationCells, inArena, isBoxFull, spawnCells, stairCells, unitAnchor, type Cell } from '../art/geometry';
+import { ART_SCALE, ARENA, BOSS_CELL, CANVAS_H, cellCenter, cellKey, engagementSlots, entranceCells, formationCells, inArena, spawnCells, stairCells, unitAnchor, type Cell } from '../art/geometry';
 import { lookKey, type Look } from '../art/look';
 import { characterTexture, characterWalkAnim, ensureLookTextures, mapTexture, monsterTexture } from '../art/textures';
 import { dominantDirection, type ArenaPoint } from './movement';
 
 const BAR_W=56,SPRITE_PX=32*ART_SCALE;
-type HeroView={container:Phaser.GameObjects.Container;look:Look;key:string;body:Phaser.GameObjects.Sprite;name:Phaser.GameObjects.Text;hpBg:Phaser.GameObjects.Rectangle;hp:Phaser.GameObjects.Rectangle;manaBg:Phaser.GameObjects.Rectangle;mana:Phaser.GameObjects.Rectangle;effects:Phaser.GameObjects.Text;direction:CharacterDirection;moveTween?:Phaser.Tweens.Tween;walking:boolean};
+type HeroView={container:Phaser.GameObjects.Container;look:Look;key:string;body:Phaser.GameObjects.Sprite;name:Phaser.GameObjects.Text;direction:CharacterDirection;moveTween?:Phaser.Tweens.Tween;walking:boolean};
 type MonsterView={body:Phaser.GameObjects.Arc|Phaser.GameObjects.Sprite;name:Phaser.GameObjects.Text;hpBg:Phaser.GameObjects.Rectangle;hp:Phaser.GameObjects.Rectangle;art?:string;height:number;facing:CharacterDirection;barW:number;barDy:number;nameDy:number;big:boolean;cell:Cell;slot?:Cell;tween?:Phaser.Tweens.Tween;moving:boolean};
 
 export class Game extends Scene {
@@ -35,6 +35,8 @@ export class Game extends Scene {
   private visualPaused=false;
   private arena!:Phaser.GameObjects.Image;
   private arenaHunt='';
+  private engageAt=0;
+  private lastTeam:Character[]=[];
 
   /** O mapa inteiro é o canvas: 512×320 de arte ×2 = 1024×640, sem corte. */
   private applyArena(huntId:string){if(huntId===this.arenaHunt)return;this.arenaHunt=huntId;this.arena.setTexture(mapTexture(huntId));}
@@ -76,7 +78,12 @@ export class Game extends Scene {
     EventBus.emit('current-scene-ready',this);
   }
 
-  update(_time:number,delta:number){gameStore.advance(delta,runtime.huntSpeed);}
+  update(_time:number,delta:number){
+    gameStore.advance(delta,runtime.huntSpeed);
+    // O cerco só começa quando os heróis já chegaram à formação (senão o monstro ocupa o lugar onde o herói vai passar).
+    if(this.needApproach&&this.time.now>=this.engageAt&&gameStore.getSnapshot().status==='running'){this.needApproach=false;this.approachHeroes(this.lastTeam);}
+  }
+  private needApproach=false;
 
   private renderState(){
     const state=gameStore.getSnapshot();
@@ -100,10 +107,7 @@ export class Game extends Scene {
       let v=this.heroes.get(c.id);
       if(!v){v=this.createHero(c,entrances.get(c.id)!);this.heroes.set(c.id,v);created.push(c.id);}
       if(v.key!==lookKey(c.look))this.swapLook(v,c);
-      const stats=characterStats(c,state);
-      v.name.setText(`${c.name} · Nv ${c.profile.level}${c.hp<=0?'  ☠':''}`);
-      v.hp.displayWidth=BAR_W*Math.max(0,c.hp/stats.maxHp);v.mana.displayWidth=BAR_W*Math.max(0,c.mana/stats.maxMana);
-      v.effects.setText(c.effects.map(e=>e.type).join(' · '));v.body.setAlpha(c.hp>0?1:.25);
+      v.name.setText(`${c.name}${c.hp<=0?'  ☠':''}`);v.body.setAlpha(c.hp>0?1:.25);
     });
 
     const activeIds=new Set(state.monsters.map(m=>m.uid));
@@ -120,7 +124,7 @@ export class Game extends Scene {
       else v.body.setTint(m.statuses?.frozen?0x9fdcff:m.statuses?.burn?0xffb070:0xffffff);
       v.name.setAlpha(m.alive?1:.3);
     });
-    if(state.status==='running')this.approachHeroes(team);
+    this.lastTeam=team;if(state.status==='running')this.needApproach=true;
     this.faceMonsters(team);
 
     if(state.status==='paused'&&!this.visualPaused){this.tweens.pauseAll();this.anims.pauseAll();this.visualPaused=true;}
@@ -141,15 +145,9 @@ export class Game extends Scene {
   private createHero(character:Character,point:ArenaPoint):HeroView{
     const look=ensureLookTextures(this,character.look,this.inUseLooks());
     const body=this.add.sprite(0,0,characterTexture(look,'down',1)).setOrigin(.5,1).setScale(ART_SCALE);
-    const top=-SPRITE_PX;
-    const hpBg=this.add.rectangle(-BAR_W/2,top-8,BAR_W,8,0x32171c,.95).setOrigin(0,.5);
-    const manaBg=this.add.rectangle(-BAR_W/2,top+1-8+9,BAR_W,6,0x152443,.95).setOrigin(0,.5);
-    const hp=this.add.rectangle(-BAR_W/2,top-8,BAR_W,6,0xc9535d).setOrigin(0,.5);
-    const mana=this.add.rectangle(-BAR_W/2,top-8+9,BAR_W,4,0x557bd0).setOrigin(0,.5);
-    const name=this.add.text(0,top-24,'',{fontSize:'11px',color:'#fff',stroke:'#090b0e',strokeThickness:4,align:'center'}).setOrigin(.5);
-    const effects=this.add.text(0,8,'',{fontSize:'10px',color:'#9ce0af',stroke:'#080a0c',strokeThickness:3}).setOrigin(.5);
-    const container=this.add.container(point.x,point.y,[body,hpBg,manaBg,hp,mana,name,effects]).setDepth(6+point.y/1000);
-    return {container,look,key:lookKey(look),body,name,hpBg,hp,manaBg,mana,effects,direction:'down',walking:false};
+    const name=this.add.text(0,-SPRITE_PX-8,'',{fontSize:'11px',color:'#fff',stroke:'#090b0e',strokeThickness:4,align:'center'}).setOrigin(.5);
+    const container=this.add.container(point.x,point.y,[body,name]).setDepth(6+point.y/1000);
+    return {container,look,key:lookKey(look),body,name,direction:'down',walking:false};
   }
   /** Trocar a aparência troca a textura/animação do mesmo objeto de cena (sem recriar). */
   private swapLook(view:HeroView,character:Character){
@@ -192,30 +190,35 @@ export class Game extends Scene {
   private approachHeroes(team:Character[]){
     const formation=formationCells(team);if(!formation.size)return;
     const alive=team.filter(c=>c.hp>0&&formation.has(c.id));if(!alive.length)return;
-    const tank=alive.find(c=>c.isTank&&c.row==='front')??alive.find(c=>c.row==='front')??alive[0];
-    const back=alive.filter(c=>c.row==='back'&&c.id!==tank.id);
+    const shares=aggroShares(alive),counts=new Map(alive.map(c=>[c.id,0]));
     const occupied=new Set<string>([...formation.values()].map(cellKey));
+    const block=(cell:Cell,big:boolean)=>{for(let dc=0;dc<(big?2:1);dc++)for(let dr=0;dr<(big?2:1);dr++)occupied.add(cellKey({c:cell.c+dc,r:cell.r+dr}));};
     const pending:MonsterView[]=[];
-    for(const v of this.enemies.values()){
-      if(v.slot){for(let dc=0;dc<(v.big?2:1);dc++)for(let dr=0;dr<(v.big?2:1);dr++)occupied.add(cellKey({c:v.slot.c+dc,r:v.slot.r+dr}));}
-      else if(v.body.visible)pending.push(v);
-    }
-    // ocupa também as células de nascimento de quem ainda não saiu do lugar
-    for(const v of this.enemies.values())if(!v.slot){for(let dc=0;dc<(v.big?2:1);dc++)for(let dr=0;dr<(v.big?2:1);dr++)occupied.add(cellKey({c:v.cell.c+dc,r:v.cell.r+dr}));}
-    const targetCell=formation.get(tank.id)!;
-    for(const v of pending){
+    for(const v of this.enemies.values()){if(v.slot)block(v.slot,v.big);else if(v.body.visible){pending.push(v);block(v.cell,v.big);}}
+    const tank=alive.find(c=>c.isTank&&c.row==='front')??alive.find(c=>c.row==='front')??alive[0];
+    const dist=(a:Cell,b:Cell)=>Math.hypot(a.c-b.c,a.r-b.r);
+    // o chefe 2×2 vai para perto do tanque; os demais se espalham entre os heróis vivos pela fatia de aggro de cada um
+    for(const v of pending.sort((a,b)=>Number(b.big)-Number(a.big)||a.cell.c-b.cell.c)){
       let slot:Cell|undefined;
       if(v.big){
-        const c0=Math.max(0,Math.min(ARENA.cols-2,targetCell.c-1)),block={c:c0,r:Math.max(0,targetCell.r-3)};
-        slot=block;for(let dc=0;dc<2;dc++)for(let dr=0;dr<2;dr++)occupied.add(cellKey({c:block.c+dc,r:block.r+dr}));
+        const t=formation.get(tank.id)!;
+        for(const c0 of [t.c-1,t.c,t.c-2,t.c+1].map(c=>Math.max(0,Math.min(ARENA.cols-2,c)))){
+          const cand={c:c0,r:Math.max(0,t.r-3)},keys=[0,1].flatMap(dc=>[0,1].map(dr=>cellKey({c:cand.c+dc,r:cand.r+dr})));
+          for(const k of keys)occupied.delete(k);
+          const free=keys.every(k=>!occupied.has(k));
+          if(free){slot=cand;break;}
+        }
+        slot??=v.cell;
       }else{
-        for(const key of [cellKey(v.cell)])occupied.delete(key);
-        const from=v.cell,tankFull=isBoxFull(targetCell,occupied);
-        const targets=[...(tankFull?[]:[targetCell]),...back.map(b=>formation.get(b.id)!),...(tankFull&&!back.length?[targetCell]:[])];
-        for(const t of targets){const slots=engagementSlots(t,occupied,from).filter(c=>c.r<BACK_ROW+1&&inArena(c));if(slots.length){slot=slots[0];break;}}
-        occupied.add(cellKey(slot??v.cell));
+        occupied.delete(cellKey(v.cell));
+        const order=[...alive].sort((a,b)=>(counts.get(a.id)!/(shares.get(a.id)||.01))-(counts.get(b.id)!/(shares.get(b.id)||.01))||dist(formation.get(a.id)!,v.cell)-dist(formation.get(b.id)!,v.cell));
+        for(const h of order){
+          const hc=formation.get(h.id)!,cost=(c:Cell)=>dist(c,v.cell)+(c.r>hc.r?4:0);   // o lado de trás do herói só serve quando o resto está cheio
+          const slots=engagementSlots(hc,occupied,v.cell).filter(inArena).sort((a,b)=>cost(a)-cost(b));
+          if(slots.length){slot=slots[0];counts.set(h.id,counts.get(h.id)!+1);break;}
+        }
       }
-      if(!slot)continue;
+      slot??=v.cell;block(slot,v.big);
       v.slot=slot;this.walkMonster(v,this.bodyPoint(v,slot));
     }
   }
@@ -245,6 +248,7 @@ export class Game extends Scene {
   }
 
   private beginWave(team:Character[]){
+    this.engageAt=this.time.now+(runtime.huntSpeed>5?0:1200);this.needApproach=true;
     const entrances=this.entrancePoints(team),combat=this.combatPoints(team);
     for(const character of team){const view=this.heroes.get(character.id),start=entrances.get(character.id),target=combat.get(character.id);if(!view||!start||!target)continue;this.stopHero(view);view.container.setPosition(start.x,start.y).setVisible(true);this.moveHero(view,target,1050,()=>this.faceNearestEnemy(view));}
   }
