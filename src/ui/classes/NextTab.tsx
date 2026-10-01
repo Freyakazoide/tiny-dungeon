@@ -68,7 +68,7 @@ export function NextTab({ state, character }: { state: GameState; character: Cha
   const [selected, setSelected] = useState<string | null>(null), [confirming, setConfirming] = useState(false), [error, setError] = useState<string>();
   const evolveBtn = useRef<HTMLElement | null>(null), refs = useRef(new Map<string, HTMLElement | null>());
   const all = [...groups.ready, ...groups.progress, ...groups.readySoon, ...groups.soon];
-  const defaultId = (groups.ready[0] ?? groups.progress[0] ?? groups.readySoon[0] ?? groups.soon[0])?.node.id ?? null;
+  const defaultId = (all.some(x => x.node.id === character.goal) ? character.goal : null) ?? (groups.ready[0] ?? groups.progress[0] ?? groups.readySoon[0] ?? groups.soon[0])?.node.id ?? null;
   const [lastChar, setLastChar] = useState(character.id);
   useEffect(() => { if (lastChar !== character.id) { setLastChar(character.id); setSelected(null); setConfirming(false); } }, [character.id, lastChar]);
   const current = all.find(s => s.node.id === selected) ?? all.find(s => s.node.id === defaultId);

@@ -20,10 +20,11 @@ export const classLabel = (character: Character) => CLASS_BY_ID[character.profil
 export function gainExperience(character: Character, amount: number) {
   gainProfileExperience(character.profile, amount);
 }
-/** Bônus do talento `t_<proficiência>` (+ `t_focus` no elemento em foco), em pontos percentuais. */
+/** Bônus de tries: talento `t_<proficiência>` (+ `t_focus` no elemento em foco) e itens com `trainBonus`, em pontos percentuais. */
 export const triesBonusPct = (character: Character, id: ProficiencyId) => {
   const totals = talentTotals(character);
-  return (totals[`t_${id}`] ?? 0) + (id === elementFocus(character) ? totals.t_focus ?? 0 : 0);
+  const items = Object.values(character.equipment).reduce((sum, itemId) => sum + (itemId ? itemById(itemId)?.trainBonus?.[id] ?? 0 : 0), 0);
+  return (totals[`t_${id}`] ?? 0) + (id === elementFocus(character) ? totals.t_focus ?? 0 : 0) + items;
 };
 /** Multiplicador total de tries de uma proficiência: afinidade da classe × (1 + talento). 0 = bloqueada. */
 export const trainMultiplier = (character: Character, id: ProficiencyId) => affinityFor(character.profile, id) * (1 + triesBonusPct(character, id) / 100);

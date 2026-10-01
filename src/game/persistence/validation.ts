@@ -4,6 +4,7 @@ import { ITEMS } from '../data/items';
 import { MONSTERS } from '../data/monsters';
 import { DEFAULT_HUNT, HUNT_BY_ID } from '../data/hunts';
 import { normalizeLook } from '../art/look';
+import { isGoalId } from '../rpg/goals';
 import { SPELLS } from '../data/spells';
 import { validTalentRanks } from '../systems/talentGrid';
 import { classItem, CLASSIFICATIONS, ITEM_CONFIG, type Classification } from '../data/classItems';
@@ -35,6 +36,7 @@ export function migrateGameState(value:unknown):unknown{
   // Fase 4: o kit acompanha a classe (saves de teste evoluídos ainda estavam com o kit do Squire).
   for(const c of characters)if(record(c.profile)&&typeof c.profile.classId==='string'&&c.profile.classId in CLASS_BY_ID)c.classId=kitOfNode(c.profile.classId);
   // Fase 13: aparência por cores. Sem `look` = padrão pela posição; ids de cor desconhecidos caem na primeira opção, sem invalidar o save; `spriteId` antigo é descartado.
+  characters.forEach(c=>{if(c.goal!==undefined&&!isGoalId(c.goal))delete c.goal;});
   characters.forEach((c,index)=>{delete c.spriteId;c.look=normalizeLook(record(c.look)?c.look as Partial<import('../art/look').Look>:undefined,index);});
   if(migrated.huntId===undefined)migrated.huntId=DEFAULT_HUNT;
   if(!record(migrated.huntStats))migrated.huntStats={};

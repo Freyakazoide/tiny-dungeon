@@ -6,6 +6,10 @@ import { equipBlockReason } from '../../game/systems/equipment';
 import { gearLines } from '../GearPanel';
 import { slotNames, statLine } from '../format';
 
+import { PROFICIENCIES } from '../../game/rpg/proficiencies';
+/** "+15% de tries em Magia" para itens com `trainBonus`. */
+export const trainLine = (item: ItemDef) => Object.entries(item.trainBonus ?? {}).map(([id, pct]) => `+${pct}% de tries em ${PROFICIENCIES[id as keyof typeof PROFICIENCIES].name}`).join(', ');
+
 export type RarityKey = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary' | 'mythic';
 export const RARITY_LABEL: Record<RarityKey, string> = { common: 'Comum', uncommon: 'Incomum', rare: 'Rara', epic: 'Épica', legendary: 'Lendária', mythic: 'Mítica' };
 export const RARITY_LETTER: Record<RarityKey, string> = { common: 'C', uncommon: 'I', rare: 'R', epic: 'É', legendary: 'L', mythic: 'M' };
@@ -32,7 +36,7 @@ export interface ItemView {
 }
 
 export function viewFromItem(item: ItemDef, quantity: number, container: 'bp' | 'loot' | 'supply', character?: Character): ItemView {
-  const base = item.kind === 'supply' ? `Recupera ${item.amount} de ${item.supply === 'health' ? 'vida' : 'mana'}` : item.kind === 'loot' ? 'Loot para vender' : statLine(item.stats) || 'Sem atributos';
+  const base = item.kind === 'supply' ? `Recupera ${item.amount} de ${item.supply === 'health' ? 'vida' : 'mana'}` : item.kind === 'loot' ? 'Loot para vender' : [statLine(item.stats), trainLine(item)].filter(Boolean).join(' · ') || 'Sem atributos';
   return {
     key: `${container}:${item.id}`, source: 'simple', name: item.name, rarity: item.rarity, rarityLabel: RARITY_LABEL[item.rarity], kind: item.kind === 'equipment' ? 'equipment' : item.kind === 'supply' ? 'supply' : 'loot',
     slot: item.slot, slotLabel: item.slot ? slotNames[item.slot] : item.kind === 'loot' ? 'Loot' : 'Suprimento', base, attrs: [], value: item.value, quantity,

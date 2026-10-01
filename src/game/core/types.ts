@@ -21,6 +21,8 @@ export interface Character {
   row: CharacterRow; isTank: boolean;
   /** Aparência (cores de pele, cabelo e armadura sobre o corpo `squire`); a evolução de classe nunca a muda. */
   look: Look;
+  /** Classe de Tier 1 que o jogador pretende seguir (objetivo; não obriga nada). */
+  goal?: string;
   hp: number; mana: number; equipment: Partial<Record<Slot, string>>;
   /** Equipamento de classe (Fase 7) por slot. Um slot tem um item antigo (`equipment`) ou um deste, nunca os dois. */
   gear: Partial<Record<Slot, ItemInstance>>;
@@ -41,7 +43,7 @@ export interface SpellDef { id: string; classId: ClassId; name: string; level: n
   burnStacks?: number; freeze?: number; stun?: number;
   /** Magia de subclasse: só disponível se o nó estiver no caminho da classe. */
   node?: string; }
-export interface ItemDef { id: string; name: string; kind: ItemKind; rarity: Rarity; value: number; /** preço de compra no Ferreiro (a venda vale `value`) */ price?: number; slot?: Slot; classIds?: ClassId[]; level?: number; stats?: Partial<Stats>; trains?: 'melee' | 'ranged'; supply?: 'health' | 'mana'; amount?: number; }
+export interface ItemDef { id: string; name: string; kind: ItemKind; rarity: Rarity; value: number; /** preço de compra no Ferreiro (a venda vale `value`) */ price?: number; slot?: Slot; classIds?: ClassId[]; level?: number; stats?: Partial<Stats>; trains?: 'melee' | 'ranged'; /** bônus de tries (%) em proficiências, enquanto equipado */ trainBonus?: Partial<Record<ProficiencyId, number>>; supply?: 'health' | 'mana'; amount?: number; }
 export interface LootEntry { itemId: string; chance: number; min: number; max: number; }
 export interface InventoryStack { itemId: string; quantity: number; }
 export interface InventoryState { bp: InventoryStack[]; loot: InventoryStack[]; supply: InventoryStack[]; capacity: { bp: number; loot: number; supply: number }; }

@@ -1,6 +1,7 @@
 import { CLASSES, kitOfNode, kitsOfPath } from '../data/classes';
 import { MONSTERS } from '../data/monsters';
 import { defaultLookFor, isValidLook, normalizeLook, type Look } from '../art/look';
+import { goalOfflineTargets, isGoalId, trainRingId, gateSkillOf, GOAL_NODES } from '../rpg/goals';
 import { DEFAULT_HUNT, HUNT_BY_ID, HUNTS, huntScale, huntWaves } from '../data/hunts';
 import { WAVE_CONFIG } from '../data/balance';
 import { batchToSpawn, composeExtras, drawFromBag, extrasTableFor, limitExtra, newBag, rollExtra, splitBatches, tierOfExtra, TIER_NAMES, waveRewards } from '../systems/waves';
@@ -40,20 +41,20 @@ const defaultCondition=(s:NonNullable<ReturnType<typeof spellById>>):SpellCondit
 export const SPELL_SLOTS=4;
 export const MAX_SIM_MS_PER_FRAME=3000;
 let idCounter=0;
-export function createCharacter(classId:ClassId,name=CLASSES[classId].name,kit?:{weaponId?:string;row?:CharacterRow;element?:ProficiencyId;look?:Partial<Look>;lookIndex?:number}):Character{
+export function createCharacter(classId:ClassId,name=CLASSES[classId].name,kit?:{weaponId?:string;row?:CharacterRow;element?:ProficiencyId;look?:Partial<Look>;lookIndex?:number;goal?:string}):Character{
   const base=CLASSES[classId].base;
   const slots=SPELLS.filter(s=>s.classId===classId&&!s.universal&&!s.node).slice(0,4).map(s=>s.id);
   const spellConditions:Record<string,SpellCondition>={};
   if(kit?.element){slots[0]=`basic_${kit.element}`;}
   for(const id of slots)spellConditions[id]=defaultCondition(spellById(id)!);
-  return {id:`hero-${Date.now()}-${idCounter++}`,name,classId,profile:createProfile(),hp:base.maxHp,mana:base.maxMana,equipment:classId==='squire'?{weapon:kit?.weaponId??'rusty_sword',offhand:STARTER_OFFHAND}:{},gear:{},row:kit?.row??defaultRow(kit?.weaponId??(classId==='squire'?'rusty_sword':undefined),itemById(kit?.weaponId??'')?.trains),isTank:false,look:normalizeLook(kit?.look,kit?.lookIndex??0),spellSlots:slots,spellConditions,talentRanks:{[rootIdOf('aprendiz')]:1},cooldowns:{basic:0},effects:[],helper:helper()};
+  return {id:`hero-${Date.now()}-${idCounter++}`,name,classId,profile:createProfile(),hp:base.maxHp,mana:base.maxMana,equipment:classId==='squire'?{weapon:kit?.weaponId??'rusty_sword',offhand:STARTER_OFFHAND,...(kit?.goal&&isGoalId(kit.goal)?{ring:trainRingId(gateSkillOf(GOAL_NODES.find(n=>n.id===kit.goal)!))}:{})}:{},gear:{},...(kit?.goal&&isGoalId(kit.goal)?{goal:kit.goal}:{}),row:kit?.row??defaultRow(kit?.weaponId??(classId==='squire'?'rusty_sword':undefined),itemById(kit?.weaponId??'')?.trains),isTank:false,look:normalizeLook(kit?.look,kit?.lookIndex??0),spellSlots:slots,spellConditions,talentRanks:{[rootIdOf('aprendiz')]:1},cooldowns:{basic:0},effects:[],helper:helper()};
 }
 /** Estado inicial: sem personagens. A tela de criação monta o grupo de 3 Squires. */
 export function initialState():GameState{
   return {version:1,status:'idle',autoAdvance:true,huntId:DEFAULT_HUNT,huntStats:{},wave:0,cycle:0,transitionMs:0,characters:[],team:[],monsters:[],gearBag:[],inventory:{bp:[],loot:[],supply:[{itemId:'health_potion',quantity:8},{itemId:'mana_potion',quantity:8}],capacity:{bp:40,loot:60,supply:200}},gold:0,charmPoints:0,charmSlots:1,equippedCharms:[],unlockedCharms:[],codex:{},analyzer:createAnalyzer(),history:[],message:'Crie seus 3 personagens para começar.',lastSavedAt:Date.now()};
 }
 export const PARTY_SIZE=3,ROSTER_LIMIT=5,NAME_LIMIT=18;
-export interface RecruitSpec{name:string;weaponId?:string;element?:ProficiencyId;look?:Partial<Look>;row?:CharacterRow}
+export interface RecruitSpec{name:string;weaponId?:string;element?:ProficiencyId;look?:Partial<Look>;row?:CharacterRow;goal?:string}
 export class GameEngine {
   private state:GameState; private listeners=new Set<()=>void>(); private fxListeners=new Set<(fx:GameFx)=>void>(); private pausedFrom:GameState['status']='running';
   constructor(state=initialState()){this.state=state;}
@@ -241,10 +242,10 @@ export class GameEngine {
   createParty(specs:CharacterSpec[]){
     if(this.state.characters.length||!Array.isArray(specs)||specs.length!==PARTY_SIZE)return false;
     const clean=specs.map(spec=>({...spec,name:(spec.name??'').trim().slice(0,NAME_LIMIT)}));
-    if(clean.some(spec=>!spec.name||!STARTER_WEAPONS.some(w=>w.id===spec.weaponId)||(spec.row!==undefined&&spec.row!=='front'&&spec.row!=='back')||!spec.element||!STARTER_ELEMENTS.includes(spec.element)||(spec.look!==undefined&&!isValidLook(spec.look))))return false;
+    if(clean.some(spec=>!spec.name||!STARTER_WEAPONS.some(w=>w.id===spec.weaponId)||(spec.row!==undefined&&spec.row!=='front'&&spec.row!=='back')||!spec.element||!STARTER_ELEMENTS.includes(spec.element)||(spec.look!==undefined&&!isValidLook(spec.look))||(spec.goal!==undefined&&!isGoalId(spec.goal))))return false;
     if(new Set(clean.map(spec=>spec.name.toLowerCase())).size!==clean.length)return false;
-    const party=clean.map((spec,index)=>createCharacter('squire',spec.name,{weaponId:spec.weaponId,row:spec.row,element:spec.element,look:spec.look,lookIndex:index}));
-    for(const c of party){const element=clean[party.indexOf(c)].element!;c.profile.offlineTargets=[element,null];c.profile.offlineHistory=[element];}
+    const party=clean.map((spec,index)=>createCharacter('squire',spec.name,{weaponId:spec.weaponId,row:spec.row,element:spec.element,look:spec.look,lookIndex:index,goal:spec.goal}));
+    for(const c of party){const element=clean[party.indexOf(c)].element!;c.profile.offlineTargets=[element,null];c.profile.offlineHistory=[element];if(c.goal){c.profile.offlineTargets=goalOfflineTargets(c.goal);c.profile.offlineHistory=c.profile.offlineTargets.filter((x):x is ProficiencyId=>!!x);}}
     const tank=party.find(c=>c.row==='front');if(tank)tank.isTank=true;
     this.state.characters=party;this.state.team=party.map(c=>c.id);this.state.message='Grupo criado. Inicie a hunt quando estiver pronto.';this.emit();return true;
   }
@@ -273,10 +274,21 @@ export class GameEngine {
     const clean=(spec.name??'').trim().slice(0,NAME_LIMIT);
     if(!clean||this.state.characters.length>=ROSTER_LIMIT||this.state.characters.some(c=>c.name.toLowerCase()===clean.toLowerCase()))return false;
     if(typeof input==='string'){this.state.characters.push(createCharacter('squire',clean,{look:defaultLookFor(this.state.characters.length)}));this.emit();return true;}
-    if(!STARTER_WEAPONS.some(w=>w.id===spec.weaponId)||!spec.element||!STARTER_ELEMENTS.includes(spec.element)||(spec.row!==undefined&&spec.row!=='front'&&spec.row!=='back')||(spec.look!==undefined&&!isValidLook(spec.look)))return false;
-    const c=createCharacter('squire',clean,{weaponId:spec.weaponId,row:spec.row,element:spec.element,look:spec.look,lookIndex:this.state.characters.length});
-    c.profile.offlineTargets=[spec.element,null];c.profile.offlineHistory=[spec.element];
+    if(!STARTER_WEAPONS.some(w=>w.id===spec.weaponId)||!spec.element||!STARTER_ELEMENTS.includes(spec.element)||(spec.row!==undefined&&spec.row!=='front'&&spec.row!=='back')||(spec.look!==undefined&&!isValidLook(spec.look))||(spec.goal!==undefined&&!isGoalId(spec.goal)))return false;
+    const c=createCharacter('squire',clean,{weaponId:spec.weaponId,row:spec.row,element:spec.element,look:spec.look,lookIndex:this.state.characters.length,goal:spec.goal});
+    c.profile.offlineTargets=c.goal?goalOfflineTargets(c.goal):[spec.element,null];c.profile.offlineHistory=c.profile.offlineTargets.filter((x):x is ProficiencyId=>!!x);
     this.state.characters.push(c);this.state.message=`${clean} foi recrutado.`;this.emit();return true;
+  }
+  /** Muda o objetivo de classe (só enquanto Squire): troca o Anel do Aprendiz equipado e aponta o treino offline para a porta nova. */
+  setGoal(id:string,goal:string|null){
+    const c=this.state.characters.find(x=>x.id===id);
+    if(!c||c.profile.classId!=='aprendiz'||(goal!==null&&!isGoalId(goal)))return false;
+    const isRing=(itemId?:string)=>!!itemId&&itemId.startsWith('apprentice_ring_');
+    if(goal===null){delete c.goal;if(isRing(c.equipment.ring))delete c.equipment.ring;this.emit();return true;}
+    c.goal=goal;const ring=trainRingId(gateSkillOf(GOAL_NODES.find(n=>n.id===goal)!));
+    if(!c.equipment.ring||isRing(c.equipment.ring))c.equipment.ring=ring;
+    else if(!addItem(this.state,ring,1)){this.state.message='Sem espaço na mochila para o Anel do Aprendiz.';}
+    c.profile.offlineTargets=goalOfflineTargets(goal);this.state.message=`Objetivo de ${c.name}: ${GOAL_NODES.find(n=>n.id===goal)!.name}.`;this.emit();return true;
   }
   /** Troca um membro da equipe por uma reserva na mesma posição; a reserva herda a linha (e o tanque, se a linha for a frente). */
   swapTeamMember(outId:string,inId:string){

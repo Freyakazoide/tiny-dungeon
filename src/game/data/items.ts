@@ -1,5 +1,6 @@
 import type { ItemDef } from '../core/types';
 import { GEAR_ITEMS, MATERIAL_ITEMS } from './gear';
+import { TRAIN_ITEMS } from './trainItems';
 
 export const ITEMS: ItemDef[] = [
   {id:'health_potion',name:'Poção de Vida',kind:'supply',rarity:'common',value:12,supply:'health',amount:90},
@@ -34,6 +35,6 @@ export const ITEMS: ItemDef[] = [
   {id:'wooden_shield',name:'Escudo de Madeira',kind:'equipment',rarity:'common',value:15,slot:'offhand',stats:{defense:4}},
   {id:'copper_ring',name:'Anel de Cobre',kind:'equipment',rarity:'common',value:30,slot:'ring',stats:{maxHp:10,maxMana:10}}
 ];
-ITEMS.push(...MATERIAL_ITEMS, ...GEAR_ITEMS);
+ITEMS.push(...MATERIAL_ITEMS, ...GEAR_ITEMS, ...TRAIN_ITEMS);
 const ITEM_INDEX = new Map(ITEMS.map(item => [item.id, item]));
 export const itemById = (id: string) => ITEM_INDEX.get(id);

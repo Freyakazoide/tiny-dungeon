@@ -7,6 +7,8 @@ import { defaultRow, STARTER_ELEMENTS, STARTER_WEAPONS, type CharacterSpec } fro
 import { PROFICIENCIES } from '../game/rpg/proficiencies';
 import { defaultLookFor } from '../game/art/look';
 import { AppearancePicker } from './AppearancePicker';
+import { GoalPicker } from './GoalPicker';
+import { GOAL_PLAN } from '../game/rpg/goals';
 import { statLine } from './format';
 
 const PLACEHOLDERS = ['Nome do primeiro Squire', 'Nome do segundo Squire', 'Nome do terceiro Squire'];
@@ -41,6 +43,10 @@ export function CreationScreen() {
           onChange={event => update(index, { name: event.target.value })} />
       </label>
       <div className="creation-sprite"><span>Aparência</span><AppearancePicker value={draft.look as import('../game/art/look').Look} restore={defaultLookFor(index)} onChange={look => update(index, { look })} label={`Aparência do personagem ${index + 1}`} /></div>
+      <div className="creation-sprite"><span>Classe futura</span><GoalPicker label={`Classe futura do personagem ${index + 1}`} value={draft.goal} onChange={goal => {
+        const plan = goal ? GOAL_PLAN[goal] : undefined, w = plan && STARTER_WEAPONS.find(x => x.id === plan.weaponId);
+        update(index, { goal, ...(plan && w ? { weaponId: plan.weaponId, element: plan.element, ...(draft.rowTouched ? {} : { row: defaultRow(plan.weaponId, w.trains) }) } : {}) });
+      }} /></div>
       <div className="weapon-options" role="radiogroup" aria-label={`Arma inicial do personagem ${index + 1}`}>{STARTER_WEAPONS.map(weapon => {
         const item = itemById(weapon.id)!, active = draft.weaponId === weapon.id;
         return <button type="button" role="radio" aria-checked={active} key={weapon.id} className={`weapon-card ${active ? 'selected' : ''}`}

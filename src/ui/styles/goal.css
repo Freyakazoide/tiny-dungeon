@@ -1,0 +1,6 @@
+.goal-picker{display:flex;flex-direction:column;gap:8px}
+.goal-chips{display:flex;flex-wrap:wrap;gap:4px}
+.goal-chip{padding:4px 8px;border:2px solid #303944;background:#171c23;color:#cdd5df;font:inherit;font-size:12px;cursor:pointer}
+.goal-chip.on{border-color:#e5ca91;color:#e5ca91;background:#2a2418}
+.goal-detail{border:1px solid #303944;padding:8px;font-size:13px;line-height:1.4}
+.goal-detail p{margin:4px 0}

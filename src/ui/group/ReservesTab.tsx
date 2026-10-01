@@ -13,6 +13,8 @@ import { Avatar } from '../components/Avatar';
 import { Icon } from '../components/Icon';
 import { colorHex } from '../format';
 import { profIcon } from '../RpgPanels';
+import { GoalPicker } from '../GoalPicker';
+import { GOAL_PLAN } from '../../game/rpg/goals';
 import { AppearancePicker } from '../AppearancePicker';
 import { ConfirmDialog } from '../classes/parts';
 
@@ -52,18 +54,19 @@ function RosterCard({ character, state, onDismiss }: { character: Character; sta
 const WEAPON_NOTE = { melee: 'Melee · frente', ranged: 'Ranged · trás' } as const;
 
 function RecruitPanel({ state }: { state: GameState }) {
-  const [name, setName] = useState(''), [weaponId, setWeaponId] = useState<string>(STARTER_WEAPONS[0].id), [element, setElement] = useState(STARTER_ELEMENTS[0]), [look, setLook] = useState<Look>(() => defaultLookFor(state.characters.length));
+  const [name, setName] = useState(''), [weaponId, setWeaponId] = useState<string>(STARTER_WEAPONS[0].id), [element, setElement] = useState(STARTER_ELEMENTS[0]), [look, setLook] = useState<Look>(() => defaultLookFor(state.characters.length)), [goal, setGoal] = useState<string>();
   const clean = name.trim(), full = state.characters.length >= ROSTER_LIMIT, dup = state.characters.some(c => c.name.toLowerCase() === clean.toLowerCase());
   const reason = full ? `Elenco cheio (${ROSTER_LIMIT}/${ROSTER_LIMIT}).` : !clean ? 'Escolha um nome.' : dup ? 'Já existe um personagem com esse nome.' : undefined;
   return <aside className="pk-panel gp-recruit" aria-label="Recrutar"><h4 className="pk-sec">Recrutar Squire <small>{state.characters.length}/{ROSTER_LIMIT}</small></h4>
     <label className="gp-field">Nome<input type="text" aria-label="Nome do novo Squire" maxLength={NAME_LIMIT} value={name} onChange={e => setName(e.target.value)} /></label>
+    <div className="gp-field">Classe futura<GoalPicker label="Classe futura do novo Squire" value={goal} onChange={g => { setGoal(g); if (g) { setWeaponId(GOAL_PLAN[g].weaponId); setElement(GOAL_PLAN[g].element); } }} /></div>
     <div className="gp-field">Arma inicial<div className="gp-weapons">{STARTER_WEAPONS.map(w => { const item = itemById(w.id); return <button type="button" key={w.id} className={`pk-btn gp-weapon ${weaponId === w.id ? 'on' : ''}`} aria-pressed={weaponId === w.id} onClick={() => setWeaponId(w.id)}>
       <span className="b"><Icon name={w.trains === 'ranged' ? 'prof_ranged' : 'slot_weapon'} size={24} /></span><span><b>{item?.name ?? w.id}</b><br />{WEAPON_NOTE[w.trains]}</span></button>; })}</div></div>
     <div className="gp-field">Elemento inicial<div className="gp-elems">{STARTER_ELEMENTS.map(el => <button type="button" key={el} className={`pk-btn gp-elem ${element === el ? 'on' : ''}`} aria-pressed={element === el} aria-label={PROFICIENCIES[el].name} title={PROFICIENCIES[el].name} onClick={() => setElement(el)}><Icon name={`elem_${el}`} size={24} /></button>)}</div></div>
     <div className="gp-field">Aparência<AppearancePicker value={look} onChange={setLook} restore={defaultLookFor(state.characters.length)} label="Aparência do novo Squire" /></div>
     <p className="muted pk-tiny">Começa no nível 1 como Squire e entra como reserva.</p>
     {reason && <div className="gp-warnline">⚠ {reason}</div>}
-    <button type="button" className="pk-btn primary" disabled={!!reason} onClick={() => { if (gameStore.recruit({ name: clean, weaponId, element, look })) setName(''); }}>Recrutar Squire</button>
+    <button type="button" className="pk-btn primary" disabled={!!reason} onClick={() => { if (gameStore.recruit({ name: clean, weaponId, element, look, goal })) { setGoal(undefined); setName(''); } }}>Recrutar Squire</button>
   </aside>;
 }
 
