@@ -10,6 +10,7 @@ import { GoalPicker } from './GoalPicker';
 import { goalSummary } from '../game/rpg/goals';
 import { CLASS_BY_ID, childrenOf } from '../game/rpg/classTree';
 import { requirementRows } from '../game/systems/guide';
+import { ClassPerks } from './classes/ClassPerks';
 
 const rowText = (row: ReturnType<typeof requirementRows>[number]) => `${row.label} ${row.kind === 'counter' ? compact(row.need) : row.need}`;
 
@@ -21,6 +22,7 @@ function PathCard({ character }: { character: Character }) {
     <p className="muted">Todo personagem começa como <b>Squire</b>. Tier 1: nível 10 + 25 na habilidade-porta. Tier 2: nível 25 + 38 numa habilidade (pura), 35+35 em duas (híbrida) ou 35 + um contador de façanhas. Itens de classe não são dados: são conquistados.</p>
     {goal && <p><b>{CLASS_BY_ID.aprendiz.name} → {goal.node.name}</b>{isSquire ? '' : character.profile.classPath.includes(goal.node.id) ? ' (alcançada)' : ' (outro caminho)'}</p>}
     {goal && subs.map(n => <div className="req" key={n.id}><span className="t"><b>{n.name}</b></span><span className="s">{requirementRows(character, n).map(rowText).join(' · ')}</span></div>)}
+    {goal && <ClassPerks nodeId={goal.node.id} />}
     {isSquire && <><h4>Objetivo</h4><GoalPicker label={`Objetivo de ${character.name}`} value={character.goal} onChange={g => gameStore.setGoal(character.id, g ?? null)} /></>}
   </div>;
 }

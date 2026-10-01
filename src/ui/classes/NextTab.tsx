@@ -9,6 +9,7 @@ import { toastStore } from '../components/ToastHost';
 import { statNames, statValue } from '../format';
 import { uiStore } from '../uiStore';
 import { ClassIcon } from './ClassIcon';
+import { ClassPerks } from './ClassPerks';
 import { AffinityStrip, ConfirmDialog, ReqBars, reqLabel, reqValue, subclassKind } from './parts';
 import { NODE_PASSIVES } from '../../game/rpg/passives';
 import { pathNames } from '../../game/systems/guide';
@@ -46,6 +47,7 @@ function Preview({ state, character, step, onEvolve }: { state: GameState; chara
       : <button type="button" className="pk-btn" disabled>{playable ? 'Faltam requisitos' : 'Kit em breve'}</button>}
     {ready && <div className="cl-warn">⚠ <span>Evoluir é definitivo. Você perde o acesso às outras <b>{pv.lostOptions} classes</b> deste personagem.</span></div>}
     {!playable && <div className="cl-warn">⚠ <span>Esta classe ainda não tem kit (atributos, magias e passiva). A evolução fica bloqueada para ninguém ficar preso numa classe vazia.</span></div>}
+    {node.tier === 1 && <ClassPerks nodeId={node.id} />}
     {pending.length > 0 && <div><h4 className="pk-sec">O que falta</h4><div className="cl-todo">{pending.map(row => <div className="r" key={row.key}><span aria-hidden="true">○</span><div>
       {reqLabel(row)} {row.kind === 'level' || row.kind === 'skill' ? row.need : reqValue(row).split('/')[1] ?? row.need} · atual {row.have === null ? 'em breve' : row.kind === 'counter' ? reqValue(row).split('/')[0] : row.have}
       {row.kind === 'skill' && <> · {row.training ? `faltam ~${formatEta(row.eta ?? Infinity)}` : 'parado'}</>}

@@ -5,7 +5,7 @@ import { Icon } from '../components/Icon';
 import { profIcon } from '../RpgPanels';
 
 /** PNGs `class_*` presentes em public/assets/ui/icons, sem ".png". Um teste confere com o diretório. */
-export const CLASS_ICON_PNGS = new Set<string>([]);
+export const CLASS_ICON_PNGS = new Set<string>(['guerreiro', 'guardiao', 'ladino', 'cacador', 'mago', 'clerigo', 'bardo', 'monge', 'bruxo', 'alquimista', 'mercenario', 'mestre_runico', 'ilusionista', 'druida', 'artilheiro'].map(id => `class_${id}`));
 
 const gateSkill = (node: ClassNode) => Object.keys(node.requires.skills ?? {})[0] as ProficiencyId | undefined;
 

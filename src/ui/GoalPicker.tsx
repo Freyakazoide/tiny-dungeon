@@ -2,6 +2,7 @@ import { itemById } from '../game/data/items';
 import { kitOfNode } from '../game/data/classes';
 import { GOAL_NODES, goalSummary, trainRingId } from '../game/rpg/goals';
 import { PROFICIENCIES } from '../game/rpg/proficiencies';
+import { CLASS_PROFILES } from '../game/data/classProfiles';
 import { HOW_TO_PROFICIENCY } from '../game/systems/guide';
 
 interface Props { value: string | undefined; onChange: (goal: string | undefined) => void; label: string; }
@@ -16,7 +17,7 @@ export function GoalPicker({ value, onChange, label }: Props) {
     </div>
     {info
       ? <div className="goal-detail" aria-live="polite">
-        <b>{info.node.name}</b> <small>{info.node.specialty}</small>
+        <b>{info.node.name}</b> <small>{CLASS_PROFILES[info.node.id]?.role} · {CLASS_PROFILES[info.node.id]?.tagline ?? info.node.specialty}</small>
         <p>Você começa como <b>Squire</b>. Ao chegar no <b>nível {info.level}</b> com <b>{PROFICIENCIES[info.gate].name} {info.gateLevel}</b>, pode evoluir para {info.node.name}{info.subclasses ? ` — e depois escolher entre ${info.subclasses} subclasses` : ''}.</p>
         <p><b>Treine:</b> {PROFICIENCIES[info.gate].name} — {HOW_TO_PROFICIENCY[info.gate]}. O Squire recebe o <i>{itemById(trainRingId(info.gate))?.name}</i> (+15% de tries nessa habilidade); a classe e seus itens você conquista jogando.</p>
         <p><small>Afinidades: {info.affinity}. Sugestão: {itemById(info.plan.weaponId)?.name} e elemento {PROFICIENCIES[info.plan.element].name} (já aplicados abaixo; você pode mudar).{kitOfNode(info.node.id) === 'squire' ? ' Kit de combate próprio dessa classe: em breve.' : ''}</small></p>

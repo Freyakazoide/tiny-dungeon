@@ -28,3 +28,18 @@ describe('objetivo de classe — UI', () => {
     expect(after.goal).toBe('mago'); expect(after.equipment.ring).toBe('apprentice_ring_magic');
   });
 });
+
+import { CLASS_PROFILES } from '../game/data/classProfiles';
+import { ClassPerks } from './classes/ClassPerks';
+import { GOAL_NODES } from '../game/rpg/goals';
+
+describe('O que você conquista (ClassPerks)', () => {
+  it('as 15 classes base têm perfil e mostram papel, 4 magias, passiva, ganhos e especializações', () => {
+    for (const n of GOAL_NODES) {
+      expect(CLASS_PROFILES[n.id], n.id).toBeTruthy(); expect(CLASS_PROFILES[n.id].playstyle).toHaveLength(3); expect(CLASS_PROFILES[n.id].rewards.length).toBeGreaterThanOrEqual(3);
+      const { container, unmount } = render(<ClassPerks nodeId={n.id} />);
+      expect(container.querySelectorAll('.cl-ks')).toHaveLength(4); expect(container.querySelector('.cl-passive')).toBeTruthy();
+      expect(container.querySelectorAll('.cl-rew li').length).toBeGreaterThanOrEqual(3); expect(container.textContent).toContain(CLASS_PROFILES[n.id].tagline); unmount();
+    }
+  });
+});
