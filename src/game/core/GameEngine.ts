@@ -150,7 +150,18 @@ export class GameEngine {
   resetAnalyzer(){if(hasAnalyzerActivity(this.state.analyzer)){this.state.history.push(structuredClone(this.state.analyzer));this.state.history=this.state.history.slice(-20);}this.state.analyzer=createAnalyzer();this.state.message='Hunt Analyzer reiniciado. Progressão e inventário preservados.';this.emit();}
   descend(){if(this.state.status==='transition'&&!this.state.autoAdvance){this.state.transitionMs=0;this.finishTransition(true);}}
   /** Avança `ms` de tempo real a `speed`x em sub-passos de até 100 ms (teto de simulação por quadro); UI e efeitos notificados uma vez no fim. */
+  /** Instante (relógio real) da última simulação: o ticker de segundo plano usa para saber quanto tempo ficou para trás. */
+  lastAdvanceAt=Date.now();
+  /** Simula `ms` de tempo real de uma vez (aba oculta ou travada): sub-passos de 100 ms, no máximo 10 min por chamada. */
+  catchUp(ms:number,speed=1){
+    const total=Math.min(Math.max(0,ms)*Math.max(1,speed),600000);let remaining=total;this.lastAdvanceAt=Date.now();
+    if(remaining<=0||(this.state.status!=='running'&&this.state.status!=='transition'&&this.state.status!=='recovering'))return 0;
+    this.quiet=true;
+    try{while(remaining>0&&(this.state.status==='running'||this.state.status==='transition'||this.state.status==='recovering')){const step=Math.min(100,remaining);this.tick(step);remaining-=step;}}finally{this.quiet=false;}
+    this.emit();return total-remaining;
+  }
   advance(ms:number,speed=1){
+    this.lastAdvanceAt=Date.now();
     if(!(speed>1)){this.tick(ms);return;}
     let remaining=Math.min(ms*speed,MAX_SIM_MS_PER_FRAME);
     this.quiet=true;
