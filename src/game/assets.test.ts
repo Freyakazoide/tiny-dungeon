@@ -1,43 +1,31 @@
 import { describe, expect, it } from 'vitest';
-import { CHARACTER_ANIMATION_FPS, CHARACTER_DIRECTIONS, CHARACTER_SPRITES, characterAnimationKey, characterFramePath, spriteFilePaths, spriteTexturesReady } from './assets';
-import { SPRITES } from './data/sprites';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { join } from 'node:path';
+import { CHARACTER_ANIMATION_FPS, CHARACTER_DIRECTIONS } from './assets';
 
-describe('sprites de personagens',()=>{
-  it('registra duas imagens por direção e mantém a velocidade configurável',()=>{
-    const necromancer=CHARACTER_SPRITES.necromancer!;
-    expect(CHARACTER_ANIMATION_FPS).toBe(6);
-    for(const direction of CHARACTER_DIRECTIONS){
-      expect(necromancer.frames[direction]).toHaveLength(2);
-      expect(necromancer.frames[direction][0]).toContain(`${direction}-1`);
-      expect(necromancer.frames[direction][1]).toContain(`${direction}-2`);
+const walk = (dir: string): string[] => readdirSync(dir).flatMap(f => { const p = join(dir, f); return statSync(p).isDirectory() ? walk(p) : [p]; });
+
+describe('arte em CSV (sem imagens no jogo)', () => {
+  it('constantes de animação continuam as mesmas', () => {
+    expect(CHARACTER_ANIMATION_FPS).toBe(6); expect(CHARACTER_DIRECTIONS).toEqual(['down', 'up', 'left', 'right']);
+  });
+  it('public/assets contém apenas ui/ e o repositório não referencia characters/, maps/ nem bg.png', () => {
+    expect(readdirSync('public/assets')).toEqual(['ui']);
+    expect(existsSync('public/assets/maps')).toBe(false); expect(existsSync('public/assets/characters')).toBe(false);
+    for (const file of walk('src').filter(f => /\.(ts|tsx|css)$/.test(f) && !/\.test\./.test(f))) {
+      const text = readFileSync(file, 'utf8');
+      expect(text, file).not.toMatch(/assets\/(characters|maps)\/|\bbg\.png|logo\.png|star\.png/);
     }
   });
-});
-
-describe('sprites escolhíveis (registro)',()=>{
-  it('cada SpriteDef gera 8 caminhos (4 direções × 2 quadros) e chaves de animação únicas',()=>{
-    expect(SPRITES.length).toBeGreaterThan(0);
-    const animationKeys=new Set<string>(),frameKeys=new Set<string>();
-    for(const sprite of SPRITES){
-      const paths=spriteFilePaths(sprite.id);
-      expect(paths).toHaveLength(8);expect(new Set(paths).size).toBe(8);
-      for(const path of paths)expect(path).toMatch(new RegExp(`^characters/${sprite.id}/(down|up|left|right)_[12]\.png$`));
-      const asset=CHARACTER_SPRITES[sprite.id];expect(asset).toMatchObject({scale:sprite.scale,origin:sprite.origin});
-      for(const direction of CHARACTER_DIRECTIONS){animationKeys.add(characterAnimationKey(sprite.id,direction));for(const key of asset.frames[direction])frameKeys.add(key);}
+  it('as cenas não carregam imagens de mapas, personagens ou monstros (load.image)', () => {
+    for (const file of walk('src/game/scenes').filter(f => f.endsWith('.ts') && !f.includes('.test.'))) expect(readFileSync(file, 'utf8'), file).not.toMatch(/load\.image|load\.setPath/);
+  });
+  it('documentos que estavam em public/assets/maps foram para docs/', () => {
+    expect(readdirSync('docs').filter(f => f.endsWith('.md')).length).toBeGreaterThanOrEqual(3);
+  });
+  it('nenhum arquivo importa SPRITES, characterFramePath, spriteId ou data/sprites', () => {
+    for (const file of walk('src').filter(f => /\.(ts|tsx)$/.test(f) && !/assets\.test|\.test\.|persistence\/validation/.test(f))) {
+      expect(readFileSync(file, 'utf8'), file).not.toMatch(/\bSPRITES\b|characterFramePath|spriteId\b|data\/sprites|SpritePicker|setSprite/);
     }
-    expect(animationKeys.size).toBe(SPRITES.length*4);expect(frameKeys.size).toBe(SPRITES.length*8);
-  });
-  it('a chave do registro é o id do sprite e não uma classe',()=>{
-    expect(Object.keys(CHARACTER_SPRITES)).toEqual(SPRITES.map(s=>s.id));
-    expect(CHARACTER_SPRITES.squire).toBeUndefined();expect(CHARACTER_SPRITES.necromancer).toBeDefined();
-    expect(characterFramePath('archer','left',2)).toBe('characters/archer/left_2.png');
-  });
-  it('PNG ausente: spriteTexturesReady é falso e o herói cai no bloco, sem exceção',()=>{
-    const asset=CHARACTER_SPRITES.necromancer;
-    const all=new Set(CHARACTER_DIRECTIONS.flatMap(d=>asset.frames[d]));
-    expect(spriteTexturesReady({exists:key=>all.has(key)},asset)).toBe(true);
-    all.delete(asset.frames.up[1]);
-    expect(spriteTexturesReady({exists:key=>all.has(key)},asset)).toBe(false);
-    expect(spriteTexturesReady({exists:()=>false},asset)).toBe(false);
   });
 });

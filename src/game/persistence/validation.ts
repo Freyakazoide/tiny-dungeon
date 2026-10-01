@@ -3,7 +3,7 @@ import { CLASSES, kitOfNode } from '../data/classes';
 import { ITEMS } from '../data/items';
 import { MONSTERS } from '../data/monsters';
 import { DEFAULT_HUNT, HUNT_BY_ID } from '../data/hunts';
-import { DEFAULT_SPRITE, defaultSpriteFor, isKnownSprite } from '../data/sprites';
+import { normalizeLook } from '../art/look';
 import { SPELLS } from '../data/spells';
 import { validTalentRanks } from '../systems/talentGrid';
 import { classItem, CLASSIFICATIONS, ITEM_CONFIG, type Classification } from '../data/classItems';
@@ -34,8 +34,8 @@ export function migrateGameState(value:unknown):unknown{
   }
   // Fase 4: o kit acompanha a classe (saves de teste evoluídos ainda estavam com o kit do Squire).
   for(const c of characters)if(record(c.profile)&&typeof c.profile.classId==='string'&&c.profile.classId in CLASS_BY_ID)c.classId=kitOfNode(c.profile.classId);
-  // Fase 5: sprite escolhível. Sem sprite = padrão pela posição; id desconhecido cai no bloco, sem invalidar o save.
-  characters.forEach((c,index)=>{if(c.spriteId===undefined)c.spriteId=defaultSpriteFor(index);else if(!isKnownSprite(c.spriteId))c.spriteId=DEFAULT_SPRITE;});
+  // Fase 13: aparência por cores. Sem `look` = padrão pela posição; ids de cor desconhecidos caem na primeira opção, sem invalidar o save; `spriteId` antigo é descartado.
+  characters.forEach((c,index)=>{delete c.spriteId;c.look=normalizeLook(record(c.look)?c.look as Partial<import('../art/look').Look>:undefined,index);});
   if(migrated.huntId===undefined)migrated.huntId=DEFAULT_HUNT;
   if(!record(migrated.huntStats))migrated.huntStats={};
   // Fase 5: offlineTarget (1 vaga) virou offlineTargets (2 vagas) + histórico.
@@ -107,7 +107,7 @@ export function validateGameState(value:unknown):value is GameState{
   if(!finite(value.wave)||Number(value.wave)<0||typeof value.huntId!=='string'||!HUNT_BY_ID[value.huntId]||Number(value.wave)>=HUNT_BY_ID[value.huntId].waves.length||!finite(value.cycle)||!finite(value.gold))return false;
   const characters=value.characters as unknown[];if(characters.length>5)return false;
   const ids=new Set<string>();
-  for(const raw of characters){if(!record(raw)||typeof raw.id!=='string'||typeof raw.name!=='string'||typeof raw.classId!=='string'||!(raw.classId in CLASSES)||!validProfile(raw.profile)||raw.classId!==kitOfNode((raw.profile as {classId:string}).classId)||(raw.row!=='front'&&raw.row!=='back')||typeof raw.isTank!=='boolean'||typeof raw.spriteId!=='string'||!record(raw.talentRanks)||!record(raw.equipment)||!Array.isArray(raw.spellSlots)||!record(raw.spellConditions)||!record(raw.cooldowns)||!Array.isArray(raw.effects)||!record(raw.helper))return false;if(ids.has(raw.id))return false;ids.add(raw.id);if((raw.spellSlots as unknown[]).some(id=>typeof id!=='string'||!SPELLS.some(s=>s.id===id)))return false;}
+  for(const raw of characters){if(!record(raw)||typeof raw.id!=='string'||typeof raw.name!=='string'||typeof raw.classId!=='string'||!(raw.classId in CLASSES)||!validProfile(raw.profile)||raw.classId!==kitOfNode((raw.profile as {classId:string}).classId)||(raw.row!=='front'&&raw.row!=='back')||typeof raw.isTank!=='boolean'||!record(raw.look)||!record(raw.talentRanks)||!record(raw.equipment)||!Array.isArray(raw.spellSlots)||!record(raw.spellConditions)||!record(raw.cooldowns)||!Array.isArray(raw.effects)||!record(raw.helper))return false;if(ids.has(raw.id))return false;ids.add(raw.id);if((raw.spellSlots as unknown[]).some(id=>typeof id!=='string'||!SPELLS.some(s=>s.id===id)))return false;}
   if((value.team as unknown[]).some(id=>typeof id!=='string'||!ids.has(id))||(value.team as unknown[]).length>4)return false;
   for(const raw of value.monsters as unknown[]){if(!record(raw)||typeof raw.uid!=='string'||typeof raw.defId!=='string'||!MONSTERS[raw.defId]||!finite(raw.hp)||!finite(raw.maxHp)||!finite(raw.cooldown)||typeof raw.alive!=='boolean')return false;}
   const inventory=value.inventory as Record<string,unknown>;if(!record(inventory.capacity))return false;

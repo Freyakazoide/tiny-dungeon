@@ -1,0 +1,5 @@
+id,tipo,largura,altura,celulas,monstro_id,hunt
+squire,personagem,24,32,1x1,,
+esqueleto,monstro,24,32,1x1,skeleton,catacumbas
+ghoul,monstro,24,32,1x1,ghoul,catacumbas
+rei_dos_ossos,monstro,40,51,2x2,bone_king,catacumbas

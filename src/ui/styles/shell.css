@@ -33,7 +33,7 @@ body { overflow: hidden; }
 /* Mapa: o Phaser dirige o tick do combate, então fica SEMPRE montado e visível; o modal só o cobre. */
 .arena { grid-row: 2; grid-column: 2; position: relative; overflow: hidden; background: radial-gradient(ellipse at 50% 45%, #2a2418 0, #15110b 60%, #0a0805 100%); }
 .stage #game-container { position: absolute; inset: 0; width: auto; height: auto; aspect-ratio: auto; max-height: none; background: transparent; overflow: hidden; }
-.stage #game-container canvas { display: block; }
+.stage #game-container canvas { display: block; image-rendering: pixelated; }
 .session { position: absolute; top: 14px; right: 14px; z-index: 5; width: 190px; background: rgba(9, 13, 19, .86); border: 1px solid var(--edge); padding: 9px 11px; font-size: 12px; }
 .session h4 { margin: 0; font: 11px Inter, sans-serif; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); display: flex; justify-content: space-between; cursor: pointer; background: none; border: 0; padding: 0; width: 100%; }
 .session .r { display: flex; justify-content: space-between; padding: 2px 0; } .session .r:first-of-type { margin-top: 6px; } .session b { color: #fff; font-variant-numeric: tabular-nums; }

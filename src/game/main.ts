@@ -13,7 +13,8 @@ const config: Phaser.Types.Core.GameConfig = {
     height: 640,
     parent: 'game-container',
     backgroundColor: '#14110c',
-    // A arena de 900×500 não muda: só a escala. O mapa ocupa toda a área livre (FIT + centralizado; a sobra é o fundo do contêiner).
+    // Arte em pixels: sem suavização. O mapa inteiro é o canvas (32×20 tiles ×2).
+    render: { pixelArt: true, antialias: false },
     scale: { mode: Scale.FIT, autoCenter: Scale.CENTER_BOTH, width: 1024, height: 640 },
     scene: [
         Boot,

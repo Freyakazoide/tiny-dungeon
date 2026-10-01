@@ -6,14 +6,14 @@ import { CLASSES } from '../../game/data/classes';
 import { classItem } from '../../game/data/classItems';
 import { itemById } from '../../game/data/items';
 import { STARTER_ELEMENTS, STARTER_WEAPONS } from '../../game/data/starter';
-import { DEFAULT_SPRITE } from '../../game/data/sprites';
+import { defaultLookFor, type Look } from '../../game/art/look';
 import { PROFICIENCIES } from '../../game/rpg/proficiencies';
 import { characterStats, classLabel, xpForLevel } from '../../game/systems/progression';
 import { Avatar } from '../components/Avatar';
 import { Icon } from '../components/Icon';
 import { colorHex } from '../format';
 import { profIcon } from '../RpgPanels';
-import { SpritePicker } from '../SpritePicker';
+import { AppearancePicker } from '../AppearancePicker';
 import { ConfirmDialog } from '../classes/parts';
 
 const bar = (tone: string, value: number, max: number) => <div className={`pk-bar thin ${tone}`}><i style={{ width: `${Math.max(0, Math.min(100, max ? value / max * 100 : 0))}%` }} /></div>;
@@ -52,7 +52,7 @@ function RosterCard({ character, state, onDismiss }: { character: Character; sta
 const WEAPON_NOTE = { melee: 'Melee · frente', ranged: 'Ranged · trás' } as const;
 
 function RecruitPanel({ state }: { state: GameState }) {
-  const [name, setName] = useState(''), [weaponId, setWeaponId] = useState<string>(STARTER_WEAPONS[0].id), [element, setElement] = useState(STARTER_ELEMENTS[0]), [sprite, setSprite] = useState<string>(DEFAULT_SPRITE);
+  const [name, setName] = useState(''), [weaponId, setWeaponId] = useState<string>(STARTER_WEAPONS[0].id), [element, setElement] = useState(STARTER_ELEMENTS[0]), [look, setLook] = useState<Look>(() => defaultLookFor(state.characters.length));
   const clean = name.trim(), full = state.characters.length >= ROSTER_LIMIT, dup = state.characters.some(c => c.name.toLowerCase() === clean.toLowerCase());
   const reason = full ? `Elenco cheio (${ROSTER_LIMIT}/${ROSTER_LIMIT}).` : !clean ? 'Escolha um nome.' : dup ? 'Já existe um personagem com esse nome.' : undefined;
   return <aside className="pk-panel gp-recruit" aria-label="Recrutar"><h4 className="pk-sec">Recrutar Squire <small>{state.characters.length}/{ROSTER_LIMIT}</small></h4>
@@ -60,10 +60,10 @@ function RecruitPanel({ state }: { state: GameState }) {
     <div className="gp-field">Arma inicial<div className="gp-weapons">{STARTER_WEAPONS.map(w => { const item = itemById(w.id); return <button type="button" key={w.id} className={`pk-btn gp-weapon ${weaponId === w.id ? 'on' : ''}`} aria-pressed={weaponId === w.id} onClick={() => setWeaponId(w.id)}>
       <span className="b"><Icon name={w.trains === 'ranged' ? 'prof_ranged' : 'slot_weapon'} size={24} /></span><span><b>{item?.name ?? w.id}</b><br />{WEAPON_NOTE[w.trains]}</span></button>; })}</div></div>
     <div className="gp-field">Elemento inicial<div className="gp-elems">{STARTER_ELEMENTS.map(el => <button type="button" key={el} className={`pk-btn gp-elem ${element === el ? 'on' : ''}`} aria-pressed={element === el} aria-label={PROFICIENCIES[el].name} title={PROFICIENCIES[el].name} onClick={() => setElement(el)}><Icon name={`elem_${el}`} size={24} /></button>)}</div></div>
-    <div className="gp-field">Sprite<SpritePicker value={sprite} onChange={setSprite} label="Sprite do novo Squire" /></div>
+    <div className="gp-field">Aparência<AppearancePicker value={look} onChange={setLook} restore={defaultLookFor(state.characters.length)} label="Aparência do novo Squire" /></div>
     <p className="muted pk-tiny">Começa no nível 1 como Squire e entra como reserva.</p>
     {reason && <div className="gp-warnline">⚠ {reason}</div>}
-    <button type="button" className="pk-btn primary" disabled={!!reason} onClick={() => { if (gameStore.recruit({ name: clean, weaponId, element, spriteId: sprite })) setName(''); }}>Recrutar Squire</button>
+    <button type="button" className="pk-btn primary" disabled={!!reason} onClick={() => { if (gameStore.recruit({ name: clean, weaponId, element, look })) setName(''); }}>Recrutar Squire</button>
   </aside>;
 }
 

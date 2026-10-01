@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, createEvent, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, createEvent, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -145,10 +145,10 @@ describe('Fase 12 — Hunts', () => {
     expect(gameStore.getSnapshot().huntId).toBe('templo_profano');
   });
 
-  it('detalhe da Catacumbas mostra Horda e Invasão em 0%; mapa sem imagem não quebra', async () => {
+  it('detalhe da Catacumbas mostra Horda e Invasão em 0%; os mapas vêm de data URL (sem arquivos de imagem)', async () => {
     open('hunts');
-    expect(screen.getByRole('img', { name: /Reforço leve .*Horda 0%.*Invasão 0%/ })).toBeTruthy();
-    for (const img of Array.from(document.querySelectorAll('img.hn-thumb'))) act(() => { fireEvent.error(img); });
-    expect(document.querySelectorAll('.hn-thumb.ph').length).toBeGreaterThan(0);
+    expect(document.querySelector('.hn-tiers')?.getAttribute('aria-label')).toMatch(/Reforço leve .*Horda 0%.*Invasão 0%/);
+    const thumbs = Array.from(document.querySelectorAll('img.hn-thumb')); expect(thumbs).toHaveLength(HUNTS.length);
+    for (const img of thumbs) expect(img.getAttribute('src')!.startsWith('data:image/png')).toBe(true);
   });
 });

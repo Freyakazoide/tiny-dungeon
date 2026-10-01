@@ -1,4 +1,5 @@
 import type { CharacterRow } from '../core/types';
+import type { Look } from '../art/look';
 import { PROFICIENCIES, PROFICIENCY_IDS, type ProficiencyId } from '../rpg/proficiencies';
 
 export interface StarterWeapon { id: string; trains: 'melee' | 'ranged'; row: CharacterRow; note: string; }
@@ -16,4 +17,4 @@ export const STARTER_OFFHAND = 'wooden_shield';
 export const defaultRow = (weaponId: string | undefined, trains?: 'melee' | 'ranged'): CharacterRow =>
   STARTER_WEAPONS.find(w => w.id === weaponId)?.row ?? (trains === 'ranged' ? 'back' : 'front');
 
-export interface CharacterSpec { name: string; weaponId: string; row?: CharacterRow; element?: ProficiencyId; spriteId?: string; }
+export interface CharacterSpec { name: string; weaponId: string; row?: CharacterRow; element?: ProficiencyId; look?: Partial<Look>; }

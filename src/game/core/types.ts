@@ -13,13 +13,14 @@ export interface SpellCondition { hpBelow?: number; minEnemies?: number; allyInj
 export interface HelperConfig { hpPotionAt: number; manaPotionAt: number; healAllies: boolean; autoSupplies: boolean; defensiveAmuletAt: number; emergencyAt: number; outOfSupplies: 'continue' | 'end'; }
 /** Um exemplar de equipamento de classe: o item base (catálogo Fase 7) + a classificação e os atributos aleatórios sorteados. */
 export interface ItemInstance { uid: string; baseId: string; classification: Classification; attrs: { code: string; level: number }[]; /** recém-obtido: limpo ao selecionar na mochila */ fresh?: true; }
+import type { Look } from '../art/look';
 export interface FormationPreset { name: string; team: string[]; rows: Record<string, CharacterRow>; tank?: string }
 export interface Character {
   id: string; name: string; classId: ClassId; profile: ProgressProfile;
   /** Linha de combate e tanque (no máximo um por grupo): definem a posição no mapa e quem apanha. */
   row: CharacterRow; isTank: boolean;
-  /** Sprite cosmético escolhido ('block' = bloco colorido da classe); a evolução de classe nunca o muda. */
-  spriteId: string;
+  /** Aparência (cores de pele, cabelo e armadura sobre o corpo `squire`); a evolução de classe nunca a muda. */
+  look: Look;
   hp: number; mana: number; equipment: Partial<Record<Slot, string>>;
   /** Equipamento de classe (Fase 7) por slot. Um slot tem um item antigo (`equipment`) ou um deste, nunca os dois. */
   gear: Partial<Record<Slot, ItemInstance>>;

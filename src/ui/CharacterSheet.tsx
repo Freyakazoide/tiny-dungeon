@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import type { Character, GameState, Stats } from '../game/core/types';
 import { gameStore } from '../game/core/GameStore';
 import { NAME_LIMIT } from '../game/core/GameEngine';
-import { CLASSES } from '../game/data/classes';
 import { CLASS_BY_ID, COUNTER_TARGETS } from '../game/rpg/classTree';
 import { NODE_PASSIVES } from '../game/rpg/passives';
 import { COUNTER_IDS } from '../game/rpg/profile';
@@ -12,11 +11,12 @@ import { analyzerMetrics } from '../game/systems/analyzer';
 import { COUNTER_NAMES } from '../game/systems/guide';
 import { characterStats, classLabel, statBreakdown, xpForLevel, type StatPart } from '../game/systems/progression';
 import { talentPointsAvailable } from '../game/systems/talentGrid';
-import { colorHex, compact, pct } from './format';
+import { compact, pct } from './format';
 import { Icon } from './components/Icon';
 import { Avatar } from './components/Avatar';
 import { nextGates, profIcon } from './RpgPanels';
-import { SpritePicker } from './SpritePicker';
+import { AppearancePicker } from './AppearancePicker';
+import type { Look } from '../game/art/look';
 
 const ATTRS: { key: keyof Stats; label: string; icon: string }[] = [
   { key: 'attack', label: 'Ataque', icon: 'stat_attack' }, { key: 'defense', label: 'Defesa', icon: 'stat_defense' },
@@ -42,8 +42,9 @@ function Attr({ c, state, def }: { c: Character; state: GameState; def: (typeof 
 /** Aba Ficha (Fase 9): retrato, vitais, atributos com composição, caminho de classe, próxima meta, passivas e contadores. */
 export function CharacterSheet({ state, character }: { state: GameState; character: Character }) {
   const { profile } = character, stats = characterStats(character, state), needed = xpForLevel(profile.level);
-  const [name, setName] = useState(character.name), [editing, setEditing] = useState(false);
+  const [name, setName] = useState(character.name), [editing, setEditing] = useState(false), [draftLook, setDraftLook] = useState<Look | null>(null);
   useEffect(() => setName(character.name), [character.id, character.name]);
+  useEffect(() => setDraftLook(null), [character.id]);
   const metrics = analyzerMetrics(state.analyzer), perSecond = metrics.xpPerHour / 3600;
   const xpEta = perSecond > 0 ? formatEta((needed - profile.xp) / perSecond) : null;
   const gates = nextGates(character), skills = Object.entries(gates.skills) as [keyof typeof PROFICIENCIES, { need: number; tier: number }][];
@@ -64,12 +65,15 @@ export function CharacterSheet({ state, character }: { state: GameState; charact
         <div className="pk-bar xp" style={{ width: '100%' }} role="progressbar" aria-label="Experiência" aria-valuenow={Math.round(pct(profile.xp, needed))} aria-valuemin={0} aria-valuemax={100}><i style={{ width: `${pct(profile.xp, needed)}%` }} /><span className="t">{compact(profile.xp)} / {compact(needed)} XP</span></div>
         <small className="muted">{xpEta ? `faltam ~${xpEta} para o nível ${profile.level + 1}` : `faltam ${compact(Math.ceil(needed - profile.xp))} XP`}</small>
         <div className="pk-row">
-          <button type="button" className="pk-btn sm" aria-expanded={editing} onClick={() => setEditing(!editing)}>✎ Renomear / Sprite</button>
+          <button type="button" className="pk-btn sm" aria-expanded={editing} onClick={() => setEditing(!editing)}>✎ Renomear / Aparência</button>
         </div>
         {editing && <div className="ch-edit">
           <div className="pk-row"><input aria-label="Nome do personagem" value={name} maxLength={NAME_LIMIT} onChange={event => setName(event.target.value)} />
             <button type="button" className="pk-btn sm" onClick={() => gameStore.rename(character.id, name)}>Renomear</button></div>
-          <div className="creation-sprite"><span>Sprite</span><SpritePicker value={character.spriteId} color={colorHex(CLASSES[character.classId].color)} onChange={id => gameStore.setSprite(character.id, id)} label={`Sprite de ${character.name}`} /></div>
+          <div className="creation-sprite"><span>Aparência</span>
+            <AppearancePicker value={draftLook ?? character.look} restore={character.look} onChange={setDraftLook} label={`Aparência de ${character.name}`} />
+            <div className="pk-row"><button type="button" className="pk-btn sm primary" disabled={!draftLook} onClick={() => { if (draftLook && gameStore.setLook(character.id, draftLook)) setDraftLook(null); }}>Aplicar</button>
+              <button type="button" className="pk-btn sm" onClick={() => { setDraftLook(null); setEditing(false); }}>Cancelar</button></div></div>
         </div>}
       </div>
       <div className="ch-vitals pk-panel">

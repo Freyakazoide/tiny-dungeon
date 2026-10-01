@@ -5,7 +5,7 @@ import { EARLY_EXTRAS, type ExtraRow } from './balance';
 export interface HuntDef {
   id: string;
   name: string;
-  /** Arquivo em public/assets/maps/<map>.png (sem extensão). Ausente: o jogo gera um placeholder. */
+  /** Nome do mapa em `arte/mapas/<map>.csv`; sem arquivo próprio, usa a sala das Catacumbas recolorida (`arte/tilesets.csv`). */
   map: string;
   /** Nível mínimo sugerido (só para aviso: qualquer hunt pode ser escolhida). */
   minLevel: number;

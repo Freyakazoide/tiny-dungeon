@@ -8,6 +8,7 @@ import { runtime } from '../game/rpg/runtime';
 import { elementCoverage } from '../game/systems/group';
 import { huntGearStatus, huntMetrics, huntRiskInfo, offlineHuntId, recommendedHunt, tierChances, waveViews } from '../game/systems/huntInfo';
 import { TIER_NAMES, tierOfExtra } from '../game/systems/waves';
+import { mapDataUrl } from '../game/art/render';
 import { duration } from './format';
 import { colorHex, compact } from './format';
 import { Icon } from './components/Icon';
@@ -18,11 +19,9 @@ type Action = 'select' | 'selectStart' | 'queue' | 'endSwap';
 const SORTS: [Sort, string][] = [['level', 'Nível'], ['xp', 'XP/h'], ['gold', 'Ouro/h']];
 const TIER_COLORS = ['#6a727d', '#71cf8c', '#e0a05c', '#e5593a', '#bd83ec'];
 
-/** Mapa da hunt; sem arquivo (ou erro de carga) vira o placeholder de cor. */
-function Map({ hunt, className, children }: { hunt: HuntDef; className: string; children?: React.ReactNode }) {
-  const [broken, setBroken] = useState(false);
-  return broken ? <div className={className + ' ph'} style={{ '--hc': colorHex(hunt.color), background: colorHex(hunt.color) } as CSSProperties} aria-hidden="true">{children}</div>
-    : <img className={className} src={`assets/maps/${hunt.map}.png`} alt="" onError={() => setBroken(true)} />;
+/** Mapa da hunt desenhado a partir de `arte/` (CSV): a miniatura é o mapa inteiro. */
+function Map({ hunt, className }: { hunt: HuntDef; className: string; children?: React.ReactNode }) {
+  return <img className={className} style={{ imageRendering: 'pixelated', objectFit: 'cover' }} src={mapDataUrl(hunt.id, hunt.color)} alt="" />;
 }
 const riskClass = (label: string) => `hn-r-${label.toLowerCase()}`;
 const hours = (ms: number) => ms >= 3_600_000 ? `${(ms / 3_600_000).toFixed(1).replace('.', ',')} h` : duration(ms / 1000);

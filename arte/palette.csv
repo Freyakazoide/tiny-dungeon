@@ -1,0 +1,39 @@
+chave,cor,nome
+.,transparente,vazio
+k,#0a0c10,contorno e olhos
+p,#e0ac81,pele (regiao pele)
+P,#b8845e,pele sombra (regiao pele)
+a,#5a3a22,cabelo (regiao cabelo)
+A,#3a2414,cabelo sombra (regiao cabelo)
+b,#4c82d3,armadura (regiao armadura)
+B,#86b6f4,armadura clara (regiao armadura)
+c,#28497f,armadura escura (regiao armadura)
+t,#a7b2c0,aco
+T,#eef2f6,aco claro
+u,#637080,aco escuro
+o,#d9ad3e,ouro
+O,#8c6a25,ouro escuro
+m,#8d5c38,madeira
+M,#52331f,madeira escura
+v,#5a4636,couro
+V,#7a604a,couro claro
+w,#eef0ea,osso claro
+g,#b9bdb2,osso
+d,#7a7f78,osso escuro
+e,#ff5a4a,brilho do olho
+r,#c8453f,vermelho
+x,#782824,vermelho escuro
+y,#f7dc45,amarelo
+l,#8a9a6a,pele de ghoul
+L,#aebb8c,pele de ghoul clara
+q,#5a6a46,pele de ghoul escura
+z,#cfd6a0,garra
+1,#5b5f68,pedra
+2,#6c717b,pedra clara
+3,#494d56,pedra escura
+4,#3a3d45,pedra sombra
+5,#7a5a47,tijolo
+6,#8f6c55,tijolo claro
+7,#5a4034,tijolo escuro
+8,#2c2a2e,argamassa
+9,#222026,fresta

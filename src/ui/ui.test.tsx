@@ -59,7 +59,7 @@ describe('Fase 8 — trilho e modais', () => {
   it('atalhos (C, I, K…) abrem e fecham os modais e NÃO disparam dentro de input/select/textarea', async () => {
     render(<App />); const user = userEvent.setup();
     await user.keyboard('c'); expect(screen.getByRole('dialog', { name: 'Personagem' })).toBeTruthy();
-    await user.click(screen.getByRole('button', { name: /Renomear \/ Sprite/ }));
+    await user.click(screen.getByRole('button', { name: /Renomear \/ Aparência/ }));
     const input = screen.getByLabelText('Nome do personagem');
     await user.click(input); await user.keyboard('ik');                       // digitando: nada de trocar de menu
     expect(screen.getByRole('dialog', { name: 'Personagem' })).toBeTruthy();

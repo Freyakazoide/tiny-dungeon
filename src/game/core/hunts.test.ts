@@ -19,7 +19,7 @@ describe('Bloco 2 — hunts', () => {
       expect(MONSTERS[hunt.waves[2].monsters[0]].boss).toBe(true);
       expect(hunt.waves[0].monsters).toHaveLength(hunt.id === 'catacumbas' ? 3 : 4);
     }
-    expect(Object.keys(import.meta.glob('/public/assets/maps/*.png')).some(path => path.endsWith('/catacumbas.png'))).toBe(true);
+    expect(Object.keys(import.meta.glob('/arte/mapas/*.csv')).some(path => path.endsWith('/catacumbas.csv'))).toBe(true);
   });
   it('as hunts novas seguem A A A A · A A B B · Boss A A e os números do plano', () => {
     const w = huntWaves('floresta_sombria');

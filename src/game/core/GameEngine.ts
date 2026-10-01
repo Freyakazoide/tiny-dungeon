@@ -1,6 +1,6 @@
 import { CLASSES, kitOfNode, kitsOfPath } from '../data/classes';
 import { MONSTERS } from '../data/monsters';
-import { DEFAULT_SPRITE, defaultSpriteFor, isKnownSprite } from '../data/sprites';
+import { defaultLookFor, isValidLook, normalizeLook, type Look } from '../art/look';
 import { DEFAULT_HUNT, HUNT_BY_ID, HUNTS, huntScale, huntWaves } from '../data/hunts';
 import { WAVE_CONFIG } from '../data/balance';
 import { batchToSpawn, composeExtras, drawFromBag, extrasTableFor, limitExtra, newBag, rollExtra, splitBatches, tierOfExtra, TIER_NAMES, waveRewards } from '../systems/waves';
@@ -40,20 +40,20 @@ const defaultCondition=(s:NonNullable<ReturnType<typeof spellById>>):SpellCondit
 export const SPELL_SLOTS=4;
 export const MAX_SIM_MS_PER_FRAME=3000;
 let idCounter=0;
-export function createCharacter(classId:ClassId,name=CLASSES[classId].name,kit?:{weaponId?:string;row?:CharacterRow;element?:ProficiencyId;spriteId?:string}):Character{
+export function createCharacter(classId:ClassId,name=CLASSES[classId].name,kit?:{weaponId?:string;row?:CharacterRow;element?:ProficiencyId;look?:Partial<Look>;lookIndex?:number}):Character{
   const base=CLASSES[classId].base;
   const slots=SPELLS.filter(s=>s.classId===classId&&!s.universal&&!s.node).slice(0,4).map(s=>s.id);
   const spellConditions:Record<string,SpellCondition>={};
   if(kit?.element){slots[0]=`basic_${kit.element}`;}
   for(const id of slots)spellConditions[id]=defaultCondition(spellById(id)!);
-  return {id:`hero-${Date.now()}-${idCounter++}`,name,classId,profile:createProfile(),hp:base.maxHp,mana:base.maxMana,equipment:classId==='squire'?{weapon:kit?.weaponId??'rusty_sword',offhand:STARTER_OFFHAND}:{},gear:{},row:kit?.row??defaultRow(kit?.weaponId??(classId==='squire'?'rusty_sword':undefined),itemById(kit?.weaponId??'')?.trains),isTank:false,spriteId:isKnownSprite(kit?.spriteId)?kit!.spriteId!:DEFAULT_SPRITE,spellSlots:slots,spellConditions,talentRanks:{[rootIdOf('aprendiz')]:1},cooldowns:{basic:0},effects:[],helper:helper()};
+  return {id:`hero-${Date.now()}-${idCounter++}`,name,classId,profile:createProfile(),hp:base.maxHp,mana:base.maxMana,equipment:classId==='squire'?{weapon:kit?.weaponId??'rusty_sword',offhand:STARTER_OFFHAND}:{},gear:{},row:kit?.row??defaultRow(kit?.weaponId??(classId==='squire'?'rusty_sword':undefined),itemById(kit?.weaponId??'')?.trains),isTank:false,look:normalizeLook(kit?.look,kit?.lookIndex??0),spellSlots:slots,spellConditions,talentRanks:{[rootIdOf('aprendiz')]:1},cooldowns:{basic:0},effects:[],helper:helper()};
 }
 /** Estado inicial: sem personagens. A tela de criação monta o grupo de 3 Squires. */
 export function initialState():GameState{
   return {version:1,status:'idle',autoAdvance:true,huntId:DEFAULT_HUNT,huntStats:{},wave:0,cycle:0,transitionMs:0,characters:[],team:[],monsters:[],gearBag:[],inventory:{bp:[],loot:[],supply:[{itemId:'health_potion',quantity:8},{itemId:'mana_potion',quantity:8}],capacity:{bp:40,loot:60,supply:200}},gold:0,charmPoints:0,charmSlots:1,equippedCharms:[],unlockedCharms:[],codex:{},analyzer:createAnalyzer(),history:[],message:'Crie seus 3 personagens para começar.',lastSavedAt:Date.now()};
 }
 export const PARTY_SIZE=3,ROSTER_LIMIT=5,NAME_LIMIT=18;
-export interface RecruitSpec{name:string;weaponId?:string;element?:ProficiencyId;spriteId?:string;row?:CharacterRow}
+export interface RecruitSpec{name:string;weaponId?:string;element?:ProficiencyId;look?:Partial<Look>;row?:CharacterRow}
 export class GameEngine {
   private state:GameState; private listeners=new Set<()=>void>(); private fxListeners=new Set<(fx:GameFx)=>void>(); private pausedFrom:GameState['status']='running';
   constructor(state=initialState()){this.state=state;}
@@ -241,9 +241,9 @@ export class GameEngine {
   createParty(specs:CharacterSpec[]){
     if(this.state.characters.length||!Array.isArray(specs)||specs.length!==PARTY_SIZE)return false;
     const clean=specs.map(spec=>({...spec,name:(spec.name??'').trim().slice(0,NAME_LIMIT)}));
-    if(clean.some(spec=>!spec.name||!STARTER_WEAPONS.some(w=>w.id===spec.weaponId)||(spec.row!==undefined&&spec.row!=='front'&&spec.row!=='back')||!spec.element||!STARTER_ELEMENTS.includes(spec.element)||(spec.spriteId!==undefined&&!isKnownSprite(spec.spriteId))))return false;
+    if(clean.some(spec=>!spec.name||!STARTER_WEAPONS.some(w=>w.id===spec.weaponId)||(spec.row!==undefined&&spec.row!=='front'&&spec.row!=='back')||!spec.element||!STARTER_ELEMENTS.includes(spec.element)||(spec.look!==undefined&&!isValidLook(spec.look))))return false;
     if(new Set(clean.map(spec=>spec.name.toLowerCase())).size!==clean.length)return false;
-    const party=clean.map((spec,index)=>createCharacter('squire',spec.name,{weaponId:spec.weaponId,row:spec.row,element:spec.element,spriteId:spec.spriteId??defaultSpriteFor(index)}));
+    const party=clean.map((spec,index)=>createCharacter('squire',spec.name,{weaponId:spec.weaponId,row:spec.row,element:spec.element,look:spec.look,lookIndex:index}));
     for(const c of party){const element=clean[party.indexOf(c)].element!;c.profile.offlineTargets=[element,null];c.profile.offlineHistory=[element];}
     const tank=party.find(c=>c.row==='front');if(tank)tank.isTank=true;
     this.state.characters=party;this.state.team=party.map(c=>c.id);this.state.message='Grupo criado. Inicie a hunt quando estiver pronto.';this.emit();return true;
@@ -272,9 +272,9 @@ export class GameEngine {
     const spec:RecruitSpec=typeof input==='string'?{name:input}:input;
     const clean=(spec.name??'').trim().slice(0,NAME_LIMIT);
     if(!clean||this.state.characters.length>=ROSTER_LIMIT||this.state.characters.some(c=>c.name.toLowerCase()===clean.toLowerCase()))return false;
-    if(typeof input==='string'){this.state.characters.push(createCharacter('squire',clean,{spriteId:defaultSpriteFor(this.state.characters.length)}));this.emit();return true;}
-    if(!STARTER_WEAPONS.some(w=>w.id===spec.weaponId)||!spec.element||!STARTER_ELEMENTS.includes(spec.element)||(spec.row!==undefined&&spec.row!=='front'&&spec.row!=='back')||(spec.spriteId!==undefined&&!isKnownSprite(spec.spriteId)))return false;
-    const c=createCharacter('squire',clean,{weaponId:spec.weaponId,row:spec.row,element:spec.element,spriteId:spec.spriteId??defaultSpriteFor(this.state.characters.length)});
+    if(typeof input==='string'){this.state.characters.push(createCharacter('squire',clean,{look:defaultLookFor(this.state.characters.length)}));this.emit();return true;}
+    if(!STARTER_WEAPONS.some(w=>w.id===spec.weaponId)||!spec.element||!STARTER_ELEMENTS.includes(spec.element)||(spec.row!==undefined&&spec.row!=='front'&&spec.row!=='back')||(spec.look!==undefined&&!isValidLook(spec.look)))return false;
+    const c=createCharacter('squire',clean,{weaponId:spec.weaponId,row:spec.row,element:spec.element,look:spec.look,lookIndex:this.state.characters.length});
     c.profile.offlineTargets=[spec.element,null];c.profile.offlineHistory=[spec.element];
     this.state.characters.push(c);this.state.message=`${clean} foi recrutado.`;this.emit();return true;
   }
@@ -346,7 +346,7 @@ export class GameEngine {
   }
   selectAndStart(id:string){if(!this.selectHunt(id))return false;this.start();return true;}
   /** Troca o sprite (cosmético: livre e gratuito). Aceita 'block' ou um id do registro; a evolução de classe não o altera. */
-  setSprite(id:string,spriteId:string){const c=this.state.characters.find(x=>x.id===id);if(!c||!isKnownSprite(spriteId))return false;c.spriteId=spriteId;this.emit();return true;}
+  setLook(id:string,look:Partial<Look>){const c=this.state.characters.find(x=>x.id===id);if(!c||!isValidLook(look))return false;c.look=normalizeLook({...c.look,...look});this.emit();return true;}
   /** Define uma das 2 vagas de treino offline (null/undefined limpa a vaga) e a empurra para o histórico. */
   setOfflineTarget(id:string,slot:0|1,target:ProficiencyId|null|undefined){
     const c=this.state.characters.find(x=>x.id===id);

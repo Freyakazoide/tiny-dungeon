@@ -1,0 +1,17 @@
+/* Aparência do personagem (Fase 13): carrosséis de cor e prévia pixelada. */
+.ap{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.ap-preview{display:flex;gap:6px;padding:8px;background:radial-gradient(ellipse at 50% 90%,#3b3020,#14110b 70%);border:2px solid var(--outline);box-shadow:inset 0 0 0 1px #3a4350}
+.ap-frame{height:96px;width:auto;image-rendering:pixelated}
+.ap-controls{display:grid;gap:6px;min-width:260px}
+.ap-carousel{position:relative;display:grid;grid-template-columns:70px auto 30px minmax(0,1fr) auto auto;gap:6px;align-items:center}
+.ap-carousel:focus-visible{outline:2px solid var(--gold-2);outline-offset:2px}
+.ap-label{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.ap-swatch{width:30px;height:30px;display:block;border:2px solid #000}
+.ap-name b{display:block;font-size:13px}.ap-name small{color:var(--muted);font-size:10px}
+.ap-live{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.ap-grid{display:flex;flex-wrap:wrap;gap:4px;right:0;top:100%;width:230px;max-height:160px;overflow:auto}
+.ap-chip{width:26px;height:26px;padding:0;border:2px solid #000}
+.ap-chip.on{box-shadow:0 0 0 2px var(--gold-2)}
+.av-img{image-rendering:pixelated;display:block}
+.who .av img,.gp-av img{width:auto!important;height:32px!important}
+.who .av img{height:26px!important}

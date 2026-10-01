@@ -4,8 +4,8 @@ import { EventBus } from '../EventBus';
 
 export class MainMenu extends Scene
 {
-    background: GameObjects.Image;
-    logo: GameObjects.Image;
+    background: GameObjects.Rectangle;
+    logo: GameObjects.Text;
     title: GameObjects.Text;
     logoTween: Phaser.Tweens.Tween | null;
 
@@ -16,9 +16,9 @@ export class MainMenu extends Scene
 
     create ()
     {
-        this.background = this.add.image(512, 384, 'background');
+        this.background = this.add.rectangle(512, 320, 1024, 640, 0x14110c);
 
-        this.logo = this.add.image(512, 300, 'logo').setDepth(100);
+        this.logo = this.add.text(512, 300, 'TINY DUNGEON', { fontFamily: 'Georgia', fontSize: 56, color: '#f0d79a', stroke: '#0b0c0f', strokeThickness: 8 }).setOrigin(0.5).setDepth(100);
 
         this.title = this.add.text(512, 460, 'Main Menu', {
             fontFamily: 'Arial Black', fontSize: 38, color: '#ffffff',
