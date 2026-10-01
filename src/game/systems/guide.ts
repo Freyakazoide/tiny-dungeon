@@ -1,11 +1,17 @@
-import type { Character } from '../core/types';
-import { CLASS_BY_ID, CLASS_NODES, childrenOf, type ClassNode } from '../rpg/classTree';
+import type { Character, GameState, Stats } from '../core/types';
+import { CLASS_BY_ID, CLASS_NODES, childrenOf, isPlayable, type ClassNode } from '../rpg/classTree';
+import { kitOfNode } from '../data/classes';
+import { SPELLS } from '../data/spells';
+import { TALENT_TREES } from '../data/talentTrees';
+import { AFFINITY } from '../rpg/affinity';
+import { NODE_PASSIVES } from '../rpg/passives';
 import { TRIES_PER_SECOND, etaSeconds } from '../rpg/curves';
 import { evolutionOptions } from '../rpg/evolution';
 import { PROFICIENCIES, PROFICIENCY_IDS, type ProficiencyId } from '../rpg/proficiencies';
 import { COUNTER_IDS, type CounterId } from '../rpg/profile';
 import { runtime } from '../rpg/runtime';
-import { trainingNow, trainMultiplier } from './progression';
+import { characterStats, spellAvailable, trainingNow, trainMultiplier } from './progression';
+import { talentPointsAvailable } from './talentGrid';
 
 export const COUNTER_NAMES: Record<CounterId, string> = {
   crits: 'Críticos', bossCrits: 'Críticos em chefes', damageTaken: 'Dano sofrido', healingDone: 'Cura total',
@@ -74,3 +80,69 @@ export function treeSplit(character: Character) {
 
 export const pathNames = (character: Character) => character.profile.classPath.map(id => CLASS_BY_ID[id].name);
 export { COUNTER_IDS };
+
+/** Progresso rumo a um nó: o pior requisito (gargalo), nunca a média. Contador não contabilizado conta 0 e nunca vira "pronta". */
+export interface ClassProgress { ratio: number; ready: boolean; bottleneck?: string; untracked: boolean }
+export function classProgress(character: Character, node: ClassNode): ClassProgress {
+  let ratio = 1, bottleneck: string | undefined, untracked = false;
+  for (const row of requirementRows(character, node)) {
+    const r = row.untracked || row.have === null ? 0 : Math.min(1, row.need > 0 ? row.have / row.need : 1);
+    if (row.untracked) untracked = true;
+    if (r < ratio || (r === ratio && r < 1 && !bottleneck)) { ratio = r; bottleneck = row.label; }
+  }
+  return { ratio, ready: ratio >= 1 && !untracked, bottleneck: ratio < 1 ? bottleneck : undefined, untracked };
+}
+
+export type Step = ReturnType<typeof nextSteps>[number] & { progress: ClassProgress; playable: boolean };
+export interface ClassGroups { ready: Step[]; progress: Step[]; readySoon: Step[]; soon: Step[] }
+/** Divide os próximos passos em prontas (jogáveis), em progresso, prontas sem kit e em breve. */
+export function groupClasses(character: Character): ClassGroups {
+  const steps: Step[] = nextSteps(character).map(step => ({ ...step, progress: classProgress(character, step.node), playable: isPlayable(step.node.id) }));
+  const byRatio = (a: Step, b: Step) => b.progress.ratio - a.progress.ratio || a.node.name.localeCompare(b.node.name);
+  return {
+    ready: steps.filter(s => s.playable && s.progress.ready).sort(byRatio),
+    progress: steps.filter(s => s.playable && !s.progress.ready).sort(byRatio),
+    readySoon: steps.filter(s => !s.playable && s.progress.ready).sort(byRatio),
+    soon: steps.filter(s => !s.playable && !s.progress.ready).sort(byRatio),
+  };
+}
+
+export interface EvolutionPreview {
+  node: ClassNode; playable: boolean; ready: boolean;
+  stats: { key: keyof Stats; before: number; after: number }[];
+  kitSpells: string[]; nodeSpells: string[];
+  passive?: { name: string; description: string };
+  affinity: Record<ProficiencyId, number>;
+  talentTree?: { name: string; nodes: number; freePoints: number };
+  lostOptions: number;
+}
+const PREVIEW_KEYS: (keyof Stats)[] = ['maxHp', 'maxMana', 'attack', 'defense', 'attackSpeed', 'crit', 'resistance', 'magicPower'];
+
+/**
+ * O que a evolução muda, sem tocar no estado: clona o personagem, aplica a mesma troca de identidade de `evolve`
+ * (kit, classId e classPath) e compara `characterStats`. Magias: as do kit que entram e, no Tier 2, as do nó nos slots livres.
+ */
+export function previewEvolution(state: GameState, character: Character, nodeId: string): EvolutionPreview {
+  const node = CLASS_BY_ID[nodeId], playable = isPlayable(nodeId);
+  const affinity = Object.fromEntries(PROFICIENCY_IDS.map(id => [id, AFFINITY[nodeId]?.[id] ?? 1])) as Record<ProficiencyId, number>;
+  const tree = TALENT_TREES[nodeId === 'aprendiz' ? 'squire' : nodeId];
+  const base = {
+    node, playable, ready: classProgress(character, node).ready, affinity, passive: NODE_PASSIVES[nodeId] ? { name: NODE_PASSIVES[nodeId].name, description: NODE_PASSIVES[nodeId].description } : undefined,
+    talentTree: tree ? { name: tree.name, nodes: tree.nodeCount, freePoints: Math.max(0, talentPointsAvailable(character)) } : undefined,
+    lostOptions: node.parent ? childrenOf(node.parent).length - 1 : 0,
+  };
+  if (!playable) return { ...base, stats: [], kitSpells: [], nodeSpells: [] };
+  const clone = structuredClone(character);
+  const kit = kitOfNode(nodeId), before = characterStats(character, state);
+  clone.profile.classId = nodeId; clone.profile.classPath = [...clone.profile.classPath, nodeId];
+  let kitSpells: string[] = [], slots = clone.spellSlots.length;
+  if (kit !== clone.classId) {
+    const kept = clone.spellSlots.filter(sid => SPELLS.find(sp => sp.id === sid)?.universal).slice(0, 1);
+    const fresh = SPELLS.filter(sp => sp.classId === kit && !sp.universal && !sp.node);
+    kitSpells = fresh.slice(0, Math.max(0, 4 - kept.length)).map(sp => sp.name); slots = Math.min(4, kept.length + fresh.length);
+    clone.classId = kit;
+  }
+  const nodeSpells = SPELLS.filter(sp => sp.node === nodeId && spellAvailable(clone, sp)).slice(0, Math.max(0, 4 - slots)).map(sp => sp.name);
+  const after = characterStats(clone, state);
+  return { ...base, stats: PREVIEW_KEYS.map(key => ({ key, before: before[key], after: after[key] })), kitSpells, nodeSpells };
+}

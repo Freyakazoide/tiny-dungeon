@@ -20,3 +20,4 @@
   .m-head { flex-wrap: wrap; } .m-title small { display: none; } .who { max-width: 100%; order: 3; flex-basis: 100%; margin-left: 0; }
   .ch-attr .pk-tip { left: 0; width: min(250px, 80vw); }
 }
+.tabs, .m-head { flex: none; }
