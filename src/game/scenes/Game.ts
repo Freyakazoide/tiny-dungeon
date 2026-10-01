@@ -9,14 +9,14 @@ import { MONSTERS } from '../data/monsters';
 import { bossIdOf, huntWaves } from '../data/hunts';
 import { characterStats } from '../systems/progression';
 import { ART } from '../art/data';
-import { ART_SCALE, BOSS_CELL, CANVAS_H, cellCenter, entranceCells, formationCells, spawnCells, stairCells, unitAnchor } from '../art/geometry';
+import { ART_SCALE, ARENA, BACK_ROW, BOSS_CELL, CANVAS_H, cellCenter, cellKey, engagementSlots, entranceCells, formationCells, inArena, isBoxFull, spawnCells, stairCells, unitAnchor, type Cell } from '../art/geometry';
 import { lookKey, type Look } from '../art/look';
 import { characterTexture, characterWalkAnim, ensureLookTextures, mapTexture, monsterTexture } from '../art/textures';
 import { dominantDirection, type ArenaPoint } from './movement';
 
 const BAR_W=56,SPRITE_PX=32*ART_SCALE;
 type HeroView={container:Phaser.GameObjects.Container;look:Look;key:string;body:Phaser.GameObjects.Sprite;name:Phaser.GameObjects.Text;hpBg:Phaser.GameObjects.Rectangle;hp:Phaser.GameObjects.Rectangle;manaBg:Phaser.GameObjects.Rectangle;mana:Phaser.GameObjects.Rectangle;effects:Phaser.GameObjects.Text;direction:CharacterDirection;moveTween?:Phaser.Tweens.Tween;walking:boolean};
-type MonsterView={body:Phaser.GameObjects.Arc|Phaser.GameObjects.Sprite;name:Phaser.GameObjects.Text;hpBg:Phaser.GameObjects.Rectangle;hp:Phaser.GameObjects.Rectangle;art?:string;height:number;facing:CharacterDirection;barW:number};
+type MonsterView={body:Phaser.GameObjects.Arc|Phaser.GameObjects.Sprite;name:Phaser.GameObjects.Text;hpBg:Phaser.GameObjects.Rectangle;hp:Phaser.GameObjects.Rectangle;art?:string;height:number;facing:CharacterDirection;barW:number;barDy:number;nameDy:number;big:boolean;cell:Cell;slot?:Cell;tween?:Phaser.Tweens.Tween;moving:boolean};
 
 export class Game extends Scene {
   private heroes=new Map<string,HeroView>();
@@ -120,6 +120,7 @@ export class Game extends Scene {
       else v.body.setTint(m.statuses?.frozen?0x9fdcff:m.statuses?.burn?0xffb070:0xffffff);
       v.name.setAlpha(m.alive?1:.3);
     });
+    if(state.status==='running')this.approachHeroes(team);
     this.faceMonsters(team);
 
     if(state.status==='paused'&&!this.visualPaused){this.tweens.pauseAll();this.anims.pauseAll();this.visualPaused=true;}
@@ -165,7 +166,7 @@ export class Game extends Scene {
       const hpBg=this.add.rectangle(a.x-barW/2,a.y-h-8,barW,9,0x35171b,.95).setOrigin(0,.5).setDepth(5);
       const hp=this.add.rectangle(a.x-barW/2,a.y-h-8,barW,7,0xd45a5f).setOrigin(0,.5).setDepth(6);
       const name=this.add.text(a.x,a.y-h-22,def.name,{fontSize:'11px',color:'#fff',stroke:'#090b0e',strokeThickness:4}).setOrigin(.5).setDepth(6);
-      return {body,name,hpBg,hp,art:art.id,height:h,facing:'down',barW};
+      return {body,name,hpBg,hp,art:art.id,height:h,facing:'down',barW,barDy:-h-8,nameDy:-h-22,big,cell,moving:false};
     }
     // Sem arte em CSV: o círculo de sempre, no centro da célula (o chefe no centro do bloco 2×2).
     const c=cellCenter(cell),x=big?c.x+32:c.x,y=big?c.y+32:c.y,radius=big?38:24,barW=big?100:BAR_W;
@@ -173,13 +174,69 @@ export class Game extends Scene {
     const body=this.add.circle(x,y,radius,def.color).setStrokeStyle(2,0xf0e3cd).setDepth(5);
     const name=this.add.text(x,y+radius+10,def.name,{fontSize:'11px',color:'#fff',stroke:'#090b0e',strokeThickness:4}).setOrigin(.5).setDepth(6);
     const hp=this.add.rectangle(x-barW/2,y-radius-14,barW,7,0xd45a5f).setOrigin(0,.5).setDepth(6);
-    return {body,name,hpBg,hp,height:radius*2,facing:'down',barW};
+    return {body,name,hpBg,hp,height:radius*2,facing:'down',barW,barDy:-radius-14,nameDy:radius+10,big,cell,moving:false};
+  }
+  /** Posição do corpo do monstro (âncora dos pés com arte; centro no círculo) para uma célula. */
+  private bodyPoint(v:MonsterView,cell:Cell):ArenaPoint{
+    if(v.art)return unitAnchor(cell,v.big?{w:2,h:2}:{w:1,h:1});
+    const c=cellCenter(cell);return v.big?{x:c.x+32,y:c.y+32}:c;
+  }
+  private setMonsterPos(v:MonsterView,x:number,y:number){
+    v.body.setPosition(x,y).setDepth(5+y/1000);
+    v.hpBg.setPosition(x-v.barW/2,y+v.barDy);v.hp.setPosition(x-v.barW/2,y+v.barDy);v.name.setPosition(x,y+v.nameDy);
+  }
+  /**
+   * Os monstros avançam do ponto de nascimento até a "box" do tanque (as 8 células ao redor dele); quando as 8 vagas
+   * acabam, os que sobram vão para a backline. Só visual: o combate não depende de posição.
+   */
+  private approachHeroes(team:Character[]){
+    const formation=formationCells(team);if(!formation.size)return;
+    const alive=team.filter(c=>c.hp>0&&formation.has(c.id));if(!alive.length)return;
+    const tank=alive.find(c=>c.isTank&&c.row==='front')??alive.find(c=>c.row==='front')??alive[0];
+    const back=alive.filter(c=>c.row==='back'&&c.id!==tank.id);
+    const occupied=new Set<string>([...formation.values()].map(cellKey));
+    const pending:MonsterView[]=[];
+    for(const v of this.enemies.values()){
+      if(v.slot){for(let dc=0;dc<(v.big?2:1);dc++)for(let dr=0;dr<(v.big?2:1);dr++)occupied.add(cellKey({c:v.slot.c+dc,r:v.slot.r+dr}));}
+      else if(v.body.visible)pending.push(v);
+    }
+    // ocupa também as células de nascimento de quem ainda não saiu do lugar
+    for(const v of this.enemies.values())if(!v.slot){for(let dc=0;dc<(v.big?2:1);dc++)for(let dr=0;dr<(v.big?2:1);dr++)occupied.add(cellKey({c:v.cell.c+dc,r:v.cell.r+dr}));}
+    const targetCell=formation.get(tank.id)!;
+    for(const v of pending){
+      let slot:Cell|undefined;
+      if(v.big){
+        const c0=Math.max(0,Math.min(ARENA.cols-2,targetCell.c-1)),block={c:c0,r:Math.max(0,targetCell.r-3)};
+        slot=block;for(let dc=0;dc<2;dc++)for(let dr=0;dr<2;dr++)occupied.add(cellKey({c:block.c+dc,r:block.r+dr}));
+      }else{
+        for(const key of [cellKey(v.cell)])occupied.delete(key);
+        const from=v.cell,tankFull=isBoxFull(targetCell,occupied);
+        const targets=[...(tankFull?[]:[targetCell]),...back.map(b=>formation.get(b.id)!),...(tankFull&&!back.length?[targetCell]:[])];
+        for(const t of targets){const slots=engagementSlots(t,occupied,from).filter(c=>c.r<BACK_ROW+1&&inArena(c));if(slots.length){slot=slots[0];break;}}
+        occupied.add(cellKey(slot??v.cell));
+      }
+      if(!slot)continue;
+      v.slot=slot;this.walkMonster(v,this.bodyPoint(v,slot));
+    }
+  }
+  /** Caminha até o destino (2 poses alternando, olhando para o lado do movimento); acima de ×5 teleporta. */
+  private walkMonster(v:MonsterView,to:ArenaPoint){
+    v.tween?.stop();
+    const from={x:v.body.x,y:v.body.y},dist=PhaserMath.Distance.Between(from.x,from.y,to.x,to.y);
+    if(dist<1)return;
+    if(runtime.huntSpeed>5){this.setMonsterPos(v,to.x,to.y);return;}
+    const dir=dominantDirection(from,to,'down');v.facing=dir;v.moving=true;
+    const sprite=v.art&&v.body instanceof GameObjects.Sprite?v.body:undefined,start=this.time.now;
+    const state={t:0};
+    v.tween=this.tweens.add({targets:state,t:1,duration:Math.min(2600,dist*9+500),ease:'Sine.easeInOut',
+      onUpdate:()=>{this.setMonsterPos(v,from.x+(to.x-from.x)*state.t,from.y+(to.y-from.y)*state.t);if(sprite&&v.art)sprite.setTexture(monsterTexture(v.art,dir,(Math.floor((this.time.now-start)/170)%2===0?1:2)));},
+      onComplete:()=>{v.moving=false;v.tween=undefined;this.setMonsterPos(v,to.x,to.y);if(sprite&&v.art)sprite.setTexture(monsterTexture(v.art,v.facing,1));}});
   }
   /** Monstros com arte olham para o herói vivo mais próximo (`down` por padrão). */
   private faceMonsters(team:Character[]){
     const targets=team.filter(c=>c.hp>0).map(c=>this.heroes.get(c.id)).filter((v):v is HeroView=>!!v);
     for(const m of this.enemies.values()){
-      if(!m.art||!(m.body instanceof GameObjects.Sprite))continue;
+      if(!m.art||m.moving||!(m.body instanceof GameObjects.Sprite))continue;
       const from={x:m.body.x,y:m.body.y-m.height/2};
       const near=targets.sort((a,b)=>PhaserMath.Distance.Between(from.x,from.y,a.container.x,a.container.y)-PhaserMath.Distance.Between(from.x,from.y,b.container.x,b.container.y))[0];
       const dir=near?dominantDirection(from,{x:near.container.x,y:near.container.y-32},'down'):'down';
@@ -256,5 +313,5 @@ export class Game extends Scene {
   private entityBody(id?:string):Phaser.GameObjects.Sprite|Phaser.GameObjects.Arc|undefined{if(!id)return undefined;return this.heroes.get(id)?.body??this.enemies.get(id)?.body;}
   private floatText(lane:string,x:number,y:number,text:string,color:string){const offset=(this.floatLanes.get(lane)??0)%3;this.floatLanes.set(lane,offset+1);const label=this.add.text(x+(offset-1)*16,y-offset*13,text,{fontFamily:'Arial Black',fontSize:'17px',color,stroke:'#08090b',strokeThickness:5}).setOrigin(.5).setDepth(15);this.tweens.add({targets:label,y:label.y-38,alpha:0,duration:850,ease:'Cubic.easeOut',onComplete:()=>label.destroy()});}
   private destroyHero(v:HeroView){this.stopHero(v);v.container.destroy(true);}
-  private destroyMonster(v:MonsterView){v.body.destroy();v.name.destroy();v.hpBg.destroy();v.hp.destroy();}
+  private destroyMonster(v:MonsterView){v.tween?.stop();v.body.destroy();v.name.destroy();v.hpBg.destroy();v.hp.destroy();}
 }

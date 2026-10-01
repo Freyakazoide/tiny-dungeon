@@ -57,3 +57,17 @@ describe('Fase 13 D — AppearancePicker e Avatar', () => {
     expect(spy).toHaveBeenCalledTimes(1); expect(gameStore.getSnapshot().characters[0].look.armadura).toBe(optionsOf('armadura')[(gameStore.getSnapshot().characters[0].look.armadura === optionsOf('armadura')[1].id ? 1 : 1)].id);
   });
 });
+
+describe('Fase 13 — cores livres', () => {
+  it('"＋" adiciona uma cor ao carrossel, seleciona e permite remover', async () => {
+    localStorage.clear(); const seen: Look[] = []; render(<Harness onChange={l => seen.push(l)} />); const user = userEvent.setup();
+    const skin = screen.getByRole('group', { name: 'Pele' }), n = optionsOf('pele').length;
+    await user.click(within(skin).getByRole('button', { name: /Adicionar cor de pele/ }));
+    const input = within(skin).getByLabelText('Escolher cor') as HTMLInputElement; await user.click(input);
+    const { fireEvent } = await import('@testing-library/react'); fireEvent.change(input, { target: { value: '#123456' } });
+    await user.type(within(skin).getByLabelText('Nome da cor'), 'Minha'); await user.click(within(skin).getByRole('button', { name: 'Adicionar' }));
+    expect(seen[seen.length - 1].pele).toBe('#123456'); expect(within(skin).getByText('Minha')).toBeTruthy();
+    await user.click(within(skin).getByRole('button', { name: /Todas as cores de pele/ })); expect(within(skin).getAllByRole('option')).toHaveLength(n + 1);
+    await user.click(within(skin).getByRole('button', { name: /Remover esta cor/ })); expect(seen[seen.length - 1].pele).not.toBe('#123456');
+  });
+});

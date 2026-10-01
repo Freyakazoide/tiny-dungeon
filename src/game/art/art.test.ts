@@ -110,3 +110,12 @@ describe('integridade dos dados entregues (arte/)', () => {
     expect(data.meta.filter(m => m.monstroId).map(m => m.monstroId).sort()).toEqual(['bone_king', 'ghoul', 'skeleton']);
   });
 });
+
+describe('cores livres no carrossel', () => {
+  it('um hex vale como id: normalizeLook mantém, isValidLook aceita, applyLook pinta com ele', () => {
+    const look = { body: 'squire', pele: '#112233', cabelo: 'preto', armadura: '#AA5500' };
+    expect(isValidLook(look)).toBe(true); expect(normalizeLook(look).armadura).toBe('#aa5500');
+    const out = applyLook(ART.palette, normalizeLook(look), ART); expect(out.p).toBe('#112233'); expect(out.b).toBe('#aa5500');
+    expect(isValidLook({ pele: '#12345' })).toBe(false);
+  });
+});

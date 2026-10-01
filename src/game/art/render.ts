@@ -1,5 +1,5 @@
 import { ART, ArtError, type ArtData, type FrameName, type Grid, type Palette } from './data';
-import { LOOK_REGIONS, optionsOf, type Look } from './look';
+import { LOOK_REGIONS, optionsOf, resolveOption, type Look } from './look';
 import { pngDataUrl } from './png';
 
 export type Rgb = [number, number, number];
@@ -21,7 +21,7 @@ export function applyLook(palette: Palette, look: Look, data: ArtData = ART): Pa
   const out: Palette = { ...palette };
   for (const { regiao, chave, tom } of data.regions) {
     if (!(LOOK_REGIONS as readonly string[]).includes(regiao)) continue;
-    const list = optionsOf(regiao, data), option = list.find(o => o.id === look[regiao as keyof Look]) ?? list[0];
+    const option = resolveOption(regiao, look[regiao as keyof Look], data) ?? optionsOf(regiao, data)[0];
     if (option) out[chave] = rgbToHex(toneOf(option.cor, tom));
   }
   return out;

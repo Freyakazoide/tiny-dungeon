@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { ART } from '../game/art/data';
-import { LOOK_REGIONS, normalizeLook, optionsOf, randomLook, type Look, type LookRegion } from '../game/art/look';
+import { LOOK_REGIONS, addCustomColor, colorChoices, normalizeLook, randomLook, removeCustomColor, type Look, type LookRegion } from '../game/art/look';
 import { frameDataUrl, type Direction } from '../game/art/render';
 
 const REGION_LABEL: Record<LookRegion, string> = { pele: 'Pele', cabelo: 'Cabelo', armadura: 'Armadura' };
@@ -20,8 +20,10 @@ export function LookPreview({ look, animate = true }: { look: Look; animate?: bo
 }
 
 function Carousel({ region, value, onPick }: { region: LookRegion; value: string; onPick: (id: string) => void }) {
-  const list = optionsOf(region), index = Math.max(0, list.findIndex(o => o.id === value)), current = list[index];
-  const [open, setOpen] = useState(false), ref = useRef<HTMLDivElement>(null);
+  const [version, setVersion] = useState(0), [open, setOpen] = useState(false), [adding, setAdding] = useState(false), [hex, setHex] = useState('#c0392b'), [nome, setNome] = useState('');
+  const list = useMemo(() => colorChoices(region, value), [region, value, version]);
+  const index = Math.max(0, list.findIndex(o => o.id === value)), current = list[index];
+  const ref = useRef<HTMLDivElement>(null);
   const go = (delta: number) => onPick(list[(index + delta + list.length) % list.length].id);
   useEffect(() => {
     if (!open) return;
@@ -39,7 +41,13 @@ function Carousel({ region, value, onPick }: { region: LookRegion; value: string
     <span className="ap-name"><b>{current.nome}</b><small>{current.cor} · {index + 1} / {list.length}</small></span>
     <button type="button" className="pk-btn sm" aria-label={`${REGION_LABEL[region]} próxima`} onClick={() => go(1)}>▶</button>
     <button type="button" className="pk-btn sm" aria-label={`Todas as cores de ${REGION_LABEL[region].toLowerCase()}`} aria-expanded={open} onClick={() => setOpen(!open)}>▦</button>
+    <button type="button" className="pk-btn sm" aria-label={`Adicionar cor de ${REGION_LABEL[region].toLowerCase()}`} aria-expanded={adding} title="Adicionar uma cor ao carrossel" onClick={() => setAdding(!adding)}>＋</button>
+    {current.custom && <button type="button" className="pk-btn sm" aria-label="Remover esta cor do carrossel" title="Remover esta cor" onClick={() => { removeCustomColor(region, current.id); setVersion(v => v + 1); onPick(list.find(o => o.id !== current.id)!.id); }}>✕</button>}
     <span className="ap-live" aria-live="polite">{`${REGION_LABEL[region]}: ${current.nome}, ${index + 1} de ${list.length}`}</span>
+    {adding && <div className="ap-add pk-panel flat" role="group" aria-label={`Nova cor de ${REGION_LABEL[region].toLowerCase()}`}>
+      <input type="color" aria-label="Escolher cor" value={hex} onChange={e => setHex(e.target.value)} />
+      <input type="text" aria-label="Nome da cor" placeholder="Nome (opcional)" maxLength={18} value={nome} onChange={e => setNome(e.target.value)} />
+      <button type="button" className="pk-btn sm primary" onClick={() => { const c = addCustomColor(region, hex, nome); if (c) { setVersion(v => v + 1); onPick(c.id); setNome(''); setAdding(false); } }}>Adicionar</button></div>}
     {open && <div className="pk-tip ap-grid" role="listbox" aria-label={`Cores de ${REGION_LABEL[region].toLowerCase()}`}>{list.map(o =>
       <button type="button" key={o.id} role="option" aria-selected={o.id === value} aria-label={o.nome} title={`${o.nome} ${o.cor}`} className={`ap-chip ${o.id === value ? 'on' : ''}`} style={{ background: o.cor }} onClick={() => { onPick(o.id); setOpen(false); }} />)}</div>}
   </div>;
