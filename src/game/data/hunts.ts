@@ -23,27 +23,29 @@ export interface HuntDef {
   extrasScale?: number;
 }
 
-/** W1 = A A A A · W2 = A A B B · W3 = Boss A A (A = comum, B = elite). */
-const waves = (names: [string, string, string], common: string, elite: string, boss: string): WaveDef[] => [
-  { name: names[0], monsters: [common, common, common, common] },
-  { name: names[1], monsters: [common, common, elite, elite] },
-  { name: names[2], monsters: [boss, common, common] },
-];
+/** 5 waves + chefe: W1 3A · W2 3A 1B · W3 3A 2B · W4 4A 2B · W5 4A 3B · Boss + 3A (A = comum, B = elite). */
+const waves = (names: [string, string, string, string, string, string], common: string, elite: string, boss: string): WaveDef[] => {
+  const mix = (a: number, b: number) => [...Array(a).fill(common), ...Array(b).fill(elite)] as string[];
+  return [
+    { name: names[0], monsters: mix(3, 0) }, { name: names[1], monsters: mix(3, 1) }, { name: names[2], monsters: mix(3, 2) },
+    { name: names[3], monsters: mix(4, 2) }, { name: names[4], monsters: mix(4, 3) }, { name: names[5], monsters: [boss, ...mix(3, 0)] },
+  ];
+};
 
 export const HUNTS: HuntDef[] = [
   { id: 'catacumbas', refXpPerHour: 24000, refGoldPerHour: 5000, name: 'Catacumbas', map: 'catacumbas', minLevel: 1, recommendedLevel: 1, color: 0x3b3a44, waves: CATACOMBS_WAVES },
   { id: 'floresta_sombria', refXpPerHour: 28000, refGoldPerHour: 20000, name: 'Floresta Sombria', map: 'floresta_sombria', minLevel: 7, recommendedLevel: 8, color: 0x1f3b2a,
-    waves: waves(['Clareira Sombria', 'Trilha das Raízes', 'Covil das Teias'], 'wolf', 'bandit', 'spider_queen') },
+    waves: waves(['Clareira Sombria', 'Trilha das Raízes', 'Bosque Retorcido', 'Toca dos Lobos', 'Fronteira das Teias', 'Covil das Teias'], 'wolf', 'bandit', 'spider_queen') },
   { id: 'pantano_toxico', refXpPerHour: 35000, refGoldPerHour: 24000, name: 'Pântano Tóxico', map: 'pantano_toxico', minLevel: 12, recommendedLevel: 13, color: 0x3a5a1e,
-    waves: waves(['Margem Borbulhante', 'Ruínas Afundadas', 'Ninho da Hidra'], 'toxic_toad', 'bog_lizard', 'bog_hydra') },
+    waves: waves(['Margem Borbulhante', 'Ruínas Afundadas', 'Lodaçal Fétido', 'Ilha das Raízes', 'Poço de Névoa', 'Ninho da Hidra'], 'toxic_toad', 'bog_lizard', 'bog_hydra') },
   { id: 'minas_esquecidas', refXpPerHour: 44000, refGoldPerHour: 27000, name: 'Minas Esquecidas', map: 'minas_esquecidas', minLevel: 16, recommendedLevel: 17, color: 0x4a3c2a,
-    waves: waves(['Galeria Principal', 'Veios de Cristal', 'Câmara do Golem'], 'kobold_miner', 'stone_golem', 'crystal_golem') },
+    waves: waves(['Galeria Principal', 'Túnel Desabado', 'Veios de Cristal', 'Forja Abandonada', 'Salão das Colunas', 'Câmara do Golem'], 'kobold_miner', 'stone_golem', 'crystal_golem') },
   { id: 'fortaleza_de_gelo', refXpPerHour: 55000, refGoldPerHour: 30000, name: 'Fortaleza de Gelo', map: 'fortaleza_de_gelo', minLevel: 20, recommendedLevel: 21, color: 0x2c4a66,
-    waves: waves(['Pátio Congelado', 'Salão dos Estandartes', 'Trono do Inverno'], 'frost_wolf', 'yeti', 'winter_queen') },
+    waves: waves(['Pátio Congelado', 'Ponte de Gelo', 'Salão dos Estandartes', 'Armaria Gelada', 'Corredor das Estátuas', 'Trono do Inverno'], 'frost_wolf', 'yeti', 'winter_queen') },
   { id: 'vulcao_ardente', refXpPerHour: 69000, refGoldPerHour: 32000, name: 'Vulcão Ardente', map: 'vulcao_ardente', minLevel: 24, recommendedLevel: 25, color: 0x5a2416,
-    waves: waves(['Borda da Cratera', 'Rios de Lava', 'Coração do Vulcão'], 'salamander', 'lava_golem', 'flame_lord') },
+    waves: waves(['Borda da Cratera', 'Passagem de Cinzas', 'Rios de Lava', 'Câmara de Obsidiana', 'Fornalha Viva', 'Coração do Vulcão'], 'salamander', 'lava_golem', 'flame_lord') },
   { id: 'templo_profano', refXpPerHour: 86000, refGoldPerHour: 34000, name: 'Templo Profano', map: 'templo_profano', minLevel: 27, recommendedLevel: 28, color: 0x35204a,
-    waves: waves(['Nave Corrompida', 'Altares Profanados', 'Santuário do Sumo Sacerdote'], 'dark_cultist', 'fallen_angel', 'profane_high_priest') },
+    waves: waves(['Nave Corrompida', 'Claustro Sombrio', 'Altares Profanados', 'Cripta dos Votos', 'Escadaria Negra', 'Santuário do Sumo Sacerdote'], 'dark_cultist', 'fallen_angel', 'profane_high_priest') },
 ];
 /**
  * Dificuldade por hunt (Fase 7, bloco B2): HP × e ataque × dos monstros. Começo gentil nas Catacumbas; o resto foi calibrado no harness
@@ -51,8 +53,8 @@ export const HUNTS: HuntDef[] = [
  * de 15% a 25% do ouro. Atenção ao "joelho": acima de ~1,5 de ataque o custo de poção dispara. Ajuste em passos de 0,05 a 0,1 e rode o harness.
  */
 const MONSTER_SCALES: Record<string, { hp: number; atk: number }> = {
-  catacumbas: { hp: 0.9, atk: 0.7 }, floresta_sombria: { hp: 1.6, atk: 1.1 }, pantano_toxico: { hp: 1.65, atk: 1.4 },
-  minas_esquecidas: { hp: 1.7, atk: 1.4 }, fortaleza_de_gelo: { hp: 1.85, atk: 1.35 }, vulcao_ardente: { hp: 1.9, atk: 1.4 }, templo_profano: { hp: 2.0, atk: 1.25 },
+  catacumbas: { hp: 0.85, atk: 0.6 }, floresta_sombria: { hp: 1.65, atk: 1.1 }, pantano_toxico: { hp: 1.6, atk: 1.4 },
+  minas_esquecidas: { hp: 1.62, atk: 1.4 }, fortaleza_de_gelo: { hp: 1.72, atk: 1.35 }, vulcao_ardente: { hp: 1.78, atk: 1.4 }, templo_profano: { hp: 1.9, atk: 1.25 },
 };
 for (const hunt of HUNTS) hunt.monsterScale = MONSTER_SCALES[hunt.id];
 /** Primeira hora: reforços curtos (sem hordas nem invasões); os completos começam na Floresta Sombria. */

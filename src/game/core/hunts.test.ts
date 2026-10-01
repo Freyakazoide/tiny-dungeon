@@ -11,19 +11,20 @@ afterEach(() => vi.restoreAllMocks());
 const FILES = ['catacumbas', 'floresta_sombria', 'pantano_toxico', 'minas_esquecidas', 'fortaleza_de_gelo', 'vulcao_ardente', 'templo_profano'];
 
 describe('Bloco 2 — hunts', () => {
-  it('são 7 hunts com 3 waves, monstros existentes e arquivos de mapa com o nome exato', () => {
+  it('são 7 hunts com 5 waves e o chefe, monstros existentes e arquivos de mapa com o nome exato', () => {
     expect(HUNTS.map(h => h.map)).toEqual(FILES);
     for (const hunt of HUNTS) {
-      expect(hunt.waves).toHaveLength(3);
+      expect(hunt.waves).toHaveLength(6);
       for (const id of hunt.waves.flatMap(w => w.monsters)) expect(MONSTERS[id], `${hunt.id}: ${id}`).toBeDefined();
-      expect(MONSTERS[hunt.waves[2].monsters[0]].boss).toBe(true);
-      expect(hunt.waves[0].monsters).toHaveLength(hunt.id === 'catacumbas' ? 3 : 4);
+      expect(MONSTERS[hunt.waves[5].monsters[0]].boss).toBe(true);
+      expect(hunt.waves[0].monsters).toHaveLength(3);
     }
     expect(Object.keys(import.meta.glob('/arte/mapas/*.csv')).some(path => path.endsWith('/catacumbas.csv'))).toBe(true);
   });
-  it('as hunts novas seguem A A A A · A A B B · Boss A A e os números do plano', () => {
+  it('as hunts novas seguem 3A · 3A 1B · 3A 2B · 4A 2B · 4A 3B · Boss 3A e os números do plano', () => {
     const w = huntWaves('floresta_sombria');
-    expect(w.map(x => x.monsters)).toEqual([['wolf', 'wolf', 'wolf', 'wolf'], ['wolf', 'wolf', 'bandit', 'bandit'], ['spider_queen', 'wolf', 'wolf']]);
+    const A = (n: number, id = 'wolf') => Array(n).fill(id) as string[];
+    expect(w.map(x => x.monsters)).toEqual([A(3), [...A(3), 'bandit'], [...A(3), ...A(2, 'bandit')], [...A(4), ...A(2, 'bandit')], [...A(4), ...A(3, 'bandit')], ['spider_queen', ...A(3)]]);
     expect([MONSTERS.wolf, MONSTERS.bandit, MONSTERS.spider_queen].map(m => [m.hp, m.attack, m.defense, m.xp])).toEqual([[742, 17, 7, 29], [1404, 25, 9, 68], [6075, 32, 12, 340]]);
     expect(MONSTERS.profane_high_priest).toMatchObject({ hp: 13770, attack: 67, defense: 21, xp: 1301 });
     expect([MONSTERS.skeleton.xp, MONSTERS.ghoul.xp, MONSTERS.bone_king.xp]).toEqual([27, 66, 270]);
@@ -49,13 +50,13 @@ describe('Bloco 2 — hunts', () => {
   it('save antigo sem huntId carrega em Catacumbas e a wave é validada contra a hunt do save', () => {
     const legacy = structuredClone(partyState()) as unknown as Record<string, unknown>; delete legacy.huntId;
     expect(cloneValidatedState(legacy).huntId).toBe('catacumbas');
-    const bad = partyState(); bad.huntId = 'pantano_toxico'; bad.wave = 3; expect(() => cloneValidatedState(bad)).toThrow(/corrompido/);
+    const bad = partyState(); bad.huntId = 'pantano_toxico'; bad.wave = 6; expect(() => cloneValidatedState(bad)).toThrow(/corrompido/);
     const unknown = partyState(); unknown.huntId = 'x'; expect(() => cloneValidatedState(unknown)).toThrow(/corrompido/);
   });
   it('o texto do boss e o total de waves vêm da hunt', () => {
     expect(MONSTERS[bossIdOf('catacumbas')].name).toBe('REI DOS OSSOS');
     expect(MONSTERS[bossIdOf('vulcao_ardente')].name).toBe('Senhor das Chamas');
-    expect(HUNT_BY_ID.pantano_toxico.waves).toHaveLength(3);
+    expect(HUNT_BY_ID.pantano_toxico.waves).toHaveLength(6);
   });
   it.each(HUNTS.map(h => h.id))('%s: um ciclo completo roda até o boss sem erro', huntId => {
     vi.spyOn(Math, 'random').mockReturnValue(.5);

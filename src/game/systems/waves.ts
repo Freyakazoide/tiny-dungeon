@@ -62,6 +62,10 @@ export function drawFromBag(state: WaveBag, table: ExtraRow[], size: number, rng
   return state.bag.pop() ?? rollExtra(table, rng);
 }
 
+/** Waves mais avançadas têm mais chance de vir maiores: a partir da 3ª wave (índice 2), +1 reforço com 12% × (índice − 1) de chance; o chefe não ganha. */
+export const lateWaveBonus = (waveIndex: number, isBoss: boolean, rng: Rng = Math.random): number =>
+  !isBoss && waveIndex >= 2 && rng() < .12 * (waveIndex - 1) ? 1 : 0;
+
 /** Válvula (HP médio baixo → no máximo +1) e "sem hordas em sequência" (depois de uma horda, no máximo +2). */
 export function limitExtra(extra: number, ctx: { avgHpFraction: number; lastExtra: number }, cfg = WAVE_CONFIG): number {
   let limited = extra;

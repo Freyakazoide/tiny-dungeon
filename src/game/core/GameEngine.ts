@@ -6,7 +6,7 @@ import { defaultLookFor, isValidLook, normalizeLook, type Look } from '../art/lo
 import { goalOfflineTargets, isGoalId, trainRingId, gateSkillOf, GOAL_NODES } from '../rpg/goals';
 import { DEFAULT_HUNT, HUNT_BY_ID, HUNTS, huntScale, huntWaves } from '../data/hunts';
 import { WAVE_CONFIG } from '../data/balance';
-import { batchToSpawn, composeExtras, drawFromBag, extrasTableFor, limitExtra, newBag, rollExtra, splitBatches, tierOfExtra, TIER_NAMES, waveRewards } from '../systems/waves';
+import { lateWaveBonus, batchToSpawn, composeExtras, drawFromBag, extrasTableFor, limitExtra, newBag, rollExtra, splitBatches, tierOfExtra, TIER_NAMES, waveRewards } from '../systems/waves';
 import { SPELLS, spellById } from '../data/spells';
 import { itemById } from '../data/items';
 import { CHARMS } from '../data/charms';
@@ -80,7 +80,7 @@ export class GameEngine {
     let drawn:number;
     if(WAVE_CONFIG.bag){const bags=this.state.waveBags??={};drawn=drawFromBag(bags[key]??=newBag(),table,WAVE_CONFIG.bagSize);}
     else drawn=rollExtra(table);
-    drawn=Math.round(drawn*(hunt?.extrasScale??1));
+    drawn=Math.round(drawn*(hunt?.extrasScale??1));drawn=Math.min(drawn+lateWaveBonus(this.state.wave,isBoss),Math.max(drawn,Math.round(Math.max(...table.map(r=>r.extra))*(hunt?.extrasScale??1))));
     const team=livingTeam(this.state),avg=team.length?team.reduce((s,c)=>s+c.hp/characterStats(c,this.state).maxHp,0)/team.length:1;
     return limitExtra(drawn,{avgHpFraction:avg,lastExtra:this.state.lastExtra??0});
   }

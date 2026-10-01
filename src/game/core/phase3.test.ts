@@ -78,11 +78,11 @@ describe('B — tanque, linha e penalidade', () => {
   });
   it('monstros e waves novos', () => {
     expect([MONSTERS.skeleton, MONSTERS.ghoul, MONSTERS.bone_king].map(m => [m.hp, m.attack, m.defense])).toEqual([[540, 11, 3], [975, 17, 5], [2700, 23, 8]]);
-    expect(WAVES.map(w => w.monsters)).toEqual([['skeleton', 'skeleton', 'skeleton'], ['skeleton', 'skeleton', 'ghoul', 'ghoul'], ['bone_king', 'skeleton', 'skeleton']]);
+    expect(WAVES).toHaveLength(6); expect(WAVES[0].monsters).toEqual(['skeleton', 'skeleton', 'skeleton']); expect(WAVES[1].monsters).toContain('ghoul'); expect(WAVES[5].monsters).toEqual(['bone_king', 'skeleton', 'skeleton', 'skeleton']);
   });
   it('monsterScale multiplica o HP dos monstros que nascem', () => {
     runtime.monsterHp = 2; const e = new GameEngine(partyState()); e.start();
-    expect(e.getSnapshot().monsters[0].maxHp).toBe(972); // 540 × 2 (runtime) × 0,9 (escala das Catacumbas)
+    expect(e.getSnapshot().monsters[0].maxHp).toBe(918); // 540 × 2 (runtime) × 0,85 (escala das Catacumbas)
   });
   it('saves antigos ganham linha e tanque na migração', () => {
     const state = partyState(); const legacy = structuredClone(state) as unknown as { characters: Record<string, unknown>[] };

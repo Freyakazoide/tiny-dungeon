@@ -1,4 +1,4 @@
-import { GameObjects, Math as PhaserMath, Scene } from 'phaser';
+import { GameObjects, Geom, Math as PhaserMath, Scene } from 'phaser';
 import { EventBus } from '../EventBus';
 import type { CharacterDirection } from '../assets';
 import { gameStore } from '../core/GameStore';
@@ -9,12 +9,13 @@ import { MONSTERS } from '../data/monsters';
 import { bossIdOf, huntWaves } from '../data/hunts';
 import { aggroShares } from '../systems/combat';
 import { ART } from '../art/data';
-import { ART_SCALE, ARENA, BOSS_CELL, CANVAS_H, cellCenter, cellKey, engagementSlots, entranceCells, formationCells, inArena, spawnCells, stairCells, unitAnchor, type Cell } from '../art/geometry';
+import { ART_SCALE, ARENA, BOSS_CELL, CANVAS_H, cellAt, cellCenter, cellKey, engagementSlots, entranceCells, findPath, formationCells, inArena, obstacleCells, spawnCells, stairCells, unitAnchor, type Cell } from '../art/geometry';
+import { obstacleArt } from '../data/obstacles';
 import { lookKey, type Look } from '../art/look';
-import { characterTexture, characterWalkAnim, ensureLookTextures, mapTexture, monsterTexture } from '../art/textures';
+import { characterTexture, characterWalkAnim, ensureLookTextures, mapTexture, monsterTexture, obstacleTexture } from '../art/textures';
 import type { FxKind } from '../systems/spellFx';
 import { playAttackFx } from './effects';
-import { dominantDirection, type ArenaPoint } from './movement';
+import { dominantDirection, samplePolyline, type ArenaPoint } from './movement';
 
 const BAR_W=56,SPRITE_PX=32*ART_SCALE;
 type HeroView={container:Phaser.GameObjects.Container;look:Look;key:string;body:Phaser.GameObjects.Sprite;name:Phaser.GameObjects.Text;direction:CharacterDirection;moveTween?:Phaser.Tweens.Tween;walking:boolean};
@@ -39,6 +40,10 @@ export class Game extends Scene {
   private arenaHunt='';
   private engageAt=0;
   private lastTeam:Character[]=[];
+  private obstacles:Phaser.GameObjects.Image[]=[];
+  private obstacleKey='';
+  private blocked=new Set<string>();
+  private declutterAt=0;
 
   /** O mapa inteiro é o canvas: 512×320 de arte ×2 = 1024×640, sem corte. */
   private applyArena(huntId:string){if(huntId===this.arenaHunt)return;this.arenaHunt=huntId;this.arena.setTexture(mapTexture(huntId));}
@@ -74,7 +79,7 @@ export class Game extends Scene {
     this.transitionBanner=this.add.container(width/2,CANVAS_H/2,[bannerBg,this.transitionText]).setDepth(12).setVisible(false);
 
     this.unsubscribe=gameStore.subscribe(()=>this.renderState());
-    if(import.meta.env.DEV)(window as unknown as {__fx?:unknown}).__fx=(kind:FxKind,a:ArenaPoint,b:ArenaPoint)=>playAttackFx(this,kind,a,b);
+    if(import.meta.env.DEV){(window as unknown as {__scene?:unknown}).__scene=this;(window as unknown as {__fx?:unknown}).__fx=(kind:FxKind,a:ArenaPoint,b:ArenaPoint)=>playAttackFx(this,kind,a,b);}
     this.unsubscribeFx=gameStore.onFx(fx=>this.animateFx(fx));
     this.events.once('shutdown',()=>{this.unsubscribe?.();this.unsubscribeFx?.();this.cancelAllHeroMovement();this.heroes.clear();this.enemies.clear();this.floatLanes.clear();});
     this.renderState();
@@ -84,9 +89,17 @@ export class Game extends Scene {
   update(_time:number,delta:number){
     gameStore.advance(delta,runtime.huntSpeed);
     // O cerco só começa quando os heróis já chegaram à formação (senão o monstro ocupa o lugar onde o herói vai passar).
+    if(this.time.now>=this.declutterAt){this.declutterAt=this.time.now+150;this.declutter();}
     if(this.needApproach&&this.time.now>=this.engageAt&&gameStore.getSnapshot().status==='running'){this.needApproach=false;this.approachHeroes(this.lastTeam);}
   }
   private needApproach=false;
+  /** Nomes de monstros que se sobrepõem a outro nome (de herói ou de um monstro mais à frente) somem; as barras de vida ficam. */
+  private declutter(){
+    const boxes:Geom.Rectangle[]=[];
+    for(const h of this.heroes.values())boxes.push(h.name.getBounds());
+    const list=[...this.enemies.values()].filter(v=>v.body.visible).sort((a,b)=>Number(b.big)-Number(a.big)||b.body.y-a.body.y);
+    for(const v of list){const box=v.name.getBounds();const clash=boxes.some(b=>Geom.Intersects.RectangleToRectangle(box,b));v.name.setAlpha(clash?0:1);if(!clash)boxes.push(box);}
+  }
 
   private renderState(){
     const state=gameStore.getSnapshot();
@@ -127,6 +140,7 @@ export class Game extends Scene {
       else v.body.setTint(m.statuses?.frozen?0x9fdcff:m.statuses?.burn?0xffb070:0xffffff);
       v.name.setAlpha(m.alive?1:.3);
     });
+    this.refreshObstacles(state.huntId,state.wave,state.wave===WAVES.length-1);
     this.lastTeam=team;if(state.status==='running')this.needApproach=true;
     this.faceMonsters(team);
 
@@ -143,12 +157,31 @@ export class Game extends Scene {
     this.previousStatus=state.status;this.previousWave=state.wave;this.previousCycle=state.cycle;
   }
 
+  /** Obstáculos da wave: um desenho por wave (o do chefe na última); nascem com um fade e bloqueiam o caminho e as vagas de cerco. */
+  private refreshObstacles(huntId:string,wave:number,boss:boolean){
+    const key=`${huntId}:${wave}:${boss}`;if(key===this.obstacleKey)return;this.obstacleKey=key;
+    for(const o of this.obstacles)o.destroy();this.obstacles=[];
+    const cells=obstacleCells(wave,boss);this.blocked=new Set(cells.map(cellKey));
+    for(const cell of cells){const a=unitAnchor(cell),tex=obstacleTexture(obstacleArt(huntId,cell));if(!this.textures.exists(tex))continue;
+      const img=this.add.image(a.x,a.y,tex).setOrigin(.5,1).setScale(ART_SCALE).setDepth(4+a.y/1000).setAlpha(0);this.tweens.add({targets:img,alpha:1,duration:350});this.obstacles.push(img);}
+  }
+  /** Linha de pés de uma arte (a 1ª linha com pixel visível do quadro down_1, em pixels de tela): onde ficam o nome e a barra. */
+  private artTop(kind:'monstros'|'personagens',id:string){
+    const g=ART.sprites[kind][id]?.down_1;if(!g)return 0;const row=g.findIndex(r=>r.some(k=>k!=='.'));return Math.max(0,row)*ART_SCALE;
+  }
+  /** Caminho em células até `to`, em pontos de pés (o 1º é a posição atual); sem caminho, linha reta. */
+  private routePoints(from:ArenaPoint,to:ArenaPoint,size=1):ArenaPoint[]{
+    const a=cellAt(from.x,from.y-1),b=cellAt(to.x,to.y-1);if(!a||!b)return [from,to];
+    const path=findPath(a,b,this.blocked,size);if(path.length<2)return [from,to];
+    const pts=path.slice(1,-1).map(c=>unitAnchor(c,size>1?{w:2,h:2}:{w:1,h:1}));
+    return [from,...pts,to];
+  }
   private inUseLooks(){return new Set([...this.heroes.values()].map(v=>v.key));}
   /** Cria o herói com a animação do `look`: sprite de 24×32 de arte ×2, âncora nos pés (0,5; 1). */
   private createHero(character:Character,point:ArenaPoint):HeroView{
     const look=ensureLookTextures(this,character.look,this.inUseLooks());
     const body=this.add.sprite(0,0,characterTexture(look,'down',1)).setOrigin(.5,1).setScale(ART_SCALE);
-    const name=this.add.text(0,-SPRITE_PX-8,'',{fontSize:'11px',color:'#fff',stroke:'#090b0e',strokeThickness:4,align:'center'}).setOrigin(.5);
+    const name=this.add.text(0,13,'',{fontSize:'11px',color:'#fff',stroke:'#090b0e',strokeThickness:4,align:'center'}).setOrigin(.5);
     const container=this.add.container(point.x,point.y,[body,name]).setDepth(6+point.y/1000);
     return {container,look,key:lookKey(look),body,name,direction:'down',walking:false};
   }
@@ -162,7 +195,7 @@ export class Game extends Scene {
     const def=MONSTERS[defId],art=ART.meta.find(m=>m.tipo==='monstro'&&m.monstroId===defId);
     const big=art?.celulas==='2x2'||(!!def.boss&&!art);
     if(art){
-      const a=unitAnchor(cell,big?{w:2,h:2}:{w:1,h:1}),h=art.altura*ART_SCALE,barW=big?100:BAR_W;
+      const a=unitAnchor(cell,big?{w:2,h:2}:{w:1,h:1}),h=art.altura*ART_SCALE-this.artTop('monstros',art.id),barW=big?100:BAR_W;
       const body=this.add.sprite(a.x,a.y,monsterTexture(art.id,'down',1)).setOrigin(.5,1).setScale(ART_SCALE).setDepth(5+a.y/1000);
       const hpBg=this.add.rectangle(a.x-barW/2,a.y-h-8,barW,9,0x35171b,.95).setOrigin(0,.5).setDepth(5);
       const hp=this.add.rectangle(a.x-barW/2,a.y-h-8,barW,7,0xd45a5f).setOrigin(0,.5).setDepth(6);
@@ -194,7 +227,7 @@ export class Game extends Scene {
     const formation=formationCells(team);if(!formation.size)return;
     const alive=team.filter(c=>c.hp>0&&formation.has(c.id));if(!alive.length)return;
     const shares=aggroShares(alive),counts=new Map(alive.map(c=>[c.id,0]));
-    const occupied=new Set<string>([...formation.values()].map(cellKey));
+    const occupied=new Set<string>([...[...formation.values()].map(cellKey),...this.blocked]);
     const block=(cell:Cell,big:boolean)=>{for(let dc=0;dc<(big?2:1);dc++)for(let dr=0;dr<(big?2:1);dr++)occupied.add(cellKey({c:cell.c+dc,r:cell.r+dr}));};
     const pending:MonsterView[]=[];
     for(const v of this.enemies.values()){if(v.slot)block(v.slot,v.big);else if(v.body.visible){pending.push(v);block(v.cell,v.big);}}
@@ -205,18 +238,18 @@ export class Game extends Scene {
       let slot:Cell|undefined;
       if(v.big){
         const t=formation.get(tank.id)!;
-        for(const c0 of [t.c-1,t.c,t.c-2,t.c+1].map(c=>Math.max(0,Math.min(ARENA.cols-2,c)))){
-          const cand={c:c0,r:Math.max(0,t.r-3)},keys=[0,1].flatMap(dc=>[0,1].map(dr=>cellKey({c:cand.c+dc,r:cand.r+dr})));
+        const tries:Cell[]=[];for(const dc of [2,3,4])for(const dr of [0,-1,1,-2])tries.push({c:t.c-dc,r:Math.max(0,Math.min(ARENA.rows-2,t.r+dr))});
+        for(const cand of tries){
+          const keys=[0,1].flatMap(dc=>[0,1].map(dr=>cellKey({c:cand.c+dc,r:cand.r+dr})));
           for(const k of keys)occupied.delete(k);
-          const free=keys.every(k=>!occupied.has(k));
-          if(free){slot=cand;break;}
+          if(keys.every(k=>!occupied.has(k)&&!this.blocked.has(k))){slot=cand;break;}
         }
         slot??=v.cell;
       }else{
         occupied.delete(cellKey(v.cell));
         const order=[...alive].sort((a,b)=>(counts.get(a.id)!/(shares.get(a.id)||.01))-(counts.get(b.id)!/(shares.get(b.id)||.01))||dist(formation.get(a.id)!,v.cell)-dist(formation.get(b.id)!,v.cell));
         for(const h of order){
-          const hc=formation.get(h.id)!,cost=(c:Cell)=>dist(c,v.cell)+(c.r>hc.r?4:0);   // o lado de trás do herói só serve quando o resto está cheio
+          const hc=formation.get(h.id)!,cost=(c:Cell)=>dist(c,v.cell)+(c.c>hc.c?4:0);   // o lado de trás (a direita) do herói só serve quando o resto está cheio
           const slots=engagementSlots(hc,occupied,v.cell).filter(inArena).sort((a,b)=>cost(a)-cost(b));
           if(slots.length){slot=slots[0];counts.set(h.id,counts.get(h.id)!+1);break;}
         }
@@ -228,14 +261,15 @@ export class Game extends Scene {
   /** Caminha até o destino (2 poses alternando, olhando para o lado do movimento); acima de ×5 teleporta. */
   private walkMonster(v:MonsterView,to:ArenaPoint){
     v.tween?.stop();
-    const from={x:v.body.x,y:v.body.y},dist=PhaserMath.Distance.Between(from.x,from.y,to.x,to.y);
+    const from={x:v.body.x,y:v.body.y},route=this.routePoints(from,to,v.big?2:1);
+    const dist=route.slice(1).reduce((n,p,i)=>n+PhaserMath.Distance.Between(route[i].x,route[i].y,p.x,p.y),0);
     if(dist<1)return;
     if(runtime.huntSpeed>5){this.setMonsterPos(v,to.x,to.y);return;}
-    const dir=dominantDirection(from,to,'down');v.facing=dir;v.moving=true;
+    v.moving=true;
     const sprite=v.art&&v.body instanceof GameObjects.Sprite?v.body:undefined,start=this.time.now;
     const state={t:0};
-    v.tween=this.tweens.add({targets:state,t:1,duration:Math.min(2600,dist*9+500),ease:'Sine.easeInOut',
-      onUpdate:()=>{this.setMonsterPos(v,from.x+(to.x-from.x)*state.t,from.y+(to.y-from.y)*state.t);if(sprite&&v.art)sprite.setTexture(monsterTexture(v.art,dir,(Math.floor((this.time.now-start)/170)%2===0?1:2)));},
+    v.tween=this.tweens.add({targets:state,t:1,duration:Math.min(4200,dist*9+500),ease:'Sine.easeInOut',
+      onUpdate:()=>{const {point,direction}=samplePolyline(route,state.t);this.setMonsterPos(v,point.x,point.y);v.facing=direction;if(sprite&&v.art)sprite.setTexture(monsterTexture(v.art,direction,(Math.floor((this.time.now-start)/170)%2===0?1:2)));},
       onComplete:()=>{v.moving=false;v.tween=undefined;this.setMonsterPos(v,to.x,to.y);if(sprite&&v.art)sprite.setTexture(monsterTexture(v.art,v.facing,1));}});
   }
   /** Monstros com arte olham para o herói vivo mais próximo (`down` por padrão). */
@@ -268,11 +302,14 @@ export class Game extends Scene {
   private moveHero(view:HeroView,target:ArenaPoint,duration:number,onComplete?:()=>void){
     this.stopHero(view);
     if(runtime.huntSpeed>5){view.container.setPosition(target.x,target.y).setDepth(6+target.y/1000);onComplete?.();return;}
-    const direction=dominantDirection({x:view.container.x,y:view.container.y},target,view.direction);
-    const distance=PhaserMath.Distance.Between(view.container.x,view.container.y,target.x,target.y);
-    if(distance<1){this.setDirection(view,direction,false);onComplete?.();return;}
-    view.walking=true;this.setDirection(view,direction,true);
-    view.moveTween=this.tweens.add({targets:view.container,x:target.x,y:target.y,duration,ease:'Sine.easeInOut',onUpdate:()=>view.container.setDepth(6+view.container.y/1000),onComplete:()=>{view.moveTween=undefined;view.walking=false;this.setDirection(view,direction,false);onComplete?.();}});
+    const from={x:view.container.x,y:view.container.y},route=this.routePoints(from,target);
+    const distance=route.slice(1).reduce((n,p,i)=>n+PhaserMath.Distance.Between(route[i].x,route[i].y,p.x,p.y),0);
+    if(distance<1){this.setDirection(view,dominantDirection(from,target,view.direction),false);onComplete?.();return;}
+    view.walking=true;this.setDirection(view,dominantDirection(route[0],route[1],view.direction),true);
+    const state={t:0};
+    view.moveTween=this.tweens.add({targets:state,t:1,duration,ease:'Sine.easeInOut',
+      onUpdate:()=>{const {point,direction}=samplePolyline(route,state.t);view.container.setPosition(point.x,point.y).setDepth(6+point.y/1000);if(direction!==view.direction)this.setDirection(view,direction,true);},
+      onComplete:()=>{view.moveTween=undefined;view.walking=false;view.container.setPosition(target.x,target.y).setDepth(6+target.y/1000);this.setDirection(view,dominantDirection(route[Math.max(0,route.length-2)],target,view.direction),false);onComplete?.();}});
   }
 
   /** Andando: animação de 2 poses; parado: pose 1 da direção. */

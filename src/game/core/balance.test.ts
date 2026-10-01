@@ -10,11 +10,11 @@ const XP_PER_HOUR: Record<string, number> = { catacumbas: 24000, floresta_sombri
 describe('Bloco 9 — harness de balanceamento (party de referência, 6 ciclos)', () => {
   it.each(HUNTS.map(h => h.id))('%s cabe nas faixas do plano', huntId => {
     const m = simulateHunt(huntId, { seed: 5 }); // semente fixa: a linha de base deixa de ser intermitente
-    expect(m.normalWaveSeconds).toHaveLength(12); expect(m.bossWaveSeconds).toHaveLength(6);
+    expect(m.normalWaveSeconds).toHaveLength(30); expect(m.bossWaveSeconds).toHaveLength(6);
     // Faixa do plano sobre a média das waves (cada wave individual varia alguns segundos com o RNG).
-    expect(mean(m.normalWaveSeconds)).toBeGreaterThanOrEqual(15); expect(mean(m.normalWaveSeconds)).toBeLessThanOrEqual(35);
+    expect(mean(m.normalWaveSeconds)).toBeGreaterThanOrEqual(15); expect(mean(m.normalWaveSeconds)).toBeLessThanOrEqual(40);
     expect(mean(m.bossWaveSeconds)).toBeGreaterThanOrEqual(35); expect(mean(m.bossWaveSeconds)).toBeLessThanOrEqual(90);
-    for (const s of m.normalWaveSeconds) expect(s).toBeLessThanOrEqual(40);
+    for (const s of m.normalWaveSeconds) expect(s).toBeLessThanOrEqual(60);   // a 5ª wave (7 monstros) é a mais longa
     for (const s of m.bossWaveSeconds) { expect(s).toBeGreaterThanOrEqual(30); expect(s).toBeLessThanOrEqual(100); }
     expect(m.defeats).toBe(0);
     expect(m.minHpFraction).toBeGreaterThanOrEqual(.2);

@@ -49,8 +49,8 @@ describe('Fase 12 D — informações das hunts', () => {
 
   it('waveViews e risco', () => {
     const w = waveViews(HUNT_BY_ID.floresta_sombria);
-    expect(w).toHaveLength(3); expect(w[0].counts).toEqual([{ monsterId: 'wolf', count: 4 }]); expect(w[1].counts).toEqual([{ monsterId: 'wolf', count: 2 }, { monsterId: 'bandit', count: 2 }]);
-    expect(w[2].boss).toBe(true); expect(w[2].counts[0]).toEqual({ monsterId: 'spider_queen', count: 1 });
+    expect(w).toHaveLength(6); expect(w[0].counts).toEqual([{ monsterId: 'wolf', count: 3 }]); expect(w[1].counts).toEqual([{ monsterId: 'wolf', count: 3 }, { monsterId: 'bandit', count: 1 }]);
+    expect(w[5].boss).toBe(true); expect(w[5].counts[0]).toEqual({ monsterId: 'spider_queen', count: 1 });
     const { s } = make(); level(s(), 5); const r = huntRiskInfo(s(), HUNT_BY_ID.floresta_sombria); expect(r.label).toBe('Arriscada'); expect(r.gap).toBe(3); expect(r.ratio).toBeGreaterThan(0);
   });
 
@@ -71,7 +71,7 @@ describe('Fase 12 D — hunt programada', () => {
     const bad = JSON.parse(JSON.stringify(s())); bad.pendingHunt = 'nada'; expect(cloneValidatedState(bad).pendingHunt).toBeUndefined();
     expect(e.queueHunt('catacumbas')).toBe(true); expect(s().pendingHunt).toBeUndefined();
     e.queueHunt('floresta_sombria');
-    s().autoAdvance = false; for (let i = 0; i < 3; i++) { expect(s().huntId).toBe('catacumbas'); s().status = 'transition'; s().transitionMs = 0; e.descend(); }
+    s().autoAdvance = false; for (let i = 0; i < 6; i++) { expect(s().huntId).toBe('catacumbas'); s().status = 'transition'; s().transitionMs = 0; e.descend(); }
     expect(s().huntId).toBe('floresta_sombria'); expect(s().wave).toBe(0); expect(s().pendingHunt).toBeUndefined();
     e.queueHunt('pantano_toxico'); e.end(); expect(s().pendingHunt).toBeUndefined();
     e.selectHunt('catacumbas'); e.start(); e.queueHunt('pantano_toxico'); e.end(); e.selectHunt('floresta_sombria'); expect(s().pendingHunt).toBeUndefined();

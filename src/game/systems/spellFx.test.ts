@@ -30,3 +30,16 @@ describe('ataques dos monstros', () => {
     const hits = seen.filter(f => f.type === 'attack' && f.source && !f.source.startsWith('c-') && f.target); expect(hits.length).toBeGreaterThan(0);
   });
 });
+
+describe('waves maiores e obstáculos (dados)', () => {
+  it('lateWaveBonus: nunca nas 2 primeiras waves nem no chefe; chance cresce com a wave', async () => {
+    const { lateWaveBonus } = await import('./waves');
+    expect(lateWaveBonus(0, false, () => 0)).toBe(0); expect(lateWaveBonus(1, false, () => 0)).toBe(0); expect(lateWaveBonus(5, true, () => 0)).toBe(0);
+    expect(lateWaveBonus(2, false, () => .1)).toBe(1); expect(lateWaveBonus(2, false, () => .13)).toBe(0); expect(lateWaveBonus(4, false, () => .3)).toBe(1);
+  });
+  it('todo desenho de obstáculo citado pelas hunts existe em arte/obstaculos', async () => {
+    const { HUNT_OBSTACLES } = await import('../data/obstacles'); const { ART } = await import('../art/data'); const { HUNTS } = await import('../data/hunts');
+    for (const h of HUNTS) expect(HUNT_OBSTACLES[h.id], h.id).toBeTruthy();
+    for (const ids of Object.values(HUNT_OBSTACLES)) for (const id of ids) { const g = ART.obstacles[id]; expect(g, id).toBeTruthy(); expect(g.length).toBeLessThanOrEqual(32); expect(g[0].length).toBeLessThanOrEqual(32); }
+  });
+});

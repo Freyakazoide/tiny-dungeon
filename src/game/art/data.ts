@@ -11,7 +11,7 @@ export interface ArtData {
   palette: Palette; paletteNames: Record<string, string>;
   regions: RegionKey[]; colors: Record<string, ColorOption[]>; meta: MetaRow[];
   sprites: { personagens: Record<string, Partial<Record<FrameName, Grid>>>; monstros: Record<string, Partial<Record<FrameName, Grid>>> };
-  tiles: Record<string, Record<string, Grid>>; maps: Record<string, Grid>; tilesets: Record<string, Palette>;
+  obstacles: Record<string, Grid>; tiles: Record<string, Record<string, Grid>>; maps: Record<string, Grid>; tilesets: Record<string, Palette>;
 }
 
 /** Erro de validação com o caminho do arquivo e a linha. */
@@ -84,13 +84,15 @@ export function buildArtData(files: Record<string, string>): ArtData {
   };
 
   const sprites: ArtData['sprites'] = { personagens: {}, monstros: {} };
-  const tiles: ArtData['tiles'] = {}, maps: ArtData['maps'] = {};
+  const tiles: ArtData['tiles'] = {}, maps: ArtData['maps'] = {}, obstacles: ArtData['obstacles'] = {};
   const mapFiles: { name: string; f: { path: string; text: string } }[] = [];
   for (const [key, f] of byKey) {
     let m = /^(personagens|monstros)\/([^/]+)\/(down|up|left|right)_([12])\.csv$/.exec(key);
     if (m) { ((sprites[m[1] as 'personagens' | 'monstros'][m[2]] ??= {}) as Record<string, Grid>)[`${m[3]}_${m[4]}`] = grid(f); continue; }
     m = /^tiles\/([^/]+)\/([^/]+)\.csv$/.exec(key);
     if (m) { const g = grid(f); if (g.length !== 16 || g.some(row => row.length !== 16)) throw new ArtError(f.path, undefined, `tile deve ser 16×16 (é ${g[0].length}×${g.length})`); (tiles[m[1]] ??= {})[m[2]] = g; continue; }
+    m = /^obstaculos\/([^/]+)\.csv$/.exec(key);
+    if (m) { const g = grid(f); if (g.length > 32 || g.some(row => row.length > 32)) throw new ArtError(f.path, undefined, `obstáculo cabe numa célula (até 32×32; é ${g[0].length}×${g.length})`); obstacles[m[1]] = g; continue; }
     m = /^mapas\/([^/]+)\.csv$/.exec(key);
     if (m) mapFiles.push({ name: m[1], f });
   }
@@ -109,7 +111,7 @@ export function buildArtData(files: Record<string, string>): ArtData {
       tilesets[r.cells[0]] = swap;
     } }
 
-  return { palette, paletteNames, regions, colors, meta, sprites, tiles, maps, tilesets };
+  return { palette, paletteNames, regions, colors, meta, sprites, obstacles, tiles, maps, tilesets };
 }
 
 /** Carga real: todos os CSV de `arte/` (leitura síncrona, validada na importação). */

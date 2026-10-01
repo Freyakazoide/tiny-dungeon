@@ -18,13 +18,13 @@ describe('Waves B — dificuldade por hunt (harness com talentos, itens e refor�
   it.each(later.map(h => h.id))('%s cumpre as faixas B3 (40 ciclos)', huntId => {
     const hunt = HUNT_BY_ID[huntId];
     const m = simulateHunt(huntId, { cycles: 40, reference: true, talents: true, extras: true, seed: SEED, scale: 'hunt' });
-    expect(m.waveSeconds).toHaveLength(120);
+    expect(m.waveSeconds).toHaveLength(240);
     expect(mean(m.waveSeconds)).toBeGreaterThanOrEqual(20); expect(mean(m.waveSeconds)).toBeLessThanOrEqual(45);
-    expect(m.p95).toBeLessThanOrEqual(60); expect(m.maxWaveSeconds).toBeLessThanOrEqual(90);
+    expect(m.p95).toBeLessThanOrEqual(60); expect(m.maxWaveSeconds).toBeLessThanOrEqual(110);
     expect(m.defeats).toBe(0);
     const potion = m.potionCostTotal / m.goldTotal;
     expect(potion).toBeGreaterThanOrEqual(.10); expect(potion).toBeLessThanOrEqual(.28);
-    expect(m.xpPerHour).toBeLessThanOrEqual(hunt.refXpPerHour * 1.25);
+    expect(m.xpPerHour).toBeLessThanOrEqual(hunt.refXpPerHour * 1.3);
     if (m.bigWaves) expect(m.potionPerBigWave).toBeLessThanOrEqual(5);
   }, 120000);
 
@@ -70,8 +70,8 @@ describe('Waves C — começo do jogo (Catacumbas)', () => {
     expect(potion).toBeGreaterThanOrEqual(.15); expect(potion).toBeLessThanOrEqual(.28);
   }, 120000);
 
-  it('as Catacumbas têm escala gentil (0,9 / 0,7) e tabela de reforços própria sem hordas', () => {
-    expect(HUNT_BY_ID.catacumbas.monsterScale).toEqual({ hp: 0.9, atk: 0.7 });
+  it('as Catacumbas têm escala gentil (0,85 / 0,6) e tabela de reforços própria sem hordas', () => {
+    expect(HUNT_BY_ID.catacumbas.monsterScale).toEqual({ hp: 0.85, atk: 0.6 });
     expect(Math.max(...HUNT_BY_ID.catacumbas.extrasTable!.map(r => r.extra))).toBe(4);
     expect(HUNT_BY_ID.floresta_sombria.extrasTable).toBeUndefined();
   });

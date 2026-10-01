@@ -36,15 +36,15 @@ describe('Fase 13 C — texturas', () => {
 });
 
 describe('Fase 13 C — posições (sem células repetidas)', () => {
-  it('heróis e até 24 monstros (com e sem chefe) ficam na arena e nunca dividem célula', () => {
+  it('heróis e até 28 monstros (com e sem chefe) ficam na arena e nunca dividem célula', () => {
     const team = [{ id: 'a', row: 'front' as const }, { id: 'b', row: 'front' as const }, { id: 'c', row: 'back' as const }, { id: 'd', row: 'back' as const }];
     const hero = [...formationCells(team).values(), ...entranceCells(team.map(t => t.id)).values()];
-    for (const boss of [false, true]) for (const n of [3, 12, 24]) {
-      const mons = spawnCells(n, boss), used = new Set<string>(), block = boss ? ['6,0', '7,0', '6,1', '7,1'] : [];
+    for (const boss of [false, true]) for (const n of [3, 12, 24, 28]) {
+      const mons = spawnCells(n, boss), used = new Set<string>(), block = boss ? ['0,3', '1,3', '0,4', '1,4'] : [];
       for (const cell of [...hero.slice(0, 4), ...mons]) { expect(inArena(cell)).toBe(true); }
       for (const cell of mons) { expect(used.has(cellKey(cell))).toBe(false); used.add(cellKey(cell)); }
       if (boss) { for (const cell of mons.slice(1)) expect(block).not.toContain(cellKey(cell)); expect(mons[0]).toEqual(BOSS_CELL); }
-      for (const cell of mons) expect(cell.r).toBeLessThanOrEqual(2);
+      for (const cell of mons) expect(cell.c).toBeLessThanOrEqual(3);
     }
     const front = [...formationCells(team).entries()]; expect(new Set(front.map(([, c]) => cellKey(c))).size).toBe(front.length);
   });

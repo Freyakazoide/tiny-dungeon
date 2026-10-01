@@ -123,8 +123,8 @@ describe('Waves A — engine', () => {
     try {
       const priv = e as unknown as { rollWaveExtras(): number; spawnWave(): void };
       priv.rollWaveExtras = () => 16; priv.spawnWave(); e.getSnapshot().status = 'running';
-      expect(e.getSnapshot().monsters).toHaveLength(8); expect(e.getSnapshot().wavePending).toHaveLength(12);
-      const total = e.getSnapshot().waveInfo!.total; expect(total).toBe(20);
+      expect(e.getSnapshot().monsters).toHaveLength(8); expect(e.getSnapshot().wavePending).toHaveLength(11);
+      const total = e.getSnapshot().waveInfo!.total; expect(total).toBe(19);
       let peak = 0, fullyIn = -1;
       for (let step = 0; step < 150 && fullyIn < 0; step++) {
         const s = e.getSnapshot(); s.characters.forEach(c => { c.hp = 1e9; }); // ninguém morre: só medimos a entrada
