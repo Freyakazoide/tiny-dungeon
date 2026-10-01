@@ -97,7 +97,7 @@ describe('Fase 11 — Classes: Árvore completa', () => {
 describe('Fase 11 — ícones de classe', () => {
   it('classIconName cai no ícone da porta; o conjunto bate com o diretório', () => {
     for (const n of CLASS_NODES.filter(n => n.tier === 1)) expect(classIconName(n)).toBe(`class_${n.id}`);
-    for (const n of CLASS_NODES.filter(n => n.tier === 2)) expect(classIconName(n)).toMatch(/^(prof|elem)_/);   // subclasses usam o ícone da porta até ganharem o seu
+    for (const n of CLASS_NODES.filter(n => n.tier === 2)) expect(classIconName(n)).toBe(`class_${n.parent}`);   // especializações usam o emblema da classe-mãe
     const files = readdirSync('public/assets/ui/icons').filter(f => /^class_.*\.png$/.test(f)).map(f => f.replace('.png', '')).sort();
     expect([...CLASS_ICON_PNGS].sort()).toEqual(files);
   });

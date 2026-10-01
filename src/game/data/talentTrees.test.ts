@@ -8,13 +8,13 @@ const trees = Object.values(TALENT_TREES);
 const count = (tree: TalentTreeDef, kind: string) => tree.nodes.filter(n => n.kind === kind).length;
 
 describe('talent-trees.json — integridade dos dados (Fase 6)', () => {
-  it('62 árvores: 1 Squire + 15 Tier 1 + 46 Tier 2, uma para cada nó da árvore de classes; 2.664 nós com ids únicos', () => {
-    expect(trees).toHaveLength(62);
-    expect(trees.filter(t => t.tier === 0)).toHaveLength(1); expect(trees.filter(t => t.tier === 1)).toHaveLength(15); expect(trees.filter(t => t.tier === 2)).toHaveLength(46);
+  it('106 árvores: 1 Squire + 15 Tier 1 + 90 Tier 2, uma para cada nó da árvore de classes; 4.292 nós com ids únicos', () => {
+    expect(trees).toHaveLength(106);
+    expect(trees.filter(t => t.tier === 0)).toHaveLength(1); expect(trees.filter(t => t.tier === 1)).toHaveLength(15); expect(trees.filter(t => t.tier === 2)).toHaveLength(90);
     for (const node of CLASS_NODES) { const tree = TALENT_TREES[node.id]; expect(tree, node.id).toBeDefined(); expect(tree.tier).toBe(node.tier); }
     for (const tree of trees) if (tree.tier === 2) expect(TALENT_TREES[CLASS_BY_ID[tree.id].parent!].tier).toBe(1);
     const ids = trees.flatMap(t => t.nodes.map(n => n.id));
-    expect(ids).toHaveLength(2664); expect(new Set(ids).size).toBe(2664); expect(TALENT_NODES.size).toBe(2664);
+    expect(ids).toHaveLength(4292); expect(new Set(ids).size).toBe(4292); expect(TALENT_NODES.size).toBe(4292);
   });
 
   it('todo nó (exceto a Origem) tem pais em linhas inferiores e a grade inteira é alcançável a partir da Origem', () => {
@@ -51,7 +51,7 @@ describe('talent-trees.json — integridade dos dados (Fase 6)', () => {
 
   it('todo Major e Keystone tem mecânica com id estável; nenhuma está implementada ainda (fica "Em breve")', () => {
     const mechanics = trees.flatMap(t => t.nodes.filter(n => n.kind === 'major' || n.kind === 'keystone').map(n => n.mechanic?.id));
-    expect(mechanics).toHaveLength(214); expect(mechanics.every(Boolean)).toBe(true); expect(new Set(mechanics).size).toBe(214);
+    expect(mechanics).toHaveLength(346); expect(mechanics.every(Boolean)).toBe(true); expect(new Set(mechanics).size).toBe(346);
     expect(MECHANICS_IMPLEMENTED.size).toBe(0);
   });
 

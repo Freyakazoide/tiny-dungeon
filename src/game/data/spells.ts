@@ -1,4 +1,5 @@
 import type { SpellDef } from '../core/types';
+import { SPEC_SPELLS } from './specSpells';
 
 export const SPELLS: SpellDef[] = [
   ['hunter_shot','hunter','Tiro Perfurante',1,9,4,'enemy',1.65,'damage',0,'Disparo perfurante'], ['hunter_volley','hunter','Chuva de Flechas',1,15,7,'allEnemies',1.15,'damage',0,'Chuva de flechas'], ['hunter_aim','hunter','Mira Verdadeira',1,22,10,'self',.32,'buff',7,'Aumenta ataque'], ['hunter_finisher','hunter','Tiro Fatal',1,24,9,'enemy',2.4,'damage',0,'Disparo devastador'],
@@ -18,14 +19,8 @@ export const SPELLS: SpellDef[] = [
   ['illusionist_daze','illusionist','Atordoar a Mente',1,12,6,'enemy',1.2,'damage',0,'Dano mental com atordoamento'], ['illusionist_mirror','illusionist','Imagem Espelhada',2,14,9,'self',32,'shield',6,'Um reflexo absorve dano'], ['illusionist_terror','illusionist','Terror Coletivo',4,22,10,'allEnemies',.9,'damage',0,'Atordoa todos os inimigos'], ['illusionist_haze','illusionist','Névoa Hipnótica',7,18,8,'enemy',1.6,'damage',0,'Dano mental forte'],
   ['gunner_heavy','gunner','Disparo Pesado',1,9,5,'enemy',2.0,'damage',0,'Tiro de alto calibre'], ['gunner_barrage','gunner','Rajada',2,15,7,'allEnemies',1.15,'damage',0,'Fogo em área'], ['gunner_overcharge','gunner','Sobrecarga',4,16,10,'self',.3,'buff',7,'Aumenta o ataque'], ['gunner_grenade','gunner','Granada',7,26,11,'allEnemies',1.75,'damage',0,'Explosão em área'],
 ].map(([id,classId,name,level,mana,cooldown,target,power,kind,duration,description]) => ({ id, classId, name, level, mana, cooldown, target, power, kind, duration, description } as SpellDef));
-/** Magias das subclasses do Mago (Tier 2): entram no kit mage, mas só ficam disponíveis com o nó no caminho. */
-const NODE_SPELLS: SpellDef[] = [
-  { id: 'pyro_fireball', classId: 'mage', node: 'piromante', name: 'Bola de Fogo', level: 1, mana: 16, cooldown: 5, target: 'enemy', power: 1.9, kind: 'damage', element: 'fire', description: 'Bola de fogo de alto dano' },
-  { id: 'pyro_inferno', classId: 'mage', node: 'piromante', name: 'Inferno', level: 1, mana: 30, cooldown: 10, target: 'allEnemies', power: 1.2, kind: 'damage', element: 'fire', burnStacks: 2, description: 'Queima todos os inimigos (+2 stacks de Combustão)' },
-  { id: 'cryo_shard', classId: 'mage', node: 'criomante', name: 'Estilhaço de Gelo', level: 1, mana: 14, cooldown: 4, target: 'enemy', power: 1.7, kind: 'damage', element: 'ice', description: 'Estilhaço gélido; parte do dano vira barreira' },
-  { id: 'cryo_nova', classId: 'mage', node: 'criomante', name: 'Nova Glacial', level: 1, mana: 28, cooldown: 10, target: 'allEnemies', power: 1.0, kind: 'damage', element: 'ice', freeze: 2, description: 'Congela todos os inimigos por 2 s' },
-  { id: 'plasma_beam', classId: 'mage', node: 'arcanista_de_plasma', name: 'Raio de Plasma', level: 1, mana: 22, cooldown: 6, target: 'enemy', power: 2.2, kind: 'damage', element: 'energy', description: 'Feixe de plasma (crítico ×2,5, recarga −20%)' },
-];
+/** Uma magia por especialização (Tier 2), geradas de tools/classes/specs.py. */
+const NODE_SPELLS: SpellDef[] = SPEC_SPELLS;
 SPELLS.push(...NODE_SPELLS);
 /** Elemento e controle das magias de kit (o resto segue a arma/foco). */
 const KIT_TWEAKS: Record<string, Partial<SpellDef>> = {

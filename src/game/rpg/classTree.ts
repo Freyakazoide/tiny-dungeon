@@ -1,10 +1,13 @@
 import type { CounterId } from './profile';
 import type { ProficiencyId } from './proficiencies';
+import { TIER2_SPECS, type SpecRow } from './tier2Specs';
 
 export interface Requirement {
   level: number;
   skills?: Partial<Record<ProficiencyId, number>>;
   counters?: Partial<Record<CounterId, number>>;
+  /** Pelo menos `count` proficiências elementais no nível `level` (qualquer combinação: o Mago escolhe os elementos). */
+  elements?: { count: number; level: number };
 }
 export interface ClassNode {
   id: string; name: string; tier: 0 | 1 | 2; parent: string | null;
@@ -23,15 +26,12 @@ const T2_LEVEL = 25;
 const tier1 = (id: string, name: string, specialty: string, skill: ProficiencyId): ClassNode =>
   ({ id, name, tier: 1, parent: 'aprendiz', specialty, requires: { level: T1_LEVEL, skills: { [skill]: 25 } } });
 
-const pure = (id: string, name: string, parent: string, skill: ProficiencyId, counter?: CounterId): ClassNode =>
-  ({ id, name, tier: 2, parent, requires: { level: T2_LEVEL, skills: { [skill]: 38 }, ...(counter && { counters: { [counter]: COUNTER_TARGETS[counter] } }) } });
-
-const hybrid = (id: string, name: string, parent: string, a: ProficiencyId, b: ProficiencyId): ClassNode =>
-  ({ id, name, tier: 2, parent, requires: { level: T2_LEVEL, skills: { [a]: 35, [b]: 35 } } });
-
-/** Subclasse com uma proficiência em 25 mais um contador vitalício. */
-const counted = (id: string, name: string, parent: string, skill: ProficiencyId, counter: CounterId): ClassNode =>
-  ({ id, name, tier: 2, parent, requires: { level: T2_LEVEL, skills: { [skill]: 35 }, counters: { [counter]: COUNTER_TARGETS[counter] } } });
+/** Nó de Tier 2 a partir da linha da tabela: pura = 1 skill 38 (+ contador); com contador = skill 35 + contador; híbrida = 2 skills 35/35; elementos = N elementos livres. */
+const spec = (row: SpecRow): ClassNode => {
+  const skills = Object.fromEntries(Object.entries(row.skills)) as Requirement['skills'];
+  const requires: Requirement = { level: T2_LEVEL, ...(Object.keys(skills ?? {}).length ? { skills } : {}), ...(row.counter ? { counters: { [row.counter]: COUNTER_TARGETS[row.counter] } } : {}), ...(row.elements ? { elements: row.elements } : {}) };
+  return { id: row.id, name: row.name, tier: 2, parent: row.parent, specialty: row.tagline, requires };
+};
 
 export const CLASS_NODES: ClassNode[] = [
   { id: 'aprendiz', name: 'Squire', tier: 0, parent: null, requires: { level: 1 } },
@@ -53,63 +53,15 @@ export const CLASS_NODES: ClassNode[] = [
   tier1('druida', 'Druida', 'Magia da natureza e cura', 'earth'),
   tier1('artilheiro', 'Artilheiro', 'Dano físico explosivo', 'ranged'),
 
-  // ---------- Tier 2: Mago (9 puras + 9 híbridas) ----------
-  pure('piromante', 'Piromante', 'mago', 'fire'),
-  pure('criomante', 'Criomante', 'mago', 'ice'),
-  pure('eletromante', 'Eletromante', 'mago', 'energy'),
-  pure('geomante', 'Geomante', 'mago', 'earth'),
-  pure('miasmante', 'Miasmante', 'mago', 'poison'),
-  pure('teurgo', 'Teurgo', 'mago', 'holy'),
-  pure('lich', 'Lich', 'mago', 'death'),
-  pure('cinetico', 'Cinético', 'mago', 'physical'),
-  pure('psionista', 'Psionista', 'mago', 'psychic'),
-  hybrid('infernalista', 'Infernalista', 'mago', 'fire', 'death'),
-  hybrid('tempestuoso', 'Tempestuoso', 'mago', 'energy', 'earth'),
-  hybrid('glaciomante_de_impacto', 'Glaciomante de Impacto', 'mago', 'ice', 'physical'),
-  hybrid('flagelo_miasmatico', 'Flagelo Miasmático', 'mago', 'death', 'poison'),
-  hybrid('inquisidor_mental', 'Inquisidor Mental', 'mago', 'holy', 'psychic'),
-  hybrid('bio_geomante', 'Bio-Geomante', 'mago', 'earth', 'poison'),
-  hybrid('arcanista_de_plasma', 'Arcanista de Plasma', 'mago', 'fire', 'energy'),
-  hybrid('singularista', 'Singularista', 'mago', 'physical', 'energy'),
-  hybrid('dominador_sombrio', 'Dominador Sombrio', 'mago', 'psychic', 'death'),
-
-  // ---------- Tier 2: demais classes (2 cada) ----------
-  pure('gladiador', 'Gladiador', 'guerreiro', 'melee', 'crits'),
-  pure('berserker', 'Berserker', 'guerreiro', 'melee', 'damageTaken'),
-  hybrid('paladino', 'Paladino', 'guardiao', 'defense', 'holy'),
-  hybrid('cavaleiro_negro', 'Cavaleiro Negro', 'guardiao', 'defense', 'death'),
-  pure('assassino', 'Assassino', 'ladino', 'melee', 'bossCrits'),
-  hybrid('mestre_das_sombras', 'Mestre das Sombras', 'ladino', 'melee', 'death'),
-  pure('atirador_de_elite', 'Atirador de Elite', 'cacador', 'ranged'),
-  hybrid('mestre_das_feras', 'Mestre das Feras', 'cacador', 'ranged', 'earth'),
-
-  counted('sumo_sacerdote', 'Sumo Sacerdote', 'clerigo', 'holy', 'healingDone'),
-  hybrid('inquisidor', 'Inquisidor', 'clerigo', 'holy', 'magic'),
-  counted('maestro', 'Maestro', 'bardo', 'magic', 'buffsApplied'),
-  hybrid('menestrel_do_caos', 'Menestrel do Caos', 'bardo', 'magic', 'psychic'),
-  hybrid('mestre_do_chi', 'Mestre do Chi', 'monge', 'physical', 'magic'),
-  hybrid('punho_de_ferro', 'Punho de Ferro', 'monge', 'physical', 'defense'),
-  pure('necromante', 'Necromante', 'bruxo', 'death'),
-  counted('epidemiologista', 'Epidemiologista', 'bruxo', 'poison', 'dotDamage'),
-  hybrid('mestre_bombardeiro', 'Mestre Bombardeiro', 'alquimista', 'ranged', 'fire'),
-  counted('transmutador', 'Transmutador', 'alquimista', 'poison', 'supportPotionsUsed'),
-  counted('cacador_de_recompensas', 'Caçador de Recompensas', 'mercenario', 'melee', 'bossKills'),
-  counted('corsario', 'Corsário', 'mercenario', 'melee', 'goldEarned'),
-  hybrid('forjador_de_laminas', 'Forjador de Lâminas', 'mestre_runico', 'magic', 'melee'),
-  hybrid('guardiao_das_runas', 'Guardião das Runas', 'mestre_runico', 'magic', 'defense'),
-  hybrid('mestre_dos_espelhos', 'Mestre dos Espelhos', 'ilusionista', 'psychic', 'magic'),
-  counted('hipnotizador', 'Hipnotizador', 'ilusionista', 'psychic', 'controlSpells'),
-  hybrid('forma_feral', 'Forma Feral', 'druida', 'earth', 'melee'),
-  hybrid('guardiao_da_natureza', 'Guardião da Natureza', 'druida', 'earth', 'magic'),
-  hybrid('engenheiro_de_torretas', 'Engenheiro de Torretas', 'artilheiro', 'ranged', 'energy'),
-  hybrid('exotraje', 'Exotraje', 'artilheiro', 'ranged', 'defense'),
+  // ---------- Tier 2: 90 especializações (15 classes × 6), geradas de tools/classes/specs.py
+  ...TIER2_SPECS.map(spec),
 ];
 
 /**
  * Só os nós com kit pronto são jogáveis; o resto aparece como "Em breve" e não deixa evoluir (a evolução é
  * irreversível: ninguém deve ficar preso numa classe vazia). Para liberar, cadastre o kit e inclua o id aqui.
  */
-export const PLAYABLE_NODES: ReadonlySet<string> = new Set(['aprendiz', ...CLASS_NODES.filter(n => n.tier === 1).map(n => n.id), 'piromante', 'criomante', 'arcanista_de_plasma']);
+export const PLAYABLE_NODES: ReadonlySet<string> = new Set(['aprendiz', ...CLASS_NODES.filter(n => n.tier <= 2).map(n => n.id)]);
 export const isPlayable = (id: string) => PLAYABLE_NODES.has(id);
 
 export const CLASS_BY_ID: Record<string, ClassNode> = Object.fromEntries(CLASS_NODES.map(n => [n.id, n]));

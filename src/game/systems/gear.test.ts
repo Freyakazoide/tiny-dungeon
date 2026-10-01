@@ -107,8 +107,8 @@ describe('Fase 7 — equipar (seção 1.1/1.2)', () => {
   });
 
   it('itens compartilhados servem às outras classes e a qualquer subclasse do Tier 1', () => {
-    const { e, c } = setup('mago'); e.evolve(c.id, 'piromante', { force: true });
-    const wand = give(e, 'mago.varinha_de_carvalho'); expect(e.equipGear(c.id, wand.uid)).toBe(true); // Piromante herda os itens do Mago
+    const { e, c } = setup('mago'); e.evolve(c.id, 'evocador', { force: true });
+    const wand = give(e, 'mago.varinha_de_carvalho'); expect(e.equipGear(c.id, wand.uid)).toBe(true); // Evocador herda os itens do Mago
     const guard = setup('guerreiro'); const shield = give(guard.e, 'guardiao.escudo_bastiao'); expect(guard.e.equipGear(guard.c.id, shield.uid)).toBe(true);
   });
 

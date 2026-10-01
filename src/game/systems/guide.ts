@@ -6,7 +6,7 @@ import { TALENT_TREES } from '../data/talentTrees';
 import { AFFINITY } from '../rpg/affinity';
 import { NODE_PASSIVES } from '../rpg/passives';
 import { TRIES_PER_SECOND, etaSeconds } from '../rpg/curves';
-import { evolutionOptions } from '../rpg/evolution';
+import { elementsAtLevel, evolutionOptions } from '../rpg/evolution';
 import { PROFICIENCIES, PROFICIENCY_IDS, type ProficiencyId } from '../rpg/proficiencies';
 import { COUNTER_IDS, type CounterId } from '../rpg/profile';
 import { runtime } from '../rpg/runtime';
@@ -35,7 +35,7 @@ export const HOW_TO_COUNTER = 'contador já contabilizado em combate';
 export const HOW_TO_UNTRACKED = 'em breve: ainda não é contabilizado';
 
 export interface RequirementRow {
-  key: string; kind: 'level' | 'skill' | 'counter'; label: string;
+  key: string; kind: 'level' | 'skill' | 'counter' | 'elements'; label: string;
   /** Valor atual; null quando o contador ainda não é contabilizado (não mostrar progresso). */
   have: number | null; need: number; met: boolean; howTo: string; untracked: boolean;
   /** Só para proficiências: treinando agora? e quantos segundos faltam (null = parado / sem estimativa). */
@@ -44,13 +44,14 @@ export interface RequirementRow {
 
 /** Checklist de requisitos de um nó para o personagem, com ETA pela taxa atual de treino. */
 export function requirementRows(character: Character, node: ClassNode): RequirementRow[] {
-  const { profile } = character, { level, skills = {}, counters = {} } = node.requires;
+  const { profile } = character, { level, skills = {}, counters = {}, elements } = node.requires;
   const rate = TRIES_PER_SECOND * runtime.trainScale;
   const rows: RequirementRow[] = [{ key: 'level', kind: 'level', label: 'Nível do personagem', have: profile.level, need: level, met: profile.level >= level, howTo: 'ganhe XP em combate', untracked: false }];
   for (const [id, need] of Object.entries(skills) as [ProficiencyId, number][]) {
     const p = profile.proficiencies[id], met = p.level >= need, training = trainingNow(character, id);
     rows.push({ key: id, kind: 'skill', label: PROFICIENCIES[id].name, have: p.level, need, met, howTo: HOW_TO_PROFICIENCY[id], untracked: false, training, eta: met || !training || !trainMultiplier(character, id) ? null : etaSeconds(id, p.level, p.tries, need, rate * trainMultiplier(character, id)) });
   }
+  if (elements) { const have = elementsAtLevel(profile, elements.level); rows.push({ key: 'elements', kind: 'elements', label: `Elementos no nível ${elements.level}`, have, need: elements.count, met: have >= elements.count, howTo: 'treine magias de elementos diferentes; qualquer combinação vale', untracked: false }); }
   for (const [id, need] of Object.entries(counters) as [CounterId, number][]) {
     const untracked = UNTRACKED_COUNTERS.includes(id), have = profile.counters[id] ?? 0;
     rows.push({ key: id, kind: 'counter', label: COUNTER_NAMES[id], have: untracked ? null : have, need, met: !untracked && have >= need, howTo: untracked ? HOW_TO_UNTRACKED : HOW_TO_COUNTER, untracked });

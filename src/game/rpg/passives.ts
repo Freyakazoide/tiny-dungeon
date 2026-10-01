@@ -1,15 +1,15 @@
 
+import { SPEC_PASSIVES } from './tier2Specs';
+
 /** Efeitos de passiva: os de atributo mais os condicionais. */
 export type PassiveEffect = 'maxHp' | 'maxMana' | 'attack' | 'defense' | 'attackSpeed' | 'crit' | 'resistance' | 'magicPower' | 'cooldown' | 'tankResistance' | 'focusMagicDamage' | 'burnOnFireHit' | 'iceBarrier' | 'plasmaCrit' | 'plasmaCritMult' | 'plasmaCooldown';
 export interface PassiveDef { name: string; description: string; effects: { effect: PassiveEffect; value: number }[]; }
 
 /** Passivas de cada nó do caminho da classe; somadas em characterStats (via talentBonus) enquanto o nó estiver no `classPath`. */
 export const NODE_PASSIVES: Record<string, PassiveDef> = {
+  ...(SPEC_PASSIVES as Record<string, PassiveDef>),
   guerreiro: { name: 'Pele de Aço', description: '+10% de defesa; se for o Tanque, +8% de resistência.', effects: [{ effect: 'defense', value: .10 }, { effect: 'tankResistance', value: .08 }] },
   cacador: { name: 'Olho de Águia', description: '+6% de chance de crítico.', effects: [{ effect: 'crit', value: .06 }] },
-  piromante: { name: 'Pirólise', description: '25% de chance de aplicar 1 stack de Combustão em qualquer acerto de magia de fogo.', effects: [{ effect: 'burnOnFireHit', value: .25 }] },
-  criomante: { name: 'Geada Protetora', description: '20% do dano causado por magia de gelo vira barreira temporária (máx. 30% do HP máx.).', effects: [{ effect: 'iceBarrier', value: .20 }] },
-  arcanista_de_plasma: { name: 'Plasma Instável', description: 'Magias de fogo e energia: +8% de crítico e crítico ×2,5 (em vez de ×1,65); Raio de Plasma recarrega 20% mais rápido.', effects: [{ effect: 'plasmaCrit', value: .08 }, { effect: 'plasmaCritMult', value: 2.5 }, { effect: 'plasmaCooldown', value: .20 }] },
   guardiao: { name: 'Muralha Viva', description: '+15% de defesa e +10% de vida; se for o Tanque, +10% de resistência.', effects: [{ effect: 'defense', value: .15 }, { effect: 'maxHp', value: .10 }, { effect: 'tankResistance', value: .10 }] },
   ladino: { name: 'Golpe Furtivo', description: '+8% de chance de crítico e +8% de velocidade de ataque.', effects: [{ effect: 'crit', value: .08 }, { effect: 'attackSpeed', value: .08 }] },
   clerigo: { name: 'Fé Inabalável', description: '+12% de mana máxima e +10% de poder mágico (mais cura).', effects: [{ effect: 'maxMana', value: .12 }, { effect: 'magicPower', value: .10 }] },

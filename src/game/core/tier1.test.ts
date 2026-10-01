@@ -35,14 +35,15 @@ describe('Bloco 5 — kits de Tier 1', () => {
     expect(CLASSES.mage.growth).toMatchObject({ maxHp: 14, maxMana: 22, magicPower: 3.8 });
     expect([CLASSES.knight.weaponSkill, CLASSES.hunter.weaponSkill, CLASSES.mage.weaponSkill]).toEqual(['melee', 'ranged', 'magic']);
   });
-  it('as 15 classes base são jogáveis; subclasses sem kit ficam "Em breve"', () => {
+  it('as 15 classes base e as 90 especializações são jogáveis', () => {
     const tier1 = CLASS_NODES.filter(n => n.tier === 1);
-    expect(tier1.filter(n => isPlayable(n.id))).toHaveLength(15); expect(isPlayable('gladiador')).toBe(false);
+    expect(tier1.filter(n => isPlayable(n.id))).toHaveLength(15); expect(CLASS_NODES.filter(n => n.tier === 2 && isPlayable(n.id))).toHaveLength(90);
   });
-  it('subclasse sem kit liberado: evolve falha com "Em breve"; com force funciona e herda o kit do pai', () => {
-    const { e, a } = fresh(); e.evolve(a.id, 'guerreiro', { force: true }); a.profile.level = 25; a.profile.proficiencies.melee.level = 38; a.profile.counters.crits = 5000;
-    expect(e.evolve(a.id, 'gladiador')).toBe(false); expect(e.getSnapshot().message).toMatch(/em breve/i); expect(a.profile.classId).toBe('guerreiro');
-    expect(e.evolve(a.id, 'gladiador', { force: true })).toBe(true); expect(a.profile.classId).toBe('gladiador'); expect(a.classId).toBe('knight');
+  it('especialização: sem requisitos o evolve falha; com force vira a especialização e herda o kit do pai', () => {
+    const { e, a } = fresh(); e.evolve(a.id, 'guerreiro', { force: true });
+    expect(e.evolve(a.id, 'gladiador')).toBe(false); expect(e.getSnapshot().message).toMatch(/Requisitos pendentes/); expect(a.profile.classId).toBe('guerreiro');
+    a.profile.level = 25; a.profile.proficiencies.melee.level = 38; a.profile.counters.crits = 5000;
+    expect(e.evolve(a.id, 'gladiador')).toBe(true); expect(a.profile.classId).toBe('gladiador'); expect(a.classId).toBe('knight');
   });
   it('cada uma das 15 classes base tem kit próprio: atributos, 4 magias e uma passiva', () => {
     const seen = new Set<string>();
@@ -70,7 +71,7 @@ describe('Bloco 5 — kits de Tier 1', () => {
     expect(row('hunter_aim')).toEqual(['self', .32, 22, 10, 1]); expect(row('hunter_finisher')).toEqual(['enemy', 2.4, 24, 9, 1]);
     expect(row('mage_arc')).toEqual(['enemy', 1.75, 10, 3.5, 1]); expect(row('mage_nova')).toEqual(['allEnemies', 1.3, 20, 7, 1]);
     expect(row('mage_barrier')).toEqual(['self', 36, 22, 10, 1]); expect(row('mage_meteor')).toEqual(['allEnemies', 2, 34, 12, 1]);
-    expect(SPELLS.filter(s => s.classId === 'hunter')).toHaveLength(4); expect(SPELLS.filter(s => s.classId === 'mage' && !s.node)).toHaveLength(4);
+    expect(SPELLS.filter(s => s.classId === 'hunter' && !s.node)).toHaveLength(4); expect(SPELLS.filter(s => s.classId === 'mage' && !s.node)).toHaveLength(4);
   });
   it('passivas: Guerreiro +10% defesa e +8% resistência só se for Tanque; Caçador +6% crítico', () => {
     const { e, a, b } = fresh();
@@ -115,7 +116,7 @@ describe('Bloco 5 — kits de Tier 1', () => {
     expect(importBackup(JSON.stringify(foreign)).characters[1].talentRanks).toEqual({ 'squire.root': 1 });
   });
   it('kitOfNode: Tier 2 herda o kit do Tier 1 e classes sem kit herdam o do Squire', () => {
-    expect([kitOfNode('mago'), kitOfNode('piromante'), kitOfNode('arcanista_de_plasma'), kitOfNode('gladiador'), kitOfNode('bardo'), kitOfNode('aprendiz')]).toEqual(['mage', 'mage', 'mage', 'knight', 'bard', 'squire']);
+    expect([kitOfNode('mago'), kitOfNode('evocador'), kitOfNode('elementalista'), kitOfNode('gladiador'), kitOfNode('bardo'), kitOfNode('aprendiz')]).toEqual(['mage', 'mage', 'mage', 'knight', 'bard', 'squire']);
   });
   it('respec devolve os pontos de todas as grades do caminho e mantém as Origens', () => {
     const { e, a } = fresh(); e.evolve(a.id, 'guerreiro', { force: true }); a.profile.level = 10; a.talentRanks = { 'squire.root': 1, 'guerreiro.root': 1, 'squire.r1c2': 2, 'guerreiro.r1c2': 1 }; e.getSnapshot().gold = 10000;

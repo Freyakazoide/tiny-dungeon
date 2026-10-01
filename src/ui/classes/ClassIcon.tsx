@@ -13,6 +13,8 @@ const gateSkill = (node: ClassNode) => Object.keys(node.requires.skills ?? {})[0
 export function classIconName(node: ClassNode): string {
   const own = `class_${node.id}`;
   if (CLASS_ICON_PNGS.has(own)) return own;
+  const parent = node.parent && CLASS_ICON_PNGS.has(`class_${node.parent}`) ? `class_${node.parent}` : undefined;   // especialização: usa o emblema da classe-mãe
+  if (parent) return parent;
   const skill = gateSkill(node);
   return skill ? profIcon(skill) : 'classes';
 }

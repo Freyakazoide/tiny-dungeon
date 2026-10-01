@@ -32,9 +32,9 @@ describe('Fase 6 A — afinidade de treino por classe', () => {
     gainTries(w, 'ranged', 5); expect(w.proficiencies.ranged.tries).toBeCloseTo(2);
   });
 
-  it('Piromante em Fogo rende ×1,5 (Mago ×1,25 + 0,25 da porta) e não há requisito Fora nem Bloqueado', () => {
-    expect(AFFINITY.mago.fire).toBe(1.25); expect(AFFINITY.piromante.fire).toBe(1.5);
-    const p = as('piromante', ['mago', 'piromante']); gainTries(p, 'fire', 4); expect(p.proficiencies.fire.tries).toBeCloseTo(6);
+  it('Duelista em Melee rende ×1,75 (Ladino ×1,5 + 0,25 da porta) e não há requisito Fora nem Bloqueado', () => {
+    expect(AFFINITY.ladino.melee).toBe(1.5); expect(AFFINITY.duelista.melee).toBe(1.75);
+    const p = as('duelista', ['ladino', 'duelista']); gainTries(p, 'melee', 4); expect(p.proficiencies.melee.tries).toBeCloseTo(7);
     for (const node of CLASS_NODES.filter(n => n.tier === 2)) for (const id of Object.keys(node.requires.skills ?? {})) expect(AFFINITY[node.id][id as keyof (typeof AFFINITY)[string]], `${node.id}: ${id}`).toBeGreaterThanOrEqual(1);
     for (const node of CLASS_NODES.filter(n => n.tier === 1)) for (const id of Object.keys(node.requires.skills ?? {})) expect(AFFINITY[node.id][id as keyof (typeof AFFINITY)[string]], `${node.id}: ${id}`).toBeGreaterThanOrEqual(1);
   });
@@ -77,7 +77,7 @@ describe('Fase 6 A — afinidade de treino por classe', () => {
 
   it('linha do cartão de classe e categorias', () => {
     expect(affinitySummary('guerreiro')).toMatch(/^Especialista em Melee \(×1,5\) · Bloqueia Fogo, Gelo/);
-    expect(affinitySummary('piromante')).toMatch(/Especialista em Magia \(×1,5\), Fogo \(×1,5\)/);
+    expect(affinitySummary('duelista')).toMatch(/Especialista em Melee \(×1,75\)/);
     expect(affinitySummary('aprendiz')).toBe('');
     expect([1.5, 1.75, 1.25, 1, .4, 0].map(affinityCategory)).toEqual(['Especialista', 'Especialista', 'Afim+', 'Afim', 'Fora', 'Bloqueada']);
   });

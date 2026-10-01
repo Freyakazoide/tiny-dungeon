@@ -134,7 +134,7 @@ describe('B — ferramentas de teste', () => {
     d.giveXp(id, 10); expect(c.profile.xp).toBe(10);
     d.setProf(id, 'nada', 5); d.setProf('x', 'fire', 5); d.addCounter(id, 'nada', 1); d.setProf(id, 'fire', 1000);
     expect(c.profile.proficiencies.fire.level).toBe(35);
-    expect(d.list().nodes).toHaveLength(62);
+    expect(d.list().nodes).toHaveLength(106);
   });
   it('timeScale(1000): 1 min de combate rende ~30 mil tries', () => {
     const e = endlessCombat(() => { runtime.trainScale = 1000; }, 1);

@@ -168,10 +168,10 @@ describe('D — itens, loja e guia de classes', () => {
     const order = steps.map(s => Object.keys(s.node.requires.skills ?? {})[0]);
     expect(order.indexOf('melee')).toBeLessThan(order.indexOf('magic'));
   });
-  it('depois de virar Ladino só as 2 subclasses aparecem e as outras 14 classes base são descartadas', () => {
+  it('depois de virar Ladino só as 6 especializações aparecem e as outras 14 classes base são descartadas', () => {
     const e = new GameEngine(partyState()); const c = e.getSnapshot().characters[0];
     expect(e.evolve(c.id, 'ladino', { force: true })).toBe(true);
-    expect(nextSteps(c).map(s => s.node.id).sort()).toEqual(['assassino', 'mestre_das_sombras']);
+    expect(nextSteps(c).map(s => s.node.id).sort()).toEqual(['assassino', 'bailarino_de_laminas', 'duelista', 'envenenador', 'mestre_das_sombras', 'saqueador']);
     const { active, discarded } = treeSplit(c);
     expect(active.map(n => n.id)).toEqual(['ladino']); expect(discarded).toHaveLength(14); expect(discarded.some(n => n.id === 'ladino')).toBe(false);
   });

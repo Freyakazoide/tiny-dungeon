@@ -36,10 +36,10 @@ describe('classProgress / groupClasses', () => {
     const names = g.readySoon.map(s => s.node.name); expect([...names].sort((a, b) => a.localeCompare(b))).toEqual(names);
   });
 
-  it('Tier 2: subclasses sem kit caem em soon/readySoon', () => {
+  it('Tier 2: as 6 especializações têm kit e nenhuma cai em Em breve', () => {
     const { e, id } = make(); const c = ch(e, id); c.profile.level = 25; c.profile.classId = 'guerreiro'; c.profile.classPath = ['aprendiz', 'guerreiro']; c.profile.proficiencies.melee.level = 38;
-    const g = groupClasses(c); expect(g.ready).toEqual([]); expect(g.progress).toEqual([]);
-    expect(g.soon.length + g.readySoon.length).toBe(childrenOf('guerreiro').length);
+    const g = groupClasses(c); expect(g.soon).toEqual([]); expect(g.readySoon).toEqual([]);
+    expect(g.ready.length + g.progress.length).toBe(childrenOf('guerreiro').length); expect(childrenOf('guerreiro')).toHaveLength(6);
   });
 });
 
@@ -64,8 +64,8 @@ describe('previewEvolution', () => {
       for (const s of pv.stats) expect(after[s.key], `${t2.id} ${s.key}`).toBeCloseTo(s.after, 6);
     }
   });
-  it('sem kit (Tier 2 ainda não liberado): sem atributos nem magias, só afinidade', () => {
+  it('especialização jogável: mostra atributos, passiva e afinidade', () => {
     const { e, id } = make(); const pv = previewEvolution(e.getSnapshot(), ch(e, id), 'gladiador');
-    expect(pv.playable).toBe(false); expect(pv.stats).toEqual([]); expect(pv.kitSpells).toEqual([]); expect(Object.keys(pv.affinity)).toHaveLength(13);
+    expect(pv.playable).toBe(true); expect(pv.passive?.name).toBe('Aclamado da Arena'); expect(Object.keys(pv.affinity)).toHaveLength(13);
   });
 });

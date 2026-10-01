@@ -56,11 +56,12 @@ describe('ritmo (Tier 1 em ~8 h, depois exponencial)', () => {
 });
 
 describe('estrutura da árvore', () => {
-  it('tem 1 Aprendiz, 15 classes base e 46 subclasses (62 nós)', () => {
+  it('tem 1 Aprendiz, 15 classes base e 90 especializações (106 nós)', () => {
     expect(CLASS_NODES.filter(n => n.tier === 0)).toHaveLength(1);
     expect(CLASS_NODES.filter(n => n.tier === 1)).toHaveLength(15);
-    expect(CLASS_NODES.filter(n => n.tier === 2)).toHaveLength(46);
-    expect(CLASS_NODES).toHaveLength(62);
+    expect(CLASS_NODES.filter(n => n.tier === 2)).toHaveLength(90);
+    expect(CLASS_NODES).toHaveLength(106);
+    for (const base of CLASS_NODES.filter(n => n.tier === 1)) expect(childrenOf(base.id), base.id).toHaveLength(6);   // 3 puras + 3 híbridas
   });
   it('ids únicos e pais coerentes (Aprendiz -> Tier 1 -> Tier 2)', () => {
     expect(new Set(CLASS_NODES.map(n => n.id)).size).toBe(CLASS_NODES.length);
@@ -97,12 +98,12 @@ describe('exclusividade e evolução', () => {
     expect(p.classId).toBe('ladino');
     expect(p.classPath).toEqual(['aprendiz', 'ladino']);
   });
-  it('depois de virar Ladino, só existem as subclasses do Ladino', () => {
+  it('depois de virar Ladino, só existem as 6 especializações do Ladino', () => {
     const p = ready({ melee: 25, magic: 38, fire: 38 }, 30);
     evolveClass(p, 'ladino');
-    expect(evolutionOptions(p).map(o => o.node.id).sort()).toEqual(['assassino', 'mestre_das_sombras']);
+    expect(evolutionOptions(p).map(o => o.node.id).sort()).toEqual(['assassino', 'bailarino_de_laminas', 'duelista', 'envenenador', 'mestre_das_sombras', 'saqueador']);
     expect(evolveClass(p, 'mago').ok).toBe(false);
-    expect(evolveClass(p, 'piromante').ok).toBe(false);
+    expect(evolveClass(p, 'evocador').ok).toBe(false);
     expect(evolveClass(p, 'aprendiz').ok).toBe(false);
   });
   it('o progresso feito antes da classe é preservado', () => {
@@ -113,20 +114,20 @@ describe('exclusividade e evolução', () => {
     expect(p.proficiencies.melee.level).toBe(25);
   });
   it('híbrida exige as duas proficiências em 35 e nível 25', () => {
-    const p = ready({ magic: 25 }, 10);
-    evolveClass(p, 'mago');
-    p.level = 25; p.proficiencies.fire.level = 35;
-    expect(evolveClass(p, 'arcanista_de_plasma').ok).toBe(false);
-    p.proficiencies.energy.level = 35;
-    expect(evolveClass(p, 'arcanista_de_plasma')).toMatchObject({ ok: true });
+    const p = ready({ melee: 25 }, 10);
+    evolveClass(p, 'guerreiro');
+    p.level = 25; p.proficiencies.melee.level = 35;
+    expect(evolveClass(p, 'legionario').ok).toBe(false);
+    p.proficiencies.defense.level = 35;
+    expect(evolveClass(p, 'legionario')).toMatchObject({ ok: true });
   });
   it('pura exige 38 e a mensagem diz o que falta', () => {
-    const p = ready({ magic: 25, fire: 37 }, 10);
+    const p = ready({ magic: 25 }, 10);
     evolveClass(p, 'mago');
-    p.level = 25;
-    const check = checkRequirements(p, CLASS_BY_ID.piromante);
+    p.level = 25; p.proficiencies.magic.level = 37;
+    const check = checkRequirements(p, CLASS_BY_ID.evocador);
     expect(check.met).toBe(false);
-    expect(check.missing).toEqual(['Fogo 38 (atual 37)']);
+    expect(check.missing).toEqual(['Magia 38 (atual 37)']);
   });
   it('subclasse com contador só libera depois de atingir o contador', () => {
     const p = ready({ melee: 38 }, 25);
@@ -221,8 +222,8 @@ describe('ETA e portas novas', () => {
   });
   it('as portas da árvore usam 25 / 35 / 35 / 38', () => {
     expect(CLASS_BY_ID.guerreiro.requires.skills).toEqual({ melee: 25 });
-    expect(CLASS_BY_ID.arcanista_de_plasma.requires.skills).toEqual({ fire: 35, energy: 35 });
+    expect(CLASS_BY_ID.legionario.requires.skills).toEqual({ melee: 35, defense: 35 });
     expect(CLASS_BY_ID.sumo_sacerdote.requires.skills).toEqual({ holy: 35 });
-    expect(CLASS_BY_ID.piromante.requires.skills).toEqual({ fire: 38 });
+    expect(CLASS_BY_ID.evocador.requires.skills).toEqual({ magic: 38 });
   });
 });

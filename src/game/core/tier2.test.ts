@@ -4,7 +4,7 @@ import { partyState } from './testing';
 import type { Character } from './types';
 import { MONSTERS } from '../data/monsters';
 import { SPELLS, spellById } from '../data/spells';
-import { COUNTER_TARGETS, CLASS_BY_ID, isPlayable } from '../rpg/classTree';
+import { COUNTER_TARGETS, CLASS_BY_ID, childrenOf, isPlayable } from '../rpg/classTree';
 import { COUNTER_IDS } from '../rpg/profile';
 import { monsterHit } from '../systems/combat';
 import { characterStats, spellAvailable } from '../systems/progression';
@@ -12,109 +12,102 @@ import { UNTRACKED_COUNTERS } from '../systems/guide';
 
 afterEach(() => vi.restoreAllMocks());
 
+const childrenOfIds = (id: string) => childrenOf(id).map(n => n.id);
 const seeded = (seed: number) => () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
 const cast = (e: GameEngine, c: Character, id: string) => (e as unknown as { cast(c: unknown, s: unknown): void }).cast(c, spellById(id));
-/** Mago (Tier 1) ou subclasse na party de teste, com uma caçada rodando contra monstros que não morrem. */
-function magePlayer(path: ('mago' | 'piromante' | 'criomante' | 'arcanista_de_plasma')[] = ['mago']) {
+/** Mago (Tier 1) ou especialização na party de teste, com uma caçada rodando contra monstros que não morrem. */
+function magePlayer(path: ('mago' | 'elementalista' | 'prismatico' | 'evocador')[] = ['mago']) {
   const e = new GameEngine(partyState()); const c = e.getSnapshot().characters[0]; c.profile.level = 30;
   for (const node of path) e.evolve(c.id, node, { force: true });
   e.start(); for (const m of e.getSnapshot().monsters) { m.hp = m.maxHp = 1e12; }
   c.mana = 1e9; return { e, c, monsters: () => e.getSnapshot().monsters };
 }
 const equip = (e: GameEngine, c: Character, spellId: string) => { c.spellSlots[3] = spellId; c.spellConditions[spellId] = { manaAbove: 0 }; void e; };
+/** Magia de teste com efeito de estado (Combustão, congelamento…): as especializações novas não carregam esses campos. */
+const withSpell = <T,>(spell: Partial<(typeof SPELLS)[number]> & { id: string }, run: () => T): T => {
+  SPELLS.push({ classId: 'mage', name: 'x', level: 1, mana: 1, cooldown: 1, target: 'enemy', power: 1, kind: 'damage', description: '', ...spell } as (typeof SPELLS)[number]);
+  try { return run(); } finally { SPELLS.pop(); }
+};
 
-describe('Bloco 8 — subclasses do Mago', () => {
-  it('só as 3 subclasses do Mago são jogáveis no Tier 2, com os requisitos já na árvore', () => {
-    expect(['piromante', 'criomante', 'arcanista_de_plasma', 'lich'].map(isPlayable)).toEqual([true, true, true, false]);
-    expect(CLASS_BY_ID.piromante.requires).toEqual({ level: 25, skills: { fire: 38 } });
-    expect(CLASS_BY_ID.criomante.requires).toEqual({ level: 25, skills: { ice: 38 } });
-    expect(CLASS_BY_ID.arcanista_de_plasma.requires).toEqual({ level: 25, skills: { fire: 35, energy: 35 } });
+describe('Bloco 8 — especializações do Mago (por estilo, o elemento é livre)', () => {
+  it('as 6 especializações do Mago são jogáveis; as híbridas pedem elementos livres, não um elemento fixo', () => {
+    const ids = ['evocador', 'destruidor', 'ritualista', 'elementalista', 'prismatico', 'polimata'];
+    expect(ids.map(isPlayable)).toEqual([true, true, true, true, true, true]);
+    expect(CLASS_BY_ID.evocador.requires).toEqual({ level: 25, skills: { magic: 38 } });
+    expect(CLASS_BY_ID.destruidor.requires).toEqual({ level: 25, skills: { magic: 38 }, counters: { bossCrits: COUNTER_TARGETS.bossCrits } });
+    expect(CLASS_BY_ID.elementalista.requires).toEqual({ level: 25, elements: { count: 2, level: 35 } });
+    expect(CLASS_BY_ID.prismatico.requires).toEqual({ level: 25, elements: { count: 3, level: 30 } });
+    expect(CLASS_BY_ID.polimata.requires).toEqual({ level: 25, elements: { count: 5, level: 25 } });
+    expect(childrenOfIds('mago').sort()).toEqual([...ids].sort());
   });
-  it('evoluir soma as magias do nó nos slots livres; com os 4 slots cheios elas ficam disponíveis para equipar', () => {
+  it('requisito de elementos: conta qualquer combinação (2 elementos a 35 abrem o Elementalista)', () => {
+    const { e, c } = magePlayer(); c.profile.level = 25; e.evolve(c.id, 'mago', { force: true });
+    c.profile.proficiencies.fire.level = 35; expect(e.evolve(c.id, 'elementalista')).toBe(false);
+    c.profile.proficiencies.ice.level = 35; expect(e.evolve(c.id, 'elementalista')).toBe(true); expect(c.profile.classId).toBe('elementalista');
+    const other = magePlayer(); other.c.profile.level = 25; other.c.profile.proficiencies.holy.level = 35; other.c.profile.proficiencies.psychic.level = 35;
+    expect(other.e.evolve(other.c.id, 'elementalista')).toBe(true);
+  });
+  it('evoluir soma a magia do nó no slot livre; com os 4 slots cheios ela fica disponível para equipar', () => {
     const { e, c } = magePlayer();
-    e.unequipSpell(c.id, 3); // libera 1 slot
-    expect(c.spellSlots).toHaveLength(3);
-    e.evolve(c.id, 'piromante', { force: true });
-    expect(c.spellSlots).toHaveLength(4); expect(c.spellSlots[3]).toBe('pyro_fireball');
-    expect(e.getSnapshot().message).toMatch(/Magias novas: Bola de Fogo/);
-    expect(spellAvailable(c, spellById('pyro_inferno')!)).toBe(true); expect(spellAvailable(c, spellById('cryo_nova')!)).toBe(false);
-    expect(e.equipSpell(c.id, 2, 'pyro_inferno')).toBe(true); expect(e.equipSpell(c.id, 1, 'cryo_shard')).toBe(false);
-    expect(SPELLS.filter(s => s.node).map(s => s.id).sort()).toEqual(['cryo_nova', 'cryo_shard', 'plasma_beam', 'pyro_fireball', 'pyro_inferno']);
-    const stats = [['pyro_fireball', 1.9, 16, 5], ['pyro_inferno', 1.2, 30, 10], ['cryo_shard', 1.7, 14, 4], ['cryo_nova', 1.0, 28, 10], ['plasma_beam', 2.2, 22, 6]] as const;
-    for (const [id, power, mana, cd] of stats) expect([spellById(id)!.power, spellById(id)!.mana, spellById(id)!.cooldown]).toEqual([power, mana, cd]);
+    e.unequipSpell(c.id, 3); expect(c.spellSlots).toHaveLength(3);
+    e.evolve(c.id, 'evocador', { force: true });
+    expect(c.spellSlots).toHaveLength(4); expect(c.spellSlots[3]).toBe('evocador_spell'); expect(e.getSnapshot().message).toMatch(/Magias novas: Raio Concentrado/);
+    expect(spellAvailable(c, spellById('evocador_spell')!)).toBe(true); expect(spellAvailable(c, spellById('destruidor_spell')!)).toBe(false);
+    expect(SPELLS.filter(s => s.node).length).toBe(90);
   });
 
-  it('Piromante: 1.000 acertos de fogo aplicam Combustão em ≈25% e o dano contínuo cresce o contador', () => {
+  it('Elementalista: 1.000 acertos de fogo aplicam Combustão em ≈15% e o dano contínuo cresce o contador', () => {
     vi.spyOn(Math, 'random').mockImplementation(seeded(1));
-    const { e, c, monsters } = magePlayer(['mago', 'piromante']); equip(e, c, 'basic_fire');
+    const { e, c, monsters } = magePlayer(['mago', 'elementalista']); equip(e, c, 'basic_fire');
     let stacked = 0; const target = monsters()[0];
     for (let i = 0; i < 1000; i++) { delete target.statuses; cast(e, c, 'basic_fire'); if ((target as { statuses?: { burn?: unknown } }).statuses?.burn) stacked++; }
-    expect(stacked / 1000).toBeGreaterThan(.21); expect(stacked / 1000).toBeLessThan(.29);
-    // dano contínuo: stacks × 0,10 × poder mágico por segundo
-    target.statuses = {}; cast(e, c, 'pyro_inferno'); const burn = target.statuses!.burn!; expect(burn.stacks).toBeGreaterThanOrEqual(2);
-    const before = c.profile.counters.dotDamage ?? 0, hp = target.hp;
-    for (let i = 0; i < 20; i++) e.tick(100);
-    expect(c.profile.counters.dotDamage! - before).toBeGreaterThan(0); expect(target.hp).toBeLessThan(hp);
-    const perSecond = burn.stacks * .10 * burn.power; expect(c.profile.counters.dotDamage! - before).toBeGreaterThan(perSecond * 1.5); // ≥ ~1,5 s de queima em 2 s
+    expect(stacked / 1000).toBeGreaterThan(.11); expect(stacked / 1000).toBeLessThan(.19);
+    withSpell({ id: 'test_burn', element: 'fire', burnStacks: 2, target: 'allEnemies' }, () => {
+      target.statuses = {}; cast(e, c, 'test_burn'); const burn = target.statuses!.burn!; expect(burn.stacks).toBeGreaterThanOrEqual(2);
+      const before = c.profile.counters.dotDamage ?? 0, hp = target.hp;
+      for (let i = 0; i < 20; i++) e.tick(100);
+      expect(c.profile.counters.dotDamage! - before).toBeGreaterThan(0); expect(target.hp).toBeLessThan(hp);
+    });
   });
   it('Combustão empilha até 5, renova a duração e termina em 5 s', () => {
     vi.spyOn(Math, 'random').mockReturnValue(.99);
-    const { e, c, monsters } = magePlayer(['mago', 'piromante']); const target = monsters()[0];
-    for (let i = 0; i < 6; i++) cast(e, c, 'pyro_inferno');
+    const { e, c, monsters } = magePlayer(['mago', 'elementalista']); const target = monsters()[0];
+    withSpell({ id: 'test_burn', element: 'fire', burnStacks: 2, target: 'allEnemies' }, () => { for (let i = 0; i < 6; i++) cast(e, c, 'test_burn'); });
     expect(target.statuses!.burn!.stacks).toBe(5); expect(target.statuses!.burn!.remaining).toBe(5);
     for (let i = 0; i < 40; i++) e.tick(100); expect(target.statuses!.burn!.remaining).toBeLessThan(1.2);
     for (let i = 0; i < 20; i++) e.tick(100); expect(target.statuses?.burn).toBeUndefined();
   });
-
-  it('Criomante: cryo_nova congela; monstro congelado não ataca por 2 s; +20% de dano físico; conta feitiço de controle', () => {
+  it('congelamento: monstro congelado não ataca por 2 s; +20% de dano físico; conta feitiço de controle', () => {
     vi.spyOn(Math, 'random').mockReturnValue(.99);
-    const { e, c, monsters } = magePlayer(['mago', 'criomante']); equip(e, c, 'cryo_nova');
+    const { e, c, monsters } = magePlayer(['mago', 'elementalista']);
     for (const m of monsters()) m.cooldown = 0.05;
     const hpTeam = () => e.getSnapshot().characters.reduce((n, x) => n + x.hp, 0);
-    cast(e, c, 'cryo_nova'); c.cooldowns.cryo_nova = 999; // como no jogo, o cast real põe a magia em recarga
+    withSpell({ id: 'test_freeze', element: 'ice', freeze: 2, target: 'allEnemies' }, () => cast(e, c, 'test_freeze'));
     expect(monsters().every(m => m.statuses?.frozen === 2)).toBe(true); expect(c.profile.counters.controlSpells).toBe(1);
-    // congelados: mesmo com o cooldown vencido, ninguém apanha durante ~1,9 s (só o Mago age; os outros também, mas nada bate neles)
     const before = hpTeam(); for (let i = 0; i < 19; i++) e.tick(100); expect(hpTeam()).toBeGreaterThanOrEqual(before);
-    for (let i = 0; i < 12; i++) e.tick(100); expect(hpTeam()).toBeLessThan(before); // descongelou e voltou a atacar
-    // dano físico +20% em congelado (ataque básico do Squire, RNG sem crítico)
+    for (let i = 0; i < 12; i++) e.tick(100); expect(hpTeam()).toBeLessThan(before);
     const attacker = e.getSnapshot().characters[1]; const dmg = () => { const m = monsters()[0]; const hp0 = m.hp; (e as unknown as { basicAttack(c: Character): void }).basicAttack(attacker); return hp0 - m.hp; };
     monsters()[0].statuses = {}; const normal = dmg(); monsters()[0].statuses = { frozen: 2 }; const frozen = dmg();
     expect(frozen / normal).toBeCloseTo(1.2, 1);
   });
-  it('Criomante: 20% do dano de gelo vira barreira, sempre ≤ 30% do HP máx.', () => {
+  it('Elementalista: 10% do dano de gelo vira barreira, sempre ≤ 30% do HP máx.', () => {
     vi.spyOn(Math, 'random').mockReturnValue(.99);
-    const { e, c } = magePlayer(['mago', 'criomante']); equip(e, c, 'cryo_shard');
-    const max = characterStats(c, e.getSnapshot()).maxHp; let last = 0;
-    for (let i = 0; i < 60; i++) {
-      cast(e, c, 'cryo_shard'); const barrier = c.effects.find(x => x.id.startsWith('cryo-barrier'))!;
-      expect(barrier.value).toBeLessThanOrEqual(max * .3 + 1e-9); expect(barrier.value).toBeGreaterThanOrEqual(last); last = barrier.value;
-    }
-    expect(last).toBeCloseTo(max * .3, 5); // saturou no teto
-    const { e: e2, c: c2 } = magePlayer(['mago', 'criomante']); cast(e2, c2, 'cryo_shard');
-    expect(c2.effects.find(x => x.id.startsWith('cryo-barrier'))!.value).toBeGreaterThan(0);
+    const { e, c } = magePlayer(['mago', 'elementalista']); equip(e, c, 'basic_ice');
+    const max = characterStats(c, e.getSnapshot()).maxHp;
+    cast(e, c, 'basic_ice'); const first = c.effects.find(x => x.id.startsWith('cryo-barrier'))!; expect(first.value).toBeGreaterThan(0); expect(first.value).toBeLessThanOrEqual(max * .3 + 1e-9);
+    let last = first.value; for (let i = 0; i < 400; i++) { cast(e, c, 'basic_ice'); const b = c.effects.find(x => x.id.startsWith('cryo-barrier'))!; expect(b.value).toBeLessThanOrEqual(max * .3 + 1e-9); expect(b.value).toBeGreaterThanOrEqual(last); last = b.value; }
   });
   it('atordoar (stun) também impede o ataque e conta como controle', () => {
-    const { e, c, monsters } = magePlayer(['mago', 'criomante']); SPELLS.push({ id: 'test_stun', classId: 'mage', name: 'x', level: 1, mana: 1, cooldown: 1, target: 'enemy', power: 1, kind: 'damage', stun: 1.5, description: '' });
-    try { for (const m of monsters()) m.cooldown = .05; const hp = e.getSnapshot().characters.reduce((n, x) => n + x.hp, 0); cast(e, c, 'test_stun'); expect(monsters()[0].statuses!.stunned).toBe(1.5); expect(c.profile.counters.controlSpells).toBe(1); void hp; }
-    finally { SPELLS.pop(); }
+    const { e, c, monsters } = magePlayer(['mago', 'elementalista']);
+    withSpell({ id: 'test_stun', stun: 1.5 }, () => { for (const m of monsters()) m.cooldown = .05; cast(e, c, 'test_stun'); expect(monsters()[0].statuses!.stunned).toBe(1.5); expect(c.profile.counters.controlSpells).toBe(1); });
   });
-
-  it('Arcanista de Plasma: crítico de fogo/energia causa ×2,5 (e +8% de chance); as demais magias não criticam', () => {
-    const damage = (rng: number, spell: string) => {
-      vi.spyOn(Math, 'random').mockReturnValue(rng); const { e, c, monsters } = magePlayer(['mago', 'arcanista_de_plasma']); equip(e, c, spell); const m = monsters()[0]; const hp = m.hp; cast(e, c, spell); vi.restoreAllMocks(); return hp - m.hp;
-    };
-    const crit = damage(0, 'plasma_beam'), normal = damage(.99, 'plasma_beam');
-    expect(crit / normal).toBeCloseTo(2.5, 1); expect(damage(0, 'basic_ice')).toBe(damage(.99, 'basic_ice')); // gelo não é fogo/energia
-    expect(damage(0, 'basic_fire') / damage(.99, 'basic_fire')).toBeCloseTo(2.5, 1);
-    const { e, c } = magePlayer(['mago', 'arcanista_de_plasma']); c.profile.classPath = ['aprendiz', 'mago', 'arcanista_de_plasma'];
-    const beam = spellById('plasma_beam')!; c.cooldowns.plasma_beam = 0; equip(e, c, 'plasma_beam');
-    expect(beam.cooldown * (1 - .2)).toBeCloseTo(4.8);
+  it('as magias de atordoar das especializações (Selador, Ilusionista…) estão marcadas com stun', () => {
+    for (const id of ['selador_spell', 'hipnotizador_spell', 'rastreador_spell', 'menestrel_do_caos_spell']) expect(spellById(id)!.stun, id).toBeGreaterThan(0);
   });
-  it('Arcanista: chance de crítico soma +8% à do personagem', () => {
-    const { c, e } = magePlayer(['mago', 'arcanista_de_plasma']); const base = characterStats(c, e.getSnapshot()).crit;
-    let crits = 0; vi.spyOn(Math, 'random').mockImplementation(seeded(3)); equip(e, c, 'basic_fire'); const m = e.getSnapshot().monsters[0];
-    for (let i = 0; i < 2000; i++) { const before = c.profile.counters.crits ?? 0; cast(e, c, 'basic_fire'); if ((c.profile.counters.crits ?? 0) > before) crits++; void m; }
-    expect(crits / 2000).toBeGreaterThan(base + .08 - .03); expect(crits / 2000).toBeLessThan(base + .08 + .03);
+  it('Prismático: +8% de crítico em magias de fogo e energia (e só nelas)', () => {
+    const rate = (spell: string) => { let crits = 0; vi.spyOn(Math, 'random').mockImplementation(seeded(3)); const { e, c } = magePlayer(['mago', 'prismatico']); equip(e, c, spell);
+      for (let i = 0; i < 2000; i++) { const before = c.profile.counters.crits ?? 0; cast(e, c, spell); if ((c.profile.counters.crits ?? 0) > before) crits++; } vi.restoreAllMocks(); return crits / 2000; };
+    const fire = rate('basic_fire'), ice = rate('basic_ice'); expect(fire - ice).toBeGreaterThan(.04); expect(fire - ice).toBeLessThan(.16);
   });
 
   it('afinidade elemental: fraco ×1,30 e resistente ×0,70 em relação ao neutro (mesmo monstro, RNG fixo)', () => {
@@ -131,7 +124,7 @@ describe('Bloco 6 — contadores e cobertura', () => {
   it('cada contador tem um caminho no engine que o incrementa (ou está marcado "em breve")', () => {
     vi.spyOn(Math, 'random').mockReturnValue(0); // crítico sempre
     const e = new GameEngine(partyState()); const [a, b, d] = e.getSnapshot().characters; a.profile.level = 30; b.profile.level = 30; d.profile.level = 30;
-    e.evolve(a.id, 'mago', { force: true }); e.evolve(a.id, 'criomante', { force: true }); e.evolve(b.id, 'mago', { force: true }); e.evolve(b.id, 'piromante', { force: true });
+    e.evolve(a.id, 'mago', { force: true }); e.evolve(a.id, 'elementalista', { force: true }); e.evolve(b.id, 'mago', { force: true }); e.evolve(b.id, 'elementalista', { force: true });
     e.getSnapshot().characters.push(createCharacter('paladin', 'Curandeira')); e.getSnapshot().team.push(e.getSnapshot().characters[3].id);
     const healer = e.getSnapshot().characters[3];
     e.start(); const state = e.getSnapshot();
@@ -142,8 +135,8 @@ describe('Bloco 6 — contadores e cobertura', () => {
     monsterHit(state.monsters[0], d, state); // dano sofrido
     d.hp = 5; cast(e, healer, 'paladin_light'); // cura
     cast(e, d, 'squire_rally'); // buffs
-    equip(e, a, 'cryo_nova'); cast(e, a, 'cryo_nova'); // controle
-    equip(e, b, 'pyro_inferno'); cast(e, b, 'pyro_inferno'); for (let i = 0; i < 10; i++) e.tick(100); // dano contínuo
+    withSpell({ id: 'test_freeze', element: 'ice', freeze: 2, target: 'allEnemies' }, () => cast(e, a, 'test_freeze')); // controle
+    withSpell({ id: 'test_burn', element: 'fire', burnStacks: 2, target: 'allEnemies' }, () => cast(e, b, 'test_burn')); for (let i = 0; i < 10; i++) e.tick(100); // dano contínuo
     expect(e.useSupply(d.id, 'health_potion')).toBe(true); // poções de suporte
     (e as unknown as { kill(t: unknown): void }).kill(boss); // chefes abatidos + ouro
     const all = e.getSnapshot().characters, total = (id: (typeof COUNTER_IDS)[number]) => all.reduce((n, x) => n + (x.profile.counters[id] ?? 0), 0);

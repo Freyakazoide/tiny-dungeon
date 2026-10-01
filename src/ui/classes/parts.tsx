@@ -12,7 +12,7 @@ export const reqLabel = (row: RequirementRow) => row.kind === 'level' ? 'Nível'
 export const reqNeed = (row: RequirementRow) => `${reqLabel(row)} ${row.kind === 'counter' ? compact(row.need) : row.need}`;
 
 /** Tipo da subclasse: Pura (1 proficiência), Híbrida (2) ou Com contador. */
-export const subclassKind = (node: ClassNode) => node.requires.counters && Object.keys(node.requires.counters).length ? 'Com contador' : Object.keys(node.requires.skills ?? {}).length >= 2 ? 'Híbrida' : 'Pura';
+export const subclassKind = (node: ClassNode) => node.requires.elements ? 'Elementos livres' : node.requires.counters && Object.keys(node.requires.counters).length ? 'Com contador' : Object.keys(node.requires.skills ?? {}).length >= 2 ? 'Híbrida' : 'Pura';
 
 /** Até 3 barras de requisito: nível, proficiências e contadores, nessa ordem. */
 export function ReqBars({ character, node }: { character: Character; node: ClassNode }) {

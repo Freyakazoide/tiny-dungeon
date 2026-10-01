@@ -10,14 +10,18 @@ const COUNTER_LABELS: Record<CounterId, string> = {
   bossKills: 'Chefes abatidos', goldEarned: 'Ouro acumulado', controlSpells: 'Feitiços de controle',
 };
 
+/** Quantas proficiências elementais já estão no nível `level` ou acima. */
+export const elementsAtLevel = (profile: ProgressProfile, level: number) => (Object.keys(PROFICIENCIES) as ProficiencyId[]).filter(id => PROFICIENCIES[id].group === 'elemental' && profile.proficiencies[id].level >= level).length;
+
 export function checkRequirements(profile: ProgressProfile, node: ClassNode): RequirementCheck {
   const missing: string[] = [];
-  const { level, skills = {}, counters = {} } = node.requires;
+  const { level, skills = {}, counters = {}, elements } = node.requires;
   if (profile.level < level) missing.push(`Nível ${level} (atual ${profile.level})`);
   for (const [id, need] of Object.entries(skills) as [ProficiencyId, number][]) {
     const have = profile.proficiencies[id].level;
     if (have < need) missing.push(`${PROFICIENCIES[id].name} ${need} (atual ${have})`);
   }
+  if (elements) { const have = elementsAtLevel(profile, elements.level); if (have < elements.count) missing.push(`${elements.count} elementos no nível ${elements.level} (atual ${have})`); }
   for (const [id, need] of Object.entries(counters) as [CounterId, number][]) {
     const have = profile.counters[id] ?? 0;
     if (have < need) missing.push(`${COUNTER_LABELS[id]} ${need} (atual ${have})`);

@@ -32,7 +32,8 @@ export function ClassPerks({ nodeId }: { nodeId: string }) {
     <div className="cl-kspells">{spells.map(s => <div key={s.id} className="cl-ks" title={s.description}><Icon name={spellIcon(s)} size={24} /><div><b>{s.name}</b><small>{KIND_LABEL[s.kind]}{s.element ? ` · ${PROFICIENCIES[s.element].name}` : ''} · {s.mana} mana</small></div></div>)}</div>
     {passive && <div className="cl-passive"><Icon name="stat_xp" size={24} /><div><b>{passive.name}</b><br /><small className="muted">{passive.description}</small></div></div>}
     <h5 className="cl-sub">Ganhos ao seguir o caminho</h5>
-    <ul className="cl-rew">{profile.rewards.map(r => <li key={r.text}><Icon name={r.icon} size={24} /><span>{r.text}</span></li>)}</ul>
+    <ul className="cl-rew">{profile.rewards.slice(0, 2).map(r => <li key={r.text}><Icon name={r.icon} size={24} /><span>{r.text}</span></li>)}
+      {subs.length > 0 && <li><Icon name={profile.rewards[2]?.icon ?? 'classes'} size={24} /><span>6 especializações: {subs.map(x => x.name).join(', ')}</span></li>}</ul>
     {subs.length > 0 && <><h5 className="cl-sub">Especializações ({subs.length})</h5>
       <div className="cl-subs">{subs.map(s => <span key={s.id} className="pk-chip" title={subclassKind(s)}>{s.name}{isPlayable(s.id) ? '' : ' 🔒'}</span>)}</div></>}
   </section>;

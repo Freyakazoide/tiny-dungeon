@@ -10,7 +10,7 @@ describe('forma dos ataques', () => {
   it('básico: corpo a corpo = corte; arco = flecha', () => { expect(basicFx('melee')).toBe('slash'); expect(basicFx('ranged')).toBe('arrow'); });
   it('toda magia de dano tem uma forma conhecida; elementos usam o próprio elemento', () => {
     for (const s of SPELLS.filter(x => x.kind === 'damage')) expect(FX_KINDS, s.id).toContain(spellFx(s));
-    expect(spellFx(SPELLS.find(s => s.id === 'pyro_fireball')!)).toBe('fire'); expect(spellFx(SPELLS.find(s => s.id === 'basic_ice')!)).toBe('ice');
+    expect(spellFx(SPELLS.find(s => s.id === 'runa_flamejante_spell')!)).toBe('fire'); expect(spellFx(SPELLS.find(s => s.id === 'basic_ice')!)).toBe('ice');
     expect(spellFx(SPELLS.find(s => s.id === 'hunter_volley')!)).toBe('arrow'); expect(spellFx(SPELLS.find(s => s.id === 'knight_cleave')!)).toBe('slash');
   });
   it('todas as formas têm paleta', () => { for (const k of FX_KINDS) expect(FX_PALETTE[k]).toBeTruthy(); });
