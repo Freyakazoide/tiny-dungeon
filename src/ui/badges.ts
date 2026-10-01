@@ -1,15 +1,11 @@
 import type { Character, GameState } from '../game/core/types';
 import { isPlayable } from '../game/rpg/classTree';
 import { evolutionOptions } from '../game/rpg/evolution';
-import { itemById } from '../game/data/items';
 import { freshCount } from './items/BagTab';
 import { talentPointsAvailable } from '../game/systems/talentGrid';
 
-/** Estoque de poções de vida considerado "confortável" (100% do chip de poções no HUD). */
-export const POTION_COMFORT = 60;
-const healthPotions = (state: GameState) => state.inventory.supply.reduce((sum, s) => sum + (itemById(s.itemId)?.supply === 'health' ? s.quantity : 0), 0);
-/** Nível das poções de vida em % (0 a 100) do estoque confortável. */
-export const potionPercent = (state: GameState) => Math.min(100, Math.round(healthPotions(state) / POTION_COMFORT * 100));
+export { POTION_COMFORT, potionPercent } from '../game/systems/group';
+import { groupAlerts, potionPercent } from '../game/systems/group';
 export const potionTone = (percent: number): 'danger' | 'warn' | undefined => percent < 15 ? 'danger' : percent < 40 ? 'warn' : undefined;
 
 /** Alguém da equipe pode evoluir agora (requisitos cumpridos e a classe tem kit pronto)? */
@@ -24,6 +20,8 @@ export function railBadges(state: GameState, selected: Character | undefined): P
   if (points > 0) out.personagem = { value: String(points), tone: 'gold', why: `${points} ${points === 1 ? 'ponto de talento livre' : 'pontos de talento livres'}` };
   const fresh = freshCount(state);
   if (fresh > 0) out.itens = { value: String(fresh), tone: 'gold', why: `${fresh} ${fresh === 1 ? 'item novo' : 'itens novos'}` };
+  const issues = groupAlerts(state).filter(a => a.level === 'bad' || a.level === 'warn');
+  if (issues.length && state.characters.length) out.grupo = { value: String(issues.length), tone: issues.some(a => a.level === 'bad') ? 'red' : 'gold', why: `${issues.length} ${issues.length === 1 ? 'alerta' : 'alertas'} na formação` };
   const ready = evolvers(state);
   if (ready.length) out.classes = { value: '!', tone: 'gold', pulse: true, why: `Pronto para evoluir: ${ready.map(c => c.name).join(', ')}` };
   const potions = potionPercent(state);

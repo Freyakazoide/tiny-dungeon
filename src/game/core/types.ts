@@ -13,6 +13,7 @@ export interface SpellCondition { hpBelow?: number; minEnemies?: number; allyInj
 export interface HelperConfig { hpPotionAt: number; manaPotionAt: number; healAllies: boolean; autoSupplies: boolean; defensiveAmuletAt: number; emergencyAt: number; outOfSupplies: 'continue' | 'end'; }
 /** Um exemplar de equipamento de classe: o item base (catálogo Fase 7) + a classificação e os atributos aleatórios sorteados. */
 export interface ItemInstance { uid: string; baseId: string; classification: Classification; attrs: { code: string; level: number }[]; /** recém-obtido: limpo ao selecionar na mochila */ fresh?: true; }
+export interface FormationPreset { name: string; team: string[]; rows: Record<string, CharacterRow>; tank?: string }
 export interface Character {
   id: string; name: string; classId: ClassId; profile: ProgressProfile;
   /** Linha de combate e tanque (no máximo um por grupo): definem a posição no mapa e quem apanha. */
@@ -59,6 +60,9 @@ export interface GameState {
   gearBag: ItemInstance[];
   /** ids de itens simples (bp) recém-obtidos, limpos ao selecionar */
   freshItems?: string[];
+  /** presets de formação (3 vagas) e hunt programada para o fim do ciclo */
+  formationPresets?: (FormationPreset | null)[];
+  pendingHunt?: string;
   gold: number; charmPoints: number; charmSlots: number; equippedCharms: string[]; unlockedCharms: string[];
   codex: Record<string, CodexEntry>; analyzer: Analyzer; history: Analyzer[]; message: string; lastSavedAt: number;
   /** Hunt atual (padrão 'catacumbas'). */

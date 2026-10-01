@@ -25,6 +25,7 @@ export const toastStore = {
 /** Traduz um evento do engine em aviso (ou nada). */
 export function toastForFx(fx: GameFx): { kind: ToastKind; text: string } | undefined {
   if (fx.type === 'drop' && fx.text?.startsWith('Equipamento:')) return { kind: 'good', text: `Drop: ${fx.text.replace('Equipamento: ', '')}` };
+  if (fx.type === 'wave' && fx.text?.startsWith('Nova hunt:')) return { kind: 'info', text: fx.text };
   if (fx.type === 'wave' && fx.text && /Horda|Invasão/.test(fx.text)) return { kind: 'warn', text: fx.text };
   if (fx.type === 'recovery') return { kind: 'danger', text: 'Equipe derrotada. Recuperação em 5 segundos.' };
   return undefined;

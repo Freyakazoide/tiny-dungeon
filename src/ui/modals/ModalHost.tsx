@@ -15,6 +15,7 @@ import { Modal, type ModalSize } from '../components/Modal';
 import { Tabs, type TabBadge } from '../components/Tabs';
 import { Avatar } from '../components/Avatar';
 import { talentPointsAvailable } from '../../game/systems/talentGrid';
+import { groupAlerts } from '../../game/systems/group';
 import { groupClasses } from '../../game/systems/guide';
 import { potionPercent } from '../badges';
 import { GEAR_BAG_CAPACITY } from '../../game/data/balance';
@@ -45,9 +46,10 @@ export const MODALS: Record<Exclude<ModalId, 'bemvindo'>, ModalDef> = {
   classes: { title: 'Classes', subtitle: 'Guia de evolução: o que treinar para o próximo passo', icon: 'classes', who: true, tabs: ['Próximo passo', 'Árvore completa'], size: () => 'xl', bodyClass: 'cl-body', tabIcons: { 'Próximo passo': 'classes', 'Árvore completa': 'hunts' },
     tabBadges: ({ state, character }) => { const n = groupClasses(character).ready.length; void state; return n > 0 ? { 'Próximo passo': { value: n, gold: true, title: `${n} classes prontas para evoluir` } } : {}; },
     render: ({ state, character, tab }) => <ClassesPanel state={state} character={character} section={tab === 'Próximo passo' ? 'next' : 'tree'} /> },
-  grupo: { title: 'Grupo', subtitle: 'Formação, tanque e reservas', icon: 'grupo', tabs: ['Formação', 'Reservas'],
+  grupo: { title: 'Grupo', subtitle: 'Formação, tanque e reservas', icon: 'grupo', tabs: ['Formação', 'Reservas'], size: () => 'xl', bodyClass: 'gp-body', tabIcons: { Formação: 'grupo', Reservas: 'personagem' },
+    tabBadges: ({ state }) => { const alerts = groupAlerts(state).filter(a => a.kind !== 'allOk'), reserves = state.characters.length - state.team.length; return { ...(alerts.length ? { Formação: { value: alerts.length, gold: alerts.some(a => a.level === 'warn' || a.level === 'bad'), title: `${alerts.length} alertas na formação` } } : {}), ...(reserves > 0 ? { Reservas: { value: reserves, title: `${reserves} fora da equipe` } } : {}) }; },
     render: ({ state, tab }) => <GroupPanel state={state} section={tab === 'Formação' ? 'formation' : 'reserves'} /> },
-  hunts: { title: 'Hunts', subtitle: 'Escolha onde caçar', icon: 'hunts', tabs: ['Mapas'], render: ({ state }) => <HuntSelector state={state} /> },
+  hunts: { title: 'Hunts', subtitle: 'Escolha onde caçar', icon: 'hunts', tabs: ['Mapas'], size: () => 'xl', bodyClass: 'hn-body', render: ({ state }) => <HuntSelector state={state} /> },
   analyzer: { title: 'Analyzer', subtitle: 'Métricas da sessão', icon: 'analyzer', tabs: ['Sessão'], render: ({ state }) => <AnalyzerPanel state={state} /> },
   helper: { title: 'Helper', subtitle: 'Automação de poções e avanço', icon: 'helper', who: true, tabs: ['Automação'], render: ({ state, character }) => <HelperPanel state={state} character={character} /> },
   progressao: { title: 'Progressão', subtitle: 'Metas, portas e marcos', icon: 'progressao', who: true, tabs: ['Metas'], render: ({ state, character }) => <ProgressPanel state={state} character={character} /> },

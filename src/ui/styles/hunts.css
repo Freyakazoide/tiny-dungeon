@@ -1,0 +1,70 @@
+/* Menu Hunts (Fase 12). Prefixo hn-. Usa o kit pk-*, tokens e .cl-* (cl-ibox) do Classes. */
+.m-body.hn-body{overflow:hidden;display:flex;flex-direction:column}
+.hn-layout{display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:14px;height:100%;min-height:0}
+.hn-left>*{flex:none}
+.hn-left{overflow:auto;min-height:0;padding-right:6px;display:flex;flex-direction:column;gap:12px}
+.hn-tools{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.hn-sort{display:inline-flex}.hn-sort button{padding:5px 12px;font-size:12px}
+.hn-sort button.on{background:linear-gradient(#3a2f18,#2a2212);box-shadow:inset 0 2px 0 #c9a55c,inset 0 -2px 0 #4a3a1a,0 0 0 1px var(--gold-2);color:var(--gold)}
+.hn-now{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:8px 12px}
+.hn-list{display:grid;gap:8px}
+.hn-card{position:relative;display:grid;grid-template-columns:132px minmax(0,1fr) auto;gap:12px;padding:8px;align-items:center;text-align:left;width:100%;cursor:pointer}
+.hn-card:hover{box-shadow:inset 0 0 0 1px var(--bronze),inset 0 3px 0 1px #2f3a49,inset 0 -3px 0 #0f141b}
+.hn-card.sel{box-shadow:inset 0 0 0 2px var(--gold-2),inset 0 3px 0 1px #2f3a49,inset 0 -3px 0 #0f141b,0 0 0 2px var(--gold-2)}
+.hn-card.cur{border-left:4px solid #4fae73}
+.hn-thumb{width:132px;height:88px;border:2px solid #000;box-shadow:inset 0 0 0 1px #3a4350;object-fit:cover;image-rendering:auto;background:var(--hc,#222);display:block}
+.hn-name{font:700 16px Georgia,serif;color:#fff;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.hn-sub{font-size:11px;color:var(--muted);margin-top:2px}
+.hn-chips{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}
+.hn-risk{display:flex;flex-direction:column;align-items:flex-end;gap:4px;min-width:96px}
+.hn-gauge{position:relative;width:96px;height:10px;background:#06090e;border:2px solid #000;box-shadow:inset 0 0 0 1px #2a323d;overflow:hidden}
+.hn-gauge i{position:absolute;inset:0 auto 0 0}
+.hn-gauge:after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(90deg,transparent 0 7px,rgba(0,0,0,.55) 7px 8px)}
+.hn-r-tranquila{--rc:#71cf8c}.hn-r-adequada{--rc:#9bd05a}.hn-r-arriscada{--rc:#e0a05c}.hn-r-suicida{--rc:#d8554f}
+.hn-pill{font-size:10px;padding:1px 6px;border:1px solid #000;background:#0b1016;box-shadow:inset 0 0 0 1px var(--rc,#555);color:var(--rc,#aaa);font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+.hn-right>*{flex:none}
+.hn-right{overflow:auto;min-height:0;display:flex;flex-direction:column;gap:12px;padding-right:2px}
+.hn-hero{position:relative;padding:0;overflow:hidden}
+.hn-hero img,.hn-hero .ph{width:100%;height:150px;object-fit:cover;display:block;border-bottom:2px solid #000}
+.hn-hero .cap{position:absolute;left:0;right:0;bottom:0;padding:26px 12px 8px;background:linear-gradient(transparent,#000c);display:flex;justify-content:space-between;align-items:flex-end;gap:8px}
+.hn-hero h3{font:700 20px Georgia,serif;color:#fff;margin:0;text-shadow:0 2px 0 #000}
+.hn-stats{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
+.hn-stat{padding:6px 9px;background:#0f151d;border:1px solid #06090e;box-shadow:inset 0 0 0 1px #232b36;font-size:11px;color:var(--muted)}
+.hn-stat b{display:block;font:700 16px Georgia,serif;color:#fff}.hn-stat em{font-style:normal;font-size:10px;color:var(--muted);margin-left:4px}
+.hn-stat.ref b{color:#c9d0da}
+.hn-meter{display:grid;gap:5px}
+.hn-meter .l{display:flex;justify-content:space-between;font-size:11px;color:var(--muted)}
+.hn-waves{display:grid;gap:6px}
+.hn-wave{display:grid;grid-template-columns:96px minmax(0,1fr);gap:8px;align-items:center;padding:6px 8px;background:#0f151d;border:2px solid #06090e;box-shadow:inset 0 0 0 1px #262e39}
+.hn-wave>b{font-size:11px;color:var(--muted);font-weight:600}
+.hn-mons{display:flex;gap:4px;flex-wrap:wrap}
+.hn-m{position:relative;width:30px;height:30px;border:2px solid #000;box-shadow:inset 0 0 0 1px #fff3;background:var(--mc,#7a3f3a);display:grid;place-items:center;font:700 9px Inter;color:#fff}
+.hn-m.boss{width:38px;height:38px;box-shadow:inset 0 0 0 2px #ff6fd0}
+.hn-m.elite{box-shadow:inset 0 0 0 2px #d4a93c}
+.hn-tiers{display:flex;height:16px;border:2px solid #000;box-shadow:inset 0 0 0 1px #2a323d;overflow:hidden}
+.hn-tiers i{display:block;height:100%}
+.hn-tl{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;font-size:10px;color:var(--muted);margin-top:4px}
+.hn-tl span{display:flex;gap:4px;align-items:center}.hn-tl i{width:8px;height:8px;border:1px solid #000;display:inline-block}
+.hn-mon{display:grid;grid-template-columns:32px minmax(0,1fr) auto;gap:8px;align-items:center;padding:6px 8px;background:#0f151d;border:2px solid #06090e;box-shadow:inset 0 0 0 1px #262e39;font-size:11px}
+.hn-mon .hn-m{width:28px;height:28px}
+.hn-mon b{font:700 12px Georgia,serif;color:#fff;display:block}
+.hn-el{display:inline-flex;align-items:center;gap:2px;margin-right:6px}
+.hn-el .icon{width:24px;height:24px}
+.hn-el.ok{outline:2px solid #4fae73;outline-offset:-1px;background:#4fae7322}
+.hn-el.res .icon{filter:grayscale(1) brightness(.6)}
+.hn-set{display:grid;gap:5px}
+.hn-piece{display:grid;grid-template-columns:24px 1fr auto;gap:8px;align-items:center;font-size:12px}
+.hn-piece .icon{width:24px;height:24px}
+.hn-actions{display:grid;gap:8px;position:sticky;bottom:0;padding:10px;background:linear-gradient(#171f29,#121922)}
+.hn-actions .row{display:flex;gap:8px;flex-wrap:wrap}
+.hn-actions .pk-btn{flex:1;justify-content:center}
+.hn-note{font-size:11px;color:var(--muted)}
+.hn-warn{display:flex;gap:8px;align-items:flex-start;padding:8px 10px;border:2px solid #000;background:#1b1810;box-shadow:inset 0 0 0 1px #4d3f22;color:#d9c79f;font-size:12px}
+.hn-warn.bad{background:#1b1212;box-shadow:inset 0 0 0 1px #6b2f2c;color:#e3b2ae}
+.hn-queue{display:flex;gap:8px;align-items:center;padding:6px 10px;border:2px solid #000;background:#101a24;box-shadow:inset 0 0 0 1px #2e3b52;font-size:12px}
+@media(max-width:900px){.hn-layout{grid-template-columns:1fr}.hn-card{grid-template-columns:96px 1fr}.hn-thumb{width:96px;height:64px}.hn-risk{grid-column:1/-1;flex-direction:row;align-items:center;justify-content:space-between}}
+/* extensões da Fase 12 */
+.hn-body .hunt-selector{flex:1;min-height:0;position:relative}
+.hn-card:focus-visible{outline:2px solid var(--gold-2);outline-offset:1px}
+.hn-card .hn-thumb.ph{display:block}
+.hn-hero .hn-pill{padding:2px 8px;font-size:11px}

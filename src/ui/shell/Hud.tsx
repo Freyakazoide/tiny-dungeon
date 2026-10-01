@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import type { GameState, HuntStatus } from '../../game/core/types';
+import { huntRiskInfo } from '../../game/systems/huntInfo';
 import { gameStore } from '../../game/core/GameStore';
-import { HUNT_BY_ID, huntRisk, huntWaves } from '../../game/data/hunts';
+import { HUNT_BY_ID, huntWaves } from '../../game/data/hunts';
 import { runtime } from '../../game/rpg/runtime';
 import { TIER_NAMES, tierOfExtra } from '../../game/systems/waves';
 import { Chip } from '../components/Badge';
@@ -48,12 +49,12 @@ export function waveProgress(state: GameState) {
 
 /** Topo: marca, hunt e risco, wave com o tier, estado, ouro, poções e os controles da caçada (velocidade só em DEV). */
 export function Hud({ state }: { state: GameState }) {
-  const hunt = HUNT_BY_ID[state.huntId], risk = huntRisk(gameStore.averageTeamLevel(), hunt.recommendedLevel);
+  const hunt = HUNT_BY_ID[state.huntId], risk = huntRiskInfo(state, hunt).label, pending = state.pendingHunt ? HUNT_BY_ID[state.pendingHunt] : undefined;
   const info = state.waveInfo, tier = info && info.extra > 0 && state.status !== 'idle' ? tierOfExtra(info.extra) : undefined;
   const status = STATUS[state.status], potions = potionPercent(state);
   return <header className="hud">
     <div className="brand"><b>TD</b><span>Tiny Dungeon</span></div>
-    <div className="hunt-title"><strong>{hunt.name}</strong><small>Nível rec. {hunt.recommendedLevel} · <span className={`risk-${risk.toLowerCase()}`}>{risk}</span> · ciclo {state.cycle + 1}</small></div>
+    <div className="hunt-title"><strong>{hunt.name}</strong><small>Nível rec. {hunt.recommendedLevel} · <span className={`risk-${risk.toLowerCase()}`}>{risk}</span> · ciclo {state.cycle + 1}{pending && <> · <span title="Troca no fim do ciclo">⏭ Próxima: {pending.name}</span></>}</small></div>
     <div className="wave"><div className="wave-top"><span>Wave {state.wave + 1}/{huntWaves(state.huntId).length}</span><span>{tier && info ? `${TIER_NAMES[tier]} · ${info.total} inimigos` : ''}</span></div>
       <div className="bar" role="progressbar" aria-label="Progresso da wave" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(waveProgress(state) * 100)}><i style={{ width: `${waveProgress(state) * 100}%` }} /></div></div>
     <Chip tone={status.tone} className="hide-s"><Icon name={status.icon} size={24} /> {status.label}</Chip>

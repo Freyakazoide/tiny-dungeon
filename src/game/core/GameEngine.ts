@@ -30,6 +30,8 @@ import { conditionMet, healAmount, livingMonsters, livingTeam, magicDamage, mele
 import { addItem, randomInt, removeItem, rollLoot } from '../systems/loot';
 import { pickSupply } from '../systems/supplies';
 import { buyPrice, shopStock } from '../data/shop';
+import { FORMATION_PRESETS } from '../systems/group';
+import type { FormationPlan } from '../systems/group';
 import { createAnalyzer, hasAnalyzerActivity } from '../systems/analyzer';
 
 export type GameFx = { type:'attack'|'damage'|'heal'|'death'|'drop'|'stairs'|'wave'|'recovery'; source?:string; target?:string; value?:number; text?:string };
@@ -51,6 +53,7 @@ export function initialState():GameState{
   return {version:1,status:'idle',autoAdvance:true,huntId:DEFAULT_HUNT,huntStats:{},wave:0,cycle:0,transitionMs:0,characters:[],team:[],monsters:[],gearBag:[],inventory:{bp:[],loot:[],supply:[{itemId:'health_potion',quantity:8},{itemId:'mana_potion',quantity:8}],capacity:{bp:40,loot:60,supply:200}},gold:0,charmPoints:0,charmSlots:1,equippedCharms:[],unlockedCharms:[],codex:{},analyzer:createAnalyzer(),history:[],message:'Crie seus 3 personagens para começar.',lastSavedAt:Date.now()};
 }
 export const PARTY_SIZE=3,ROSTER_LIMIT=5,NAME_LIMIT=18;
+export interface RecruitSpec{name:string;weaponId?:string;element?:ProficiencyId;spriteId?:string;row?:CharacterRow}
 export class GameEngine {
   private state:GameState; private listeners=new Set<()=>void>(); private fxListeners=new Set<(fx:GameFx)=>void>(); private pausedFrom:GameState['status']='running';
   constructor(state=initialState()){this.state=state;}
@@ -105,14 +108,14 @@ export class GameEngine {
   start(){if(this.state.status!=='idle'||!this.state.team.length)return;if(!livingTeam(this.state).length)for(const id of this.state.team){const c=this.state.characters.find(x=>x.id===id);if(c){const stats=characterStats(c,this.state);c.hp=stats.maxHp;c.mana=stats.maxMana;c.effects=[];}}if(!this.state.monsters.length||!livingMonsters(this.state).length)this.spawnWave();this.state.status='running';if(!this.state.analyzer.activeMs)this.state.analyzer.startedAt=Date.now();this.state.message='Hunt iniciada.';this.emit();}
   pause(){if(this.state.status==='idle'||this.state.status==='paused')return;this.pausedFrom=this.state.status;this.state.status='paused';this.state.message='Hunt pausada — cooldowns congelados.';this.emit();}
   resume(){if(this.state.status!=='paused')return;this.state.status=this.pausedFrom;this.state.message='Hunt retomada.';this.emit();}
-  end(){if(this.state.status==='idle')return;this.state.status='idle';this.state.transitionMs=0;this.state.wave=0;this.state.monsters=[];this.state.wavePending=[];this.state.message='Expedição encerrada. Recompensas preservadas.';this.emit();}
+  end(){if(this.state.status==='idle')return;delete this.state.pendingHunt;this.state.status='idle';this.state.transitionMs=0;this.state.wave=0;this.state.monsters=[];this.state.wavePending=[];this.state.message='Expedição encerrada. Recompensas preservadas.';this.emit();}
   /** Nível médio da equipe (base da etiqueta de risco das hunts). */
   averageTeamLevel(){const levels=this.state.team.map(id=>this.state.characters.find(c=>c.id===id)?.profile.level).filter((l):l is number=>l!==undefined);return levels.length?levels.reduce((a,b)=>a+b,0)/levels.length:0;}
   /** Troca a hunt: qualquer uma vale (sem bloqueio por nível), mas só com a caçada parada. */
   selectHunt(id:string){
     const hunt=HUNT_BY_ID[id];
     if(!hunt||this.state.status!=='idle')return false;
-    this.state.huntId=id;this.state.wave=0;this.state.monsters=[];this.state.transitionMs=0;this.state.message=`Hunt: ${hunt.name}`;this.emit();return true;
+    this.state.huntId=id;delete this.state.pendingHunt;this.state.wave=0;this.state.monsters=[];this.state.transitionMs=0;this.state.message=`Hunt: ${hunt.name}`;this.emit();return true;
   }
   setAutoAdvance(value:boolean){this.state.autoAdvance=value;this.emit();}
   resetAnalyzer(){if(hasAnalyzerActivity(this.state.analyzer)){this.state.history.push(structuredClone(this.state.analyzer));this.state.history=this.state.history.slice(-20);}this.state.analyzer=createAnalyzer();this.state.message='Hunt Analyzer reiniciado. Progressão e inventário preservados.';this.emit();}
@@ -228,7 +231,7 @@ export class GameEngine {
   }
   private completeWave(){this.waveBonus();this.completeWaveCore();}
   private completeWaveCore(){const boss=this.state.wave===this.waves().length-1;this.state.status='transition';this.state.transitionMs=boss?2000:1000;this.state.message=boss?`Boss derrotado! ${this.state.analyzer.lootValue} de valor em loot.`:'Wave concluída — a escada surgiu.';if(boss){this.state.analyzer.cycles++;this.state.cycle++;}this.emit({type:'stairs',text:this.state.message});}
-  private finishTransition(force=false){if(this.state.status==='recovering'){for(const id of this.state.team){const c=this.state.characters.find(x=>x.id===id);if(c){const s=characterStats(c,this.state);c.hp=s.maxHp;c.mana=s.maxMana;c.effects=[];}}this.state.wave=0;this.spawnWave();this.state.status='running';return;}if(!this.state.autoAdvance&&!force){this.state.transitionMs=0;return;}this.state.wave=(this.state.wave+1)%this.waves().length;for(const c of this.state.characters){const s=characterStats(c,this.state);c.hp=Math.min(s.maxHp,c.hp+s.maxHp*.12);c.mana=Math.min(s.maxMana,c.mana+s.maxMana*.18);}this.spawnWave();this.state.status='running';}
+  private finishTransition(force=false){if(this.state.status==='recovering'){for(const id of this.state.team){const c=this.state.characters.find(x=>x.id===id);if(c){const s=characterStats(c,this.state);c.hp=s.maxHp;c.mana=s.maxMana;c.effects=[];}}this.state.wave=0;this.applyPendingHunt();this.spawnWave();this.state.status='running';return;}if(!this.state.autoAdvance&&!force){this.state.transitionMs=0;return;}this.state.wave=(this.state.wave+1)%this.waves().length;if(this.state.wave===0)this.applyPendingHunt();for(const c of this.state.characters){const s=characterStats(c,this.state);c.hp=Math.min(s.maxHp,c.hp+s.maxHp*.12);c.mana=Math.min(s.maxMana,c.mana+s.maxMana*.18);}this.spawnWave();this.state.status='running';}
   private defeat(){this.state.analyzer.defeats++;this.state.status='recovering';this.state.transitionMs=5000;this.state.message='Equipe derrotada. Recuperação em 5 segundos.';this.emit({type:'recovery',text:this.state.message});}
   private autoSupply(c:Character,maxHp:number,maxMana:number){if(!c.helper.autoSupplies)return;const use=(supply:'health'|'mana')=>{const item=pickSupply(this.state.inventory.supply,supply,supply==='health'?maxHp-c.hp:maxMana-c.mana);if(!item)return false;removeItem(this.state.inventory.supply,item.id);const potency=1+talentValue(c,'potion');if(supply==='health')c.hp=Math.min(maxHp,c.hp+(item.amount??0)*potency);else c.mana=Math.min(maxMana,c.mana+(item.amount??0)*potency);this.trackSupply(item.id,item.value,c);return true;};if(c.hp/maxHp*100<=c.helper.hpPotionAt)use('health');if(c.mana/maxMana*100<=c.helper.manaPotionAt)use('mana');}
   /**
@@ -265,7 +268,83 @@ export class GameEngine {
   }
   /** Vende todo o loot da bolsa de uma vez e devolve o valor recebido. */
   sellAllLoot(){let total=0;for(const stack of this.state.inventory.loot)total+=(itemById(stack.itemId)?.value??0)*stack.quantity;total=Math.round(total*(1+this.teamBest('sell')));if(!total)return 0;this.state.inventory.loot=[];this.state.gold+=total;this.state.message=`Loot vendido por ${total} ouro.`;this.emit();return total;}
-  recruit(name:string){const clean=name.trim().slice(0,NAME_LIMIT);if(!clean||this.state.characters.length>=ROSTER_LIMIT||this.state.characters.some(c=>c.name.toLowerCase()===clean.toLowerCase()))return false;this.state.characters.push(createCharacter('squire',clean,{spriteId:defaultSpriteFor(this.state.characters.length)}));this.emit();return true;}
+  recruit(input:string|RecruitSpec){
+    const spec:RecruitSpec=typeof input==='string'?{name:input}:input;
+    const clean=(spec.name??'').trim().slice(0,NAME_LIMIT);
+    if(!clean||this.state.characters.length>=ROSTER_LIMIT||this.state.characters.some(c=>c.name.toLowerCase()===clean.toLowerCase()))return false;
+    if(typeof input==='string'){this.state.characters.push(createCharacter('squire',clean,{spriteId:defaultSpriteFor(this.state.characters.length)}));this.emit();return true;}
+    if(!STARTER_WEAPONS.some(w=>w.id===spec.weaponId)||!spec.element||!STARTER_ELEMENTS.includes(spec.element)||(spec.row!==undefined&&spec.row!=='front'&&spec.row!=='back')||(spec.spriteId!==undefined&&!isKnownSprite(spec.spriteId)))return false;
+    const c=createCharacter('squire',clean,{weaponId:spec.weaponId,row:spec.row,element:spec.element,spriteId:spec.spriteId??defaultSpriteFor(this.state.characters.length)});
+    c.profile.offlineTargets=[spec.element,null];c.profile.offlineHistory=[spec.element];
+    this.state.characters.push(c);this.state.message=`${clean} foi recrutado.`;this.emit();return true;
+  }
+  /** Troca um membro da equipe por uma reserva na mesma posição; a reserva herda a linha (e o tanque, se a linha for a frente). */
+  swapTeamMember(outId:string,inId:string){
+    const at=this.state.team.indexOf(outId);
+    const out=this.state.characters.find(c=>c.id===outId),into=this.state.characters.find(c=>c.id===inId);
+    if(outId===inId||at<0||!out||!into||this.state.team.includes(inId))return false;
+    into.row=out.row;const wasTank=out.isTank;out.isTank=false;into.isTank=wasTank&&into.row==='front';
+    this.state.team[at]=inId;this.state.message=`${into.name} entrou no lugar de ${out.name}.`;this.emit();return true;
+  }
+  /** Dispensa definitivamente: devolve o equipamento às mochilas (ou recusa sem mudar nada se faltar espaço). */
+  dismiss(id:string){
+    const c=this.state.characters.find(x=>x.id===id);
+    if(!c||this.state.characters.length<=1)return false;
+    const inTeam=this.state.team.includes(id);
+    if(inTeam&&this.state.team.length<=1)return false;
+    if(inTeam&&this.state.status!=='idle'){this.state.message='Encerre a caçada para dispensar alguém da equipe.';this.emit();return false;}
+    const simple=Object.values(c.equipment).filter((x):x is string=>!!x),gear=Object.values(c.gear);
+    const probe={...this.state,inventory:structuredClone(this.state.inventory),freshItems:[...(this.state.freshItems??[])]} as GameState;
+    const fits=simple.every(itemId=>addItem(probe,itemId,1)===1)&&this.state.gearBag.length+gear.length<=GEAR_BAG_CAPACITY;
+    if(!fits){this.state.message='Libere espaço na mochila para guardar o equipamento.';this.emit();return false;}
+    for(const itemId of simple)addItem(this.state,itemId,1);
+    for(const g of gear){g.fresh=true;this.state.gearBag.push(g);}
+    this.state.characters=this.state.characters.filter(x=>x.id!==id);this.state.team=this.state.team.filter(x=>x!==id);
+    if(c.isTank&&!this.state.team.some(t=>this.state.characters.find(x=>x.id===t)?.isTank)){const first=this.state.team.map(t=>this.state.characters.find(x=>x.id===t)).find(x=>x?.row==='front');if(first)first.isTank=true;}
+    this.state.formationPresets=this.state.formationPresets?.map(p=>p?{...p,team:p.team.filter(x=>x!==id),rows:Object.fromEntries(Object.entries(p.rows).filter(([k])=>k!==id)),tank:p.tank===id?undefined:p.tank}:p);
+    this.state.message=`${c.name} foi dispensado.`;this.emit();return true;
+  }
+  /** Aplica o plano de `suggestFormation` com uma só emissão: linhas primeiro, depois o tanque (nunca dois). */
+  applyFormation(plan:FormationPlan){
+    const moves=plan.moves.filter(m=>this.state.characters.some(c=>c.id===m.id));if(!moves.length)return false;
+    for(const m of moves){const c=this.state.characters.find(x=>x.id===m.id)!;if(m.row==='front'||m.row==='back'){c.row=m.row;if(m.row==='back')c.isTank=false;}}
+    for(const m of moves)if(m.tank){const c=this.state.characters.find(x=>x.id===m.id)!;if(c.row!=='front')continue;for(const other of this.state.characters)other.isTank=false;c.isTank=true;}
+    this.state.message='Formação ajustada.';this.emit();return true;
+  }
+  saveFormationPreset(slot:number,name:string){
+    const clean=name.trim().slice(0,18);if(!Number.isInteger(slot)||slot<0||slot>=FORMATION_PRESETS||!clean||!this.state.team.length)return false;
+    const team=this.state.team.map(id=>this.state.characters.find(c=>c.id===id)).filter((c):c is Character=>!!c);
+    const presets=(this.state.formationPresets??[]).slice(0,FORMATION_PRESETS);while(presets.length<FORMATION_PRESETS)presets.push(null);
+    presets[slot]={name:clean,team:team.map(c=>c.id),rows:Object.fromEntries(team.map(c=>[c.id,c.row])),tank:team.find(c=>c.isTank)?.id};
+    this.state.formationPresets=presets;this.state.message=`Formação '${clean}' salva.`;this.emit();return true;
+  }
+  applyFormationPreset(slot:number){
+    const preset=this.state.formationPresets?.[slot];if(!preset)return false;
+    const team=preset.team.filter(id=>this.state.characters.some(c=>c.id===id)).slice(0,4);if(!team.length)return false;
+    this.state.team=team;
+    for(const id of team){const c=this.state.characters.find(x=>x.id===id)!;const row=preset.rows[id];if(row==='front'||row==='back')c.row=row;}
+    for(const c of this.state.characters)c.isTank=false;
+    const tank=preset.tank&&team.includes(preset.tank)?this.state.characters.find(c=>c.id===preset.tank):undefined;if(tank&&tank.row==='front')tank.isTank=true;
+    this.state.message=`Formação '${preset.name}' aplicada.`;this.emit();return true;
+  }
+  clearFormationPreset(slot:number){
+    if(!this.state.formationPresets?.[slot])return false;
+    this.state.formationPresets=this.state.formationPresets.map((p,i)=>i===slot?null:p);this.emit();return true;
+  }
+  /** Programa a troca de hunt para o fim do ciclo (só com a caçada em andamento); a hunt atual cancela a fila. */
+  queueHunt(id:string){
+    const hunt=HUNT_BY_ID[id];if(!hunt||(this.state.status!=='running'&&this.state.status!=='transition'))return false;
+    if(id===this.state.huntId){return this.cancelQueuedHunt();}
+    this.state.pendingHunt=id;this.state.message=`Nova hunt: ${hunt.name}. Começa no próximo ciclo.`;this.emit();return true;
+  }
+  cancelQueuedHunt(){if(!this.state.pendingHunt)return false;delete this.state.pendingHunt;this.emit();return true;}
+  /** Fim do ciclo: troca a hunt programada (chamado quando a wave volta a 0, antes de sortear a wave). */
+  private applyPendingHunt(){
+    const id=this.state.pendingHunt;if(!id)return;delete this.state.pendingHunt;
+    const hunt=HUNT_BY_ID[id];if(!hunt)return;
+    this.state.huntId=id;this.state.wave=0;this.state.message=`Nova hunt: ${hunt.name}`;this.fxListeners.forEach(fn=>fn({type:'wave',text:`Nova hunt: ${hunt.name}`}));
+  }
+  selectAndStart(id:string){if(!this.selectHunt(id))return false;this.start();return true;}
   /** Troca o sprite (cosmético: livre e gratuito). Aceita 'block' ou um id do registro; a evolução de classe não o altera. */
   setSprite(id:string,spriteId:string){const c=this.state.characters.find(x=>x.id===id);if(!c||!isKnownSprite(spriteId))return false;c.spriteId=spriteId;this.emit();return true;}
   /** Define uma das 2 vagas de treino offline (null/undefined limpa a vaga) e a empurra para o histórico. */
