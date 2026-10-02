@@ -7,9 +7,10 @@ import { defaultLookFor, isValidLook, normalizeLook, type Look } from '../art/lo
 import { goalOfflineTargets, isGoalId, trainRingId, gateSkillOf, GOAL_NODES } from '../rpg/goals';
 import { DEFAULT_HUNT, HUNT_BY_ID, HUNTS, huntScale, huntWaves } from '../data/hunts';
 import { RUN_CONFIG, WAVE_CONFIG } from '../data/balance';
+import { reinforcementIds } from '../systems/waves';
 import { RunPlan, bossPowerFor, BOSS_HP_MUL, depthScale, CHUNK_LEN } from '../run/plan';
-import { FOE_ATTACK, foeRole, hasWindup, type WindupRole } from '../run/foes';
-import { createRun, dist, foesInReach, heroesInReach, placeHero, placeParty, radiusOf, reachOf, stepRun } from '../run/world';
+import { BOSS_ENRAGE, BOSS_PHASES, FOE_ATTACK, foeRole, hasWindup, type FoeRole, type WindupRole } from '../run/foes';
+import { createRun, dist, foesInReach, freeNear, heroesInReach, placeHero, placeParty, radiusOf, reachOf, stepRun } from '../run/world';
 import { lateWaveBonus, batchToSpawn, composeExtras, drawFromBag, extrasTableFor, limitExtra, newBag, rollExtra, splitBatches, tierOfExtra, TIER_NAMES, waveRewards } from '../systems/waves';
 import { SPELLS, spellById } from '../data/spells';
 import { itemById } from '../data/items';
@@ -63,7 +64,7 @@ export function initialState():GameState{
 export const PARTY_SIZE=3,ROSTER_LIMIT=5,NAME_LIMIT=18;
 export interface RecruitSpec{name:string;weaponId?:string;element?:ProficiencyId;look?:Partial<Look>;row?:CharacterRow;goal?:string}
 export class GameEngine {
-  private state:GameState; private listeners=new Set<()=>void>(); private fxListeners=new Set<(fx:GameFx)=>void>(); private pausedFrom:GameState['status']='running';
+  private trapped=new Map<string,string>();private state:GameState; private listeners=new Set<()=>void>(); private fxListeners=new Set<(fx:GameFx)=>void>(); private pausedFrom:GameState['status']='running';
   constructor(state=initialState()){this.state=state;}
   getSnapshot=()=>this.state;
   hydrate(next:GameState){this.state=next;this.pausedFrom=next.status==='paused'?'running':next.status;this.emit();}
@@ -126,18 +127,18 @@ export class GameEngine {
     if(at){m.x=at.x;m.y=at.y;m.atkMul=scale.atk;m.rewardMul=(1+(chunk??0)*.025)*RUN_CONFIG.reward*(HUNT_BY_ID[this.state.huntId]?.rewardScale??1);}return m;
   }
   /** Encontro do corredor: registra a wave (tier, mensagem, mecânicas de início de wave) como as waves antigas faziam. */
-  private startEncounter(_chunk:number,enc:{extra:number;tier:string;boss:boolean;monsters:string[]}){
+  private startEncounter(_chunk:number,enc:{extra:number;tier:string;boss:boolean;monsters:string[];ambush?:number}){
     this.mech.onWaveStart();this.state.lastExtra=enc.extra;this.state.waveInfo={extra:enc.extra,total:enc.monsters.length,goldStart:this.state.analyzer.gold};
     const name=enc.boss?`Chefe: ${MONSTERS[enc.monsters[0]].name}`:'Encontro';
-    this.state.message=enc.extra>0&&!enc.boss?`${name} — ${TIER_NAMES[tierOfExtra(enc.extra)]} (${enc.monsters.length} inimigos)`:name;
+    this.state.message=(enc.extra>0&&!enc.boss?`${name} — ${TIER_NAMES[tierOfExtra(enc.extra)]} (${enc.monsters.length} inimigos)`:name)+(enc.ambush?' — EMBOSCADA pelas costas!':'');
     this.emit({type:'wave',text:this.state.message});
   }
   private tickRun(dt:number){
     stepRun(this.state,this.plan(),dt,{
       trigger:(chunk,enc)=>this.startEncounter(chunk,enc),
-      spawn:(chunk,ids,at)=>{const base=this.state.monsters.length,fresh=ids.map((id,i)=>this.makeMonster(id,base+i,chunk,at[i]));const credit=this.mech.takePending();if(credit>0)for(const f of fresh)f.hp=Math.max(Math.round(f.maxHp*.4),f.hp-Math.round(credit));this.state.monsters.push(...fresh);},
+      spawn:(chunk,ids,at,ambush)=>{const base=this.state.monsters.length,fresh=ids.map((id,i)=>this.makeMonster(id,base+i,chunk,at[i]));if(ambush)for(const f of fresh)f.ambush=true;const credit=this.mech.takePending();if(credit>0)for(const f of fresh)f.hp=Math.max(Math.round(f.maxHp*.4),f.hp-Math.round(credit));this.state.monsters.push(...fresh);},
     });
-    this.tickWindups(dt);this.tickShots(dt);
+    this.tickWindups(dt);this.tickShots(dt);this.tickTraps();this.tickBossPhases();
     const run=this.state.run!;
     if(run.open&&!livingMonsters(this.state).length&&!run.queue.length)this.completeEncounter();
     if(this.state.monsters.length>24)this.state.monsters=this.state.monsters.filter(m=>m.alive);
@@ -159,8 +160,8 @@ export class GameEngine {
       m.cooldown-=dt;
       if(m.cooldown>0)continue;
       const all=livingTeam(this.state);if(!all.length){this.defeat();return;}
-      const role=foeRole(m.defId);
-      if(this.runOn()&&hasWindup(role)){if(this.beginWindup(m,role,all))m.cooldown+=1/MONSTERS[m.defId].speed;else m.cooldown=Math.max(0,m.cooldown);continue;}
+      const role:FoeRole=MONSTERS[m.defId].boss&&(m.phase??0)>=2?'boss':foeRole(m.defId);
+      if(this.runOn()&&hasWindup(role)){if(this.beginWindup(m,role,all))m.cooldown+=1/this.attackRate(m);else m.cooldown=Math.max(0,m.cooldown);continue;}
       const pool=this.runOn()?heroesInReach(this.state,m,all):all;
       if(!pool.length){m.cooldown=Math.max(0,m.cooldown);continue;}
       if(this.runOn()&&m.slot&&all.some(x=>x.id===m.slot!.hero)&&!pool.some(x=>x.id===m.slot!.hero)){m.cooldown=Math.max(0,m.cooldown);continue;}
@@ -168,7 +169,7 @@ export class GameEngine {
       if(m.statuses?.confused){const others=livingMonsters(this.state).filter(x=>x!==m),src=this.state.characters.find(x=>x.id===m.statuses!.confused!.source);if(others.length&&src){this.hit(src,others[Math.floor(Math.random()*others.length)],Math.max(1,Math.round(MONSTERS[m.defId].attack*3*runtime.monsterAtk)),false,true);m.cooldown+=1/MONSTERS[m.defId].speed;if(!livingMonsters(this.state).length)return;continue;}}
       const target=(m.slot&&targets.find(x=>x.id===m.slot!.hero))||pickMonsterTarget(targets)!;
       this.monsterStrike(m,target,1);
-      m.cooldown+=1/MONSTERS[m.defId].speed;
+      m.cooldown+=1/this.attackRate(m);
       if(!livingTeam(this.state).length){this.defeat();return;}
     }
   }
@@ -185,6 +186,7 @@ export class GameEngine {
     const run=this.state.run!,cfg=FOE_ATTACK[role];if((run.windups??[]).some(w=>w.src===m.uid))return false;
     const me={x:m.x!,y:m.y!};let target:Character|undefined;
     if(role==='brute'){target=m.slot?all.find(x=>x.id===m.slot!.hero):undefined;if(!target||!heroesInReach(this.state,m,all).includes(target))return false;}
+    else if(role==='boss'){const reach=heroesInReach(this.state,m,all);if(!reach.length)return false;target=reach.reduce((b,h)=>dist(run.pos[h.id],me)<dist(run.pos[b.id],me)?h:b);}
     else{const near=all.filter(h=>run.pos[h.id]&&dist(run.pos[h.id],me)<=cfg.range),back=near.filter(h=>h.row==='back'),pool=back.length?back:near;if(!pool.length)return false;target=pool.reduce((b,h)=>dist(run.pos[h.id],me)<dist(run.pos[b.id],me)?h:b);}
     const p=run.pos[target.id];(run.windups??=[]).push({id:`w${this.nextUid()}`,src:m.uid,x:p.x,y:p.y,r:cfg.r,t:cfg.windup,total:cfg.windup,mult:cfg.mult,role});return true;
   }
@@ -233,6 +235,29 @@ export class GameEngine {
     }
     run.shots=keep;
   }
+  /** Armadilhas: quem pisa numa célula de espinhos leva dano uma vez (de novo só depois de sair e entrar). Heróis perdem % da vida e nunca morrem por isso; monstros perdem % e ficam com ao menos 1. */
+  private tickTraps(){
+    const run=this.state.run;if(!run)return;const plan=this.plan();
+    const step=(id:string,x:number,y:number,hit:()=>void)=>{const on=plan.isTrap(x,y),key=`${Math.floor(x)},${Math.floor(y)}`;if(!on){this.trapped.delete(id);return;}if(this.trapped.get(id)===key)return;this.trapped.set(id,key);hit();};
+    for(const c of livingTeam(this.state)){const p=run.pos[c.id];if(!p)continue;step(c.id,p.x,p.y,()=>{const d=Math.max(1,Math.round(characterStats(c,this.state).maxHp*RUN_CONFIG.trapHero));c.hp=Math.max(1,c.hp-d);this.emit({type:'damage',target:c.id,value:d,text:'Armadilha!'});});}
+    for(const m of livingMonsters(this.state)){if(m.x===undefined)continue;step(m.uid,m.x,m.y!,()=>{const d=Math.max(1,Math.round(m.maxHp*(MONSTERS[m.defId].boss?RUN_CONFIG.trapBoss:RUN_CONFIG.trapFoe)));m.hp=Math.max(1,m.hp-d);this.emit({type:'damage',target:m.uid,value:d,text:'Armadilha!'});});}
+  }
+  /** Golpes por segundo de um monstro (o chefe enfurecido bate mais rápido). */
+  private attackRate(m:MonsterRuntime){return MONSTERS[m.defId].speed*((m.phase??0)>=2?BOSS_ENRAGE.attack:1);}
+  /** Fases dos chefes: ao cruzar 66% e 33% da vida invoca ajudantes ao redor; na 2ª enfurece. Cada fase dispara uma vez. */
+  private tickBossPhases(){
+    const run=this.state.run;if(!run)return;
+    for(const m of livingMonsters(this.state)){
+      if(!MONSTERS[m.defId].boss||m.x===undefined)continue;
+      const ratio=m.hp/m.maxHp,phase=m.phase??0,next=BOSS_PHASES.findIndex((th,i)=>i===phase&&ratio<=th);
+      if(next<0)continue;
+      m.phase=next+1;const common=reinforcementIds(this.state.huntId).common,plan=this.plan(),boss={x:m.x,y:m.y!};
+      const at=Array.from({length:BOSS_ENRAGE.adds},(_,i)=>freeNear(plan,{x:boss.x+Math.cos(i*Math.PI+1)*2.2,y:boss.y+Math.sin(i*Math.PI+1)*2.2}));
+      const fresh=at.map((p,i)=>this.makeMonster(common,this.state.monsters.length+i,run.lastTrigger,p));this.state.monsters.push(...fresh);
+      const name=MONSTERS[m.defId].name;this.state.message=m.phase===1?`${name} invoca ajudantes!`:`${name} se enfurece e invoca ajudantes!`;
+      this.emit({type:'wave',text:this.state.message});
+    }
+  }
   /** Fim do encontro: quem caiu levanta no ponto da fila dele com parte da vida e enfraquecido até o fim do próximo encontro (a penalidade da vez anterior sai). */
   private reviveFallen(){
     const weak='revive-weak',team=this.state.team.map(id=>this.state.characters.find(x=>x.id===id)).filter(Boolean) as Character[];
@@ -245,7 +270,7 @@ export class GameEngine {
   }
   /** Depois de cair: recomeça no início do chunk atual, com o encontro de novo. */
   private resetRunAfterDefeat(){
-    const run=this.state.run!,idx=this.plan().indexAt(run.anchor);run.anchor=Math.max(4,idx*CHUNK_LEN+(idx?1:4));run.lastTrigger=Math.min(run.lastTrigger,idx-1);run.open=false;run.queue=[];run.windups=[];run.shots=[];this.state.monsters=[];placeParty(this.state,this.plan());
+    const run=this.state.run!,idx=this.plan().indexAt(run.anchor);run.anchor=Math.max(4,idx*CHUNK_LEN+(idx?1:4));run.lastTrigger=Math.min(run.lastTrigger,idx-1);run.open=false;run.queue=[];run.windups=[];run.shots=[];this.trapped.clear();this.state.monsters=[];placeParty(this.state,this.plan());
   }
   private spawnWave(){
     const waves=this.waves(),isBoss=this.state.wave===waves.length-1;

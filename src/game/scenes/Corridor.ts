@@ -11,7 +11,7 @@ import { ART } from '../art/data';
 import { ART_SCALE, CELL_PX } from '../art/geometry';
 import { obstacleArt } from '../data/obstacles';
 import { lookKey, type Look } from '../art/look';
-import { TOMBSTONE_TEXTURE, cellTexture, characterTexture, characterWalkAnim, ensureLookTextures, monsterTexture, obstacleTexture, type CellKind } from '../art/textures';
+import { TOMBSTONE_TEXTURE, TRAP_TEXTURE, cellTexture, characterTexture, characterWalkAnim, ensureLookTextures, monsterTexture, obstacleTexture, type CellKind } from '../art/textures';
 import type { FxKind } from '../systems/spellFx';
 import { CHUNK_LEN, RunPlan } from '../run/plan';
 import { aggroGroups, freeNear, radiusOf, RADIUS, ringPoint } from '../run/world';
@@ -113,7 +113,7 @@ export class Game extends Scene {
     plan.ensure(plan.indexAt(anchor));
     const here = plan.pathPoint(anchor), fwd = plan.forwardAt(anchor), tx = px(here.x + fwd.x * 2.5), ty = px(here.y + fwd.y * 2.5);
     if (!this.cam.init) { this.cam.x = tx; this.cam.y = ty; this.cam.init = true; }
-    const k = Math.min(1, .07 * (runtime.huntSpeed > 5 ? 3 : 1)); this.cam.x += (tx - this.cam.x) * k; this.cam.y += (ty - this.cam.y) * k;
+    const k = Math.min(1, .07 * Math.max(1, Math.min(runtime.huntSpeed, 8))); this.cam.x += (tx - this.cam.x) * k; this.cam.y += (ty - this.cam.y) * k;
     cam.setScroll(Math.round(this.cam.x - width / 2), Math.round(this.cam.y - height / 2));
     const huntId = state.huntId, x0 = Math.floor(cam.scrollX / CELL_PX) - 1, x1 = Math.ceil((cam.scrollX + width) / CELL_PX) + 1, y0 = Math.floor(cam.scrollY / CELL_PX) - 1, y1 = Math.ceil((cam.scrollY + height) / CELL_PX) + 1;
     const keep = new Set<string>(), propKeep = new Set<string>();
@@ -126,6 +126,10 @@ export class Game extends Scene {
       const texture = cellTexture(huntId, tex), have = this.tiles.get(key);
       if (!have) this.tiles.set(key, this.add.image(px(cx), px(cy), texture).setOrigin(0).setScale(ART_SCALE).setDepth(0));
       else if (have.texture.key !== texture) have.setTexture(texture);
+      if (kind === 3) {
+        propKeep.add(key);
+        if (!this.props.has(key)) this.props.set(key, this.add.image(px(cx), px(cy), TRAP_TEXTURE).setOrigin(0).setScale(ART_SCALE).setDepth(2));
+      }
       if (kind === 2) {
         propKeep.add(key);
         if (!this.props.has(key)) { const tex2 = obstacleTexture(obstacleArt(huntId, { c: cx, r: cy })); if (this.textures.exists(tex2)) this.props.set(key, this.add.image(px(cx + .5), px(cy + 1), tex2).setOrigin(.5, 1).setScale(ART_SCALE).setDepth(4 + cy / 1000)); }

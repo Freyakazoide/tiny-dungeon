@@ -5,7 +5,7 @@
  * - `archer` / `caster`: ficam longe e miram a backline com um círculo avisado no chão (dá para desviar).
  * Todo golpe avisado é um "windup": um círculo que aparece, cresce e só então causa dano a quem ainda estiver dentro.
  */
-export type FoeRole = 'melee' | 'runner' | 'brute' | 'archer' | 'caster';
+export type FoeRole = 'melee' | 'runner' | 'brute' | 'archer' | 'caster' | 'boss';
 
 export const FOE_ROLE: Record<string, FoeRole> = {
   skeleton: 'melee', ghoul: 'brute',
@@ -23,7 +23,12 @@ export const FOE_ATTACK = {
   brute: { windup: .8, r: 1.45, mult: 1.6, range: 0 },
   archer: { windup: .7, r: .75, mult: 1.15, range: 6.5 },
   caster: { windup: 1, r: 1.3, mult: 1, range: 6 },
+  /** chefe enfurecido (fase 2): pancada em área grande em quem está colado nele */
+  boss: { windup: .9, r: 1.9, mult: 1.7, range: 0 },
 } as const;
+/** Fases do chefe: abaixo destas frações da vida ele invoca ajudantes (1ª e 2ª) e, na 2ª, enfurece (mais rápido e com pancada em área). */
+export const BOSS_PHASES = [.66, .33] as const;
+export const BOSS_ENRAGE = { speed: 1.4, attack: 1.3, adds: 2 } as const;
 export type WindupRole = keyof typeof FOE_ATTACK;
 export const hasWindup = (role: FoeRole): role is WindupRole => role in FOE_ATTACK;
 /** Atiradores e magos ficam longe: não têm vaga no anel. */

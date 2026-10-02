@@ -24,10 +24,13 @@ export interface Encounter {
   at: number; tier: WaveTier; extra: number; boss: boolean; bossPower?: BossPower;
   /** ids dos monstros, na ordem em que entram (levas): primeiro o núcleo do encontro, depois os reforços */
   monsters: string[];
+  /** os últimos `ambush` monstros da lista nascem ATRÁS do grupo (emboscada) e vão direto na backline */
+  ambush?: number;
 }
 /** Quadro de um chunk: ponto do mundo = (ox, oy) + a·c + b·r, com c ao longo e r através (a e b são vetores unitários dos eixos). */
 export interface Frame { ox: number; oy: number; ax: number; ay: number; bx: number; by: number }
-export interface Chunk { index: number; start: number; heading: Heading; frame: Frame; turn?: 'R' | 'L'; obstacles: Obstacle[]; encounter?: Encounter }
+export interface Trap { c: number; r: number }
+export interface Chunk { index: number; start: number; heading: Heading; frame: Frame; turn?: 'R' | 'L'; obstacles: Obstacle[]; /** armadilhas de espinhos: chão andável que fere quem pisa (nunca sobre obstáculo) */ traps: Trap[]; encounter?: Encounter }
 
 export interface RunParams { seed: number; huntId: string }
 export const bossIdOf = (huntId: string) => { const waves = (HUNT_BY_ID[huntId] ?? HUNT_BY_ID.catacumbas).waves; return waves[waves.length - 1].monsters.find(id => MONSTERS[id]?.boss) ?? waves[waves.length - 1].monsters[0]; };
@@ -89,10 +92,27 @@ function rollObstacles(seed: number, index: number, turn: boolean): Obstacle[] {
   return [...out.values()];
 }
 
+/** Armadilhas: a partir do 4º trecho, 1 em cada 3 tem 1 ou 2 grupos de 2 a 4 espinhos no meio do chão. Nunca sobre obstáculo, nem na entrada de um canto. */
+export const TRAP_FROM = 3;
+function rollTraps(seed: number, index: number, turn: boolean, obstacles: Obstacle[]): Trap[] {
+  if (index < TRAP_FROM) return [];
+  const rng = rngFor(seed, 29, index); if (rng() >= .34) return [];
+  const taken = new Set(obstacles.map(o => o.c * 8 + o.r)), out = new Map<number, Trap>(), L = CHUNK_LEN, B = BAND, guard = turn ? B + 2 : 4, groups = 1 + (rng() < .4 ? 1 : 0);
+  for (let g = 0; g < groups; g++) {
+    let c = randInt(guard, L - 5, rng), r = randInt(0, B - 1, rng); const size = randInt(2, 4, rng);
+    for (let n = 0; n < size; n++) {
+      if (c >= guard && c <= L - 4 && r >= 0 && r < B && !taken.has(c * 8 + r)) out.set(c * 8 + r, { c, r });
+      if (rng() < .5) c++; else r += rng() < .5 ? 1 : -1;
+    }
+  }
+  return [...out.values()];
+}
+
+export const AMBUSH_FROM = 2, AMBUSH_CHANCE = .25;
 export function generateChunk(params: RunParams, index: number, frame: Frame, heading: Heading, turn?: 'R' | 'L'): Chunk {
   const { seed, huntId } = params;
   const isBossChunk = index > 0 && (index + 1) % BOSS_EVERY === 0, rng = rngFor(seed, 51, index);
-  const chunk: Chunk = { index, start: index * CHUNK_LEN, heading, frame, turn, obstacles: rollObstacles(seed, index, !!turn) };
+  const obstacles = rollObstacles(seed, index, !!turn), chunk: Chunk = { index, start: index * CHUNK_LEN, heading, frame, turn, obstacles, traps: rollTraps(seed, index, !!turn, obstacles) };
   if (index === 0) return chunk;                  // o primeiro chunk é só a entrada: ninguém ataca antes de a run começar
   const { common, elite } = reinforcementIds(huntId);
   const extra = limitExtra(rawExtra(params, index, isBossChunk), { avgHpFraction: 1, lastExtra: rawExtra(params, index - 1, false) });
@@ -102,7 +122,9 @@ export function generateChunk(params: RunParams, index: number, frame: Frame, he
   const core = isBossChunk ? 3 : baseCount(index);
   for (let i = 0; i < core; i++) monsters.push(i === 0 && !isBossChunk && index > 8 && rng() < .5 ? elite : common);
   for (let i = 0; i < extra; i++) monsters.push(rng() < .15 ? elite : common);
-  chunk.encounter = { at: randInt(turn ? BAND + 3 : 6, CHUNK_LEN - 8, rng), tier: tierOfExtra(extra), extra, boss: isBossChunk, bossPower, monsters };
+  // emboscada: a partir do 3º trecho, 1 encontro comum em 4 manda 2 ou 3 monstros pelas costas do grupo
+  const ambush = !isBossChunk && index >= AMBUSH_FROM && monsters.length >= 4 && rng() < AMBUSH_CHANCE ? Math.min(3, 2 + (rng() < .4 ? 1 : 0)) : 0;
+  chunk.encounter = { at: randInt(turn ? BAND + 3 : 6, CHUNK_LEN - 8, rng), tier: tierOfExtra(extra), extra, boss: isBossChunk, bossPower, monsters, ...(ambush ? { ambush } : {}) };
   return chunk;
 }
 
@@ -114,7 +136,7 @@ export type Pt = { x: number; y: number };
 export class RunPlan {
   private frames: Frame[] = []; private heads: Heading[] = []; private turns: (('R' | 'L') | undefined)[] = [];
   private cache = new Map<number, Chunk>();
-  /** célula → 1 (chão) ou 2 (obstáculo sobre chão) */
+  /** célula → 1 (chão), 2 (obstáculo sobre chão) ou 3 (chão com armadilha) */
   private grid = new Map<number, number>();
   private loaded = new Set<number>();
   constructor(readonly params: RunParams) {
@@ -139,10 +161,10 @@ export class RunPlan {
   }
   private load(index: number) {
     if (this.loaded.has(index)) return; this.loaded.add(index);
-    const chunk = this.chunk(index), blocked = new Set(chunk.obstacles.map(o => o.c * 8 + o.r));
+    const chunk = this.chunk(index), blocked = new Set(chunk.obstacles.map(o => o.c * 8 + o.r)), traps = new Set(chunk.traps.map(t => t.c * 8 + t.r));
     for (let c = 0; c < CHUNK_LEN; c++) for (let r = 0; r < BAND; r++) {
       const p = toWorld(chunk.frame, c + .5, r + .5);
-      this.grid.set(cellKey(Math.floor(p.x), Math.floor(p.y)), blocked.has(c * 8 + r) ? 2 : 1);
+      this.grid.set(cellKey(Math.floor(p.x), Math.floor(p.y)), blocked.has(c * 8 + r) ? 2 : traps.has(c * 8 + r) ? 3 : 1);
     }
   }
   private unload(index: number) {
@@ -161,10 +183,12 @@ export class RunPlan {
   precompute(count: number) { for (let i = 0; i < count; i++) this.load(i); }
   get loadedCount() { return this.loaded.size; }
   /** Célula (inteira) andável? Obstáculos e paredes são bloqueados. */
-  isBlockedCell(cx: number, cy: number) { return this.grid.get(cellKey(cx, cy)) !== 1; }
+  isBlockedCell(cx: number, cy: number) { const k = this.grid.get(cellKey(cx, cy)); return k !== 1 && k !== 3; }
   isBlocked(x: number, y: number) { return this.isBlockedCell(Math.floor(x), Math.floor(y)); }
   /** Existe chão (mesmo com obstáculo) na célula? Usado para desenhar. */
-  cellKind(cx: number, cy: number): 0 | 1 | 2 { return (this.grid.get(cellKey(cx, cy)) ?? 0) as 0 | 1 | 2; }
+  cellKind(cx: number, cy: number): 0 | 1 | 2 | 3 { return (this.grid.get(cellKey(cx, cy)) ?? 0) as 0 | 1 | 2 | 3; }
+  /** A célula tem armadilha de espinhos? */
+  isTrap(x: number, y: number) { return this.grid.get(cellKey(Math.floor(x), Math.floor(y))) === 3; }
   indexAt(progress: number) { return Math.max(0, Math.floor(progress / CHUNK_LEN)); }
 
   /** Ponto da linha central do caminho no progresso `p` (células desde a entrada). Nos cantos a linha passa pelo centro da sala. */

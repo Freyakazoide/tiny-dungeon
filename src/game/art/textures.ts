@@ -23,6 +23,15 @@ const CELL_TILES: Record<CellKind, [string, string, string, string]> = {
 export const TOMBSTONE_TEXTURE = 'art-tombstone';
 const TOMBSTONE = ['....1111....', '..11222211..', '.1122222211.', '.1222332221.', '.1222332221.', '.1223333221.', '.1223333221.', '.1222332221.', '.1222332221.', '.1222222221.', '.1222222221.', '.1111111111.', '333333333333'];
 export const tombstoneGrid = (): string[][] => { const w = TOMBSTONE[0].length + 2, pad = Array<string>(w).fill('.'); return [pad, ...TOMBSTONE.map(r => ['.', ...r, '.']), [...pad]]; };
+/** Armadilha de espinhos (célula de 32×32 de arte): placa escura com 9 espetos de aço. */
+export const TRAP_TEXTURE = 'art-trap';
+export function trapGrid(): string[][] {
+  const g = Array.from({ length: 32 }, () => Array<string>(32).fill('.'));
+  for (let y = 3; y < 29; y++) for (let x = 3; x < 29; x++) g[y][x] = (x + y) % 11 === 0 ? '4' : '3';                     // placa de pedra escura
+  const spike = ['..T..', '.tTu.', '.tTuu', 'ttTuu', 'ttuuu'];
+  for (const [ox, oy] of [[5, 5], [13, 5], [21, 5], [5, 13], [13, 13], [21, 13], [5, 21], [13, 21], [21, 21]]) spike.forEach((row, ry) => [...row].forEach((ch, rx) => { if (ch !== '.') g[oy + ry][ox + rx] = ch; }));
+  return g;
+}
 export const obstacleTexture = (id: string) => `art-o-${id}`;
 export const monsterTexture = (monsterArtId: string, dir: Direction, pose: 1 | 2) => `art-m-${monsterArtId}-${dir}-${pose}`;
 export const characterTexture = (look: Look, dir: Direction, pose: 1 | 2) => `art-c-${lookKey(look)}-${dir}-${pose}`;
@@ -36,6 +45,7 @@ const addCanvas = (scene: Scene, key: string, canvas: HTMLCanvasElement) => {
 
 /** Mapas das 7 hunts e todos os monstros com arte (síncrono e barato: poucas centenas de pixels por quadro). */
 export function ensureArtTextures(scene: Scene) {
+  addCanvas(scene, TRAP_TEXTURE, rasterToCanvas(rasterize(outline(toPixels(trapGrid(), ART.palette)))));
   addCanvas(scene, TOMBSTONE_TEXTURE, rasterToCanvas(rasterize(outline(toPixels(tombstoneGrid(), ART.palette)))));
   for (const [id, grid] of Object.entries(ART.obstacles)) addCanvas(scene, obstacleTexture(id), rasterToCanvas(rasterize(outline(toPixels(grid, ART.palette)))));
   for (const hunt of HUNTS) addCanvas(scene, mapTexture(hunt.id), rasterToCanvas(mapRaster(hunt.id, hunt.color)));

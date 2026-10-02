@@ -7,7 +7,7 @@ import { livingMonsters, livingTeam } from '../systems/combat';
 import { characterStats } from '../systems/progression';
 import type { Character, GameState, MonsterRuntime, RunState } from '../core/types';
 import { BAND, RunPlan, type Encounter, type Pt } from './plan';
-import { FOE_ATTACK, foeRole, isRanged } from './foes';
+import { BOSS_ENRAGE, FOE_ATTACK, foeRole, isRanged } from './foes';
 
 /**
  * Mundo do corredor: posições em células do mundo (x, y), movimento, colisão e IA de quem anda no mapa. Só lê CONFIGURAÇÃO (nunca ordens ao
@@ -69,6 +69,17 @@ export function moveToward(plan: RunPlan, u: Body, tx: number, ty: number, step:
 }
 /** Folga (células) além do raio de um círculo avisado em que o herói já se considera dentro: um passo de ~.45 não o coloca de volta ao alcance do golpe. */
 const SAFE = .9;
+/** Ninguém escolhe parar numa armadilha: o ponto vai para a célula livre mais próxima (passar por cima, no caminho, ainda é possível). */
+export function avoidTrap(plan: RunPlan, p: Pt): Pt {
+  if (!plan.isTrap(p.x, p.y)) return p;
+  let best = p, bestD = Infinity;
+  for (let dx = -2; dx <= 2; dx++) for (let dy = -2; dy <= 2; dy++) {
+    const cx = Math.floor(p.x) + dx, cy = Math.floor(p.y) + dy;
+    if (plan.cellKind(cx, cy) !== 1) continue;
+    const q = { x: cx + .5, y: cy + .5 }, d = dist(p, q); if (d < bestD) { bestD = d; best = q; }
+  }
+  return best;
+}
 /** Saída de um círculo avisado: de 16 pontos logo fora dele, o mais perto de quem está dentro cujo caminho não esbarra em ninguém e cabe no chão. */
 function escapePoint(plan: RunPlan, self: Body, w: { x: number; y: number; r: number }, bodies: Body[]): Pt | null {
   const out = w.r + SAFE + .1; let best: Pt | null = null, bestD = Infinity;
@@ -165,7 +176,7 @@ export interface WorldHooks {
   /** um encontro dispara: o motor registra a wave (tier, mensagem, mecânicas de início de wave) */
   trigger(chunk: number, enc: Encounter): void;
   /** nascem monstros: o motor cria os `MonsterRuntime` */
-  spawn(chunk: number, ids: string[], at: Pt[]): void;
+  spawn(chunk: number, ids: string[], at: Pt[], ambush?: boolean): void;
 }
 
 /** Posição da vaga `k` (0 a 7, de 45 em 45°) no anel de raio `R.ringRadius` em volta de um herói. */
@@ -187,7 +198,7 @@ export function aggroGroups(team: Character[]): Character[][] {
  */
 function assignSlots(plan: RunPlan, foes: MonsterRuntime[], team: Character[], run: RunState) {
   const groups = aggroGroups(team), pos = (h: Character) => posOf(run, h);
-  const roleOf = (m: MonsterRuntime) => foeRole(m.defId);
+  const roleOf = (m: MonsterRuntime) => m.ambush ? 'runner' : foeRole(m.defId);
   const usable = foes.filter(m => !MONSTERS[m.defId].boss && !isRanged(roleOf(m)));
   for (const m of foes) if (MONSTERS[m.defId].boss || isRanged(roleOf(m))) delete m.slot;
   const claimed = new Set<string>(), key = (id: string, k: number) => `${id}#${k}`;
@@ -257,10 +268,13 @@ export function stepRun(state: GameState, plan: RunPlan, dt: number, hooks: Worl
   const along = (p: Pt) => (p.x - tankAt.x) * fwd.x + (p.y - tankAt.y) * fwd.y;
   const here = plan.pathPoint(run.anchor);
   // 1) o grupo só anda quando todos estão perto da âncora e não há inimigo por perto
-  if (team.every(c => dist(posOf(run, c), here) <= R.rear + 4) && !foes.some(f => dist({ x: f.x!, y: f.y! }, tankAt) < R.engage)) { run.anchor += R.walk * dt; run.deepest = Math.max(run.deepest, run.anchor); }
+  if (team.every(c => dist(posOf(run, c), here) <= R.rear + 4) && !foes.some(f => f.ambush || dist({ x: f.x!, y: f.y! }, tankAt) < R.engage)) { run.anchor += R.walk * dt; run.deepest = Math.max(run.deepest, run.anchor); }
   // 2) encontros do chunk em que o grupo está
   const idx = plan.indexAt(run.anchor), chunk = plan.chunk(idx), enc = chunk.encounter;
-  if (enc && run.lastTrigger < idx && run.anchor >= chunk.start + enc.at) { run.lastTrigger = idx; run.open = true; run.queue.push({ chunk: idx, ids: [...enc.monsters], waited: 0 }); hooks.trigger(idx, enc); }
+  if (enc && run.lastTrigger < idx && run.anchor >= chunk.start + enc.at) { run.lastTrigger = idx; run.open = true; const behind = enc.ambush ? enc.monsters.slice(-enc.ambush) : undefined;
+    run.queue.push({ chunk: idx, ids: enc.ambush ? enc.monsters.slice(0, -enc.ambush) : [...enc.monsters], waited: 0 }); hooks.trigger(idx, enc);
+    if (behind) hooks.spawn(idx, behind, behind.map(() => plan.spawnPoint(Math.max(1, run.anchor - R.rear - 4 - Math.random() * 3), Math.random)), true);
+  }
   // 3) levas: mesmos números das waves (WAVE_CONFIG)
   for (const q of run.queue) {
     q.waited += dt;
@@ -282,7 +296,7 @@ export function stepRun(state: GameState, plan: RunPlan, dt: number, hooks: Worl
   for (const f of living) {
     const body = foeBody.get(f.uid)!;
     if ((f.statuses?.frozen ?? 0) > 0 || (f.statuses?.stunned ?? 0) > 0) continue;
-    const boss = !!MONSTERS[f.defId].boss, speed = R.foeSpeed * (boss ? .75 : MONSTERS[f.defId].speed > 1 ? 1 : .85) * dt;
+    const boss = !!MONSTERS[f.defId].boss, speed = R.foeSpeed * (boss ? .75 : MONSTERS[f.defId].speed > 1 ? 1 : .85) * ((f.phase ?? 0) >= 2 ? BOSS_ENRAGE.speed : 1) * dt;
     let target: Pt, stop = 0;
     if (f.slot) target = orbitTarget(f, f.slot, team, run);
     else if (boss) { target = tankAt; stop = 1.9; }
@@ -321,6 +335,7 @@ export function stepRun(state: GameState, plan: RunPlan, dt: number, hooks: Worl
     // ninguém sai da zona da própria formação: perseguir, desviar e recuar acontecem dentro de `roam` células do ponto de descanso
     const roam = roamOf(role, ai), off = Math.hypot(tx - home.x, ty - home.y);
     if (off > roam) { tx = home.x + (tx - home.x) * roam / off; ty = home.y + (ty - home.y) * roam / off; }
+    ({ x: tx, y: ty } = avoidTrap(plan, { x: tx, y: ty }));
     const speed = (engaged ? R.heroSpeed : R.travel) * dt;
     if (dist(me, { x: tx, y: ty }) > .08) moveToward(plan, body, tx, ty, speed, bodies);
   }
