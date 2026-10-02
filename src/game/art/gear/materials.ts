@@ -37,6 +37,22 @@ export const MATERIALS: Record<string, Material> = Object.fromEntries([
   mat('luz_solar',        'Luz solar',        'magia',   'forte', '#4a1a0a', '#e0661c', '#e8841e', '#ffb62e', '#ffe066', '#fffbd0', '#fff6a8'),
   mat('essencia_funesta', 'Essência funesta', 'magia',   'forte', '#04180f', '#1f8a4a', '#14683a', '#2fb45a', '#7aea8a', '#e8ffe4', '#b8ff8a'),
   mat('ferrugem',         'Ferrugem',         'organico','nenhum','#2a120c', '#8a3a1c', '#6a3220', '#a85a2c', '#d08a44', '#e0a060'),
+  mat('linho',            'Linho',            'organico','nenhum','#2b2418', '#8a7a5a', '#8f8264', '#c4b48c', '#e6d9b4', '#f4ecd0'),
+  mat('pano_azul',        'Pano azul',        'organico','nenhum','#101a30', '#3a5fa8', '#2e4a86', '#4c78cf', '#86abf0', '#bcd2ff'),
+  mat('veludo_vermelho',  'Veludo vermelho',  'organico','nenhum','#260a12', '#a02838', '#7a1828', '#b83040', '#e0606a', '#f08a90'),
+  mat('seda_arcana',      'Seda arcana',      'organico','medio', '#1a0c33', '#6a44b0', '#4a2d8a', '#7a54c8', '#aa88f0', '#d8c4ff'),
+  mat('pano_negro',       'Pano negro',       'organico','nenhum','#08080e', '#3a3a54', '#1a1a28', '#2a2a3c', '#444460', '#5a5a78'),
+  mat('pele',             'Pele',             'organico','nenhum','#231810', '#7a5a3a', '#5a4028', '#8a6a44', '#b8946a', '#c8a47c'),
+  mat('cobre',            'Cobre',            'metal',   'medio', '#2a140e', '#a8502a', '#8a4020', '#c8703a', '#eca068', '#ffd0a8'),
+  mat('pedra',            'Pedra',            'organico','medio', '#1c1e24', '#5a6070', '#4a4e58', '#7a808c', '#a8aebb', '#c8ceda'),
+  mat('escama',           'Escama',           'organico','medio', '#08201a', '#2a8a6a', '#1f6a52', '#3a9a78', '#78d0a8', '#b8f0d8'),
+  mat('pergaminho',       'Pergaminho',       'organico','nenhum','#3a2a14', '#a08a58', '#b8a070', '#e0cc98', '#f6ecc4', '#fffaea'),
+  mat('rubi',             'Rubi',             'cristal', 'forte', '#2a0610', '#c01838', '#8a1028', '#d82848', '#ff6080', '#ffd0d8', '#ff8098'),
+  mat('safira',           'Safira',           'cristal', 'forte', '#061030', '#2a60d8', '#1a409a', '#3a78f0', '#78a8ff', '#d8e8ff', '#a0c4ff'),
+  mat('esmeralda',        'Esmeralda',        'cristal', 'forte', '#04180f', '#1a9a50', '#107038', '#28c070', '#70f0a8', '#e0ffee', '#a0ffc8'),
+  mat('vidro',            'Vidro',            'cristal', 'forte', '#123040', '#6ac0d8', '#5a9ab0', '#a8dcea', '#e0f6fb', '#ffffff'),
+  mat('pocao_vida',       'Poção de vida',    'magia',   'forte', '#2a0610', '#d02838', '#a01830', '#e43a48', '#ff7a84', '#ffd0d4', '#ff9aa4'),
+  mat('pocao_mana',       'Poção de mana',    'magia',   'forte', '#08143a', '#2a58d8', '#1c3ea8', '#3a74f0', '#7aa8ff', '#d0e0ff', '#9cc0ff'),
 ].map(m => [m.id, m]));
 
 export const materialIds = (): string[] => Object.keys(MATERIALS);
@@ -58,5 +74,8 @@ export function roleColor(m: Material, role: Role): Rgb {
     case 'h': return hex(m.highlight);
     case 'p': return mix(hex(m.highlight), hex(m.specular), SHINE_FACTOR[m.brilho]);
     case 'e': return hex(m.emissive ?? m.highlight);
+    case 'l': return hex(m.base);
+    case 'L': return hex(m.highlight);
+    case 'd': return hex(m.shadow);
   }
 }

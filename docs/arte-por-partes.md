@@ -40,6 +40,20 @@ Cada material é uma rampa `deep · rim · shadow · base · highlight · specul
 - **Parte nova:** acrescente em `swords.ts`/`bows.ts`/`staffs.ts` (grade + âncoras). `npx vitest run src/game/art/gear` valida e monta todas as combinações.
 - **Família nova:** partes + um gabarito em `TEMPLATES`.
 
-## 6. Ainda não feito
+## 6. Famílias (25)
 
-Escudos, elmos e armaduras; personagem em camadas (corpo, cabelo, roupa, arma, offhand, detalhe da classe) com âncoras por quadro de animação; ligar os ícones do jogo (`ItemIcon`) às receitas.
+| Grupo | Famílias |
+|---|---|
+| Armas | espada, adaga, machado, martelo (maça/mangual), lança, foice, arco, besta, cajado, varinha, arma de fogo, instrumento, luvas |
+| Mão secundária | escudo, livro, orbe (foco/esfera), totem, aljava |
+| Armadura | elmo e chapéu (`cabeca`), armadura (`torso`), calças, botas |
+| Joias | amuleto, anel |
+| Consumíveis | poção (frasco de vidro + rolha + líquido), espólio (osso, presa, pelagem, escama, minério, cristal, saquinho de pó, crânio) |
+
+O jogo escolhe a arte de cada item por **slot e nome** (`src/ui/items/gearIcon.ts`): "Capuz de Couro" é um capuz, "Cota de Malha" é malha, "Poção Forte de Vida" é o frasco grande com líquido vermelho, "Osso Antigo" é o osso. Todas as ~1.200 bases de equipamento de classe e os itens simples têm receita (um teste confere). A mesma peça sempre tem a mesma cara; peças de classe com a mesma base e uids diferentes variam.
+
+**Líquidos:** os papéis `l`/`L`/`d` (base, claro, escuro do líquido) pegam o material de outro slot (`fonteLiquido`), por isso a poção mistura vidro e líquido na mesma parte.
+
+## 7. Ainda não feito
+
+Personagem em camadas (corpo, cabelo, roupa, arma, offhand, detalhe da classe) com âncoras por quadro de animação; ligar os ícones do jogo (`ItemIcon`) às receitas.

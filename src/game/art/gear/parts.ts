@@ -3,9 +3,13 @@ import { isRole, type Role } from './roles';
 
 import type { Rarity } from '../../core/types';
 export type { Rarity };
-export type Family = 'espada' | 'arco' | 'cajado';
+export type Family =
+  | 'espada' | 'arco' | 'cajado' | 'machado' | 'martelo' | 'lanca' | 'adaga' | 'varinha' | 'besta' | 'foice' | 'arma_fogo' | 'instrumento' | 'luvas'
+  | 'escudo' | 'livro' | 'orbe' | 'totem' | 'aljava'
+  | 'cabeca' | 'torso' | 'pernas' | 'botas' | 'amuleto' | 'anel'
+  | 'pocao' | 'espolio';
 /** Categoria do slot: decide de qual lista de materiais a raridade sorteia. */
-export type SlotCategory = 'lamina' | 'guarnicao' | 'cabo' | 'gema' | 'corda' | 'efeito';
+export type SlotCategory = 'lamina' | 'guarnicao' | 'cabo' | 'gema' | 'corpo' | 'liquido' | 'vidro' | 'espolio' | 'corda' | 'efeito';
 export type Point = [x: number, y: number];
 
 /**
@@ -29,6 +33,8 @@ export interface PartDef {
   incompativel?: string[];
   /** Menor raridade em que o sorteio usa esta parte (padrão: common). */
   desde?: Rarity;
+  /** Papéis `l`/`L`/`d` (líquido) desta parte usam o material do slot indicado (ex.: `liquido` numa poção). */
+  fonteLiquido?: string;
   /** Parte que é só uma linha entre dois anchors (corda do arco): papéis repetidos ao longo da linha. */
   linha?: string;
 }

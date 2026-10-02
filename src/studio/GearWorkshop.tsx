@@ -1,6 +1,6 @@
 import { useMemo, useState, type CSSProperties } from 'react';
 import { gearDataUrl, gearSize, recipeKey, type Recipe } from '../game/art/gear/assemble';
-import { FAMILIES, partsFor, TEMPLATES } from '../game/art/gear/catalog';
+import { FAMILIES, FAMILY_NAMES, partsFor, TEMPLATES } from '../game/art/gear/catalog';
 import { MATERIALS, SHINE_FACTOR, type Material } from '../game/art/gear/materials';
 import { compatible, RARITIES, type Family, type Rarity } from '../game/art/gear/parts';
 import { PLAN_RECIPES, recipeForSeed, recipeIssues, SWORD_LADDER } from '../game/art/gear/recipes';
@@ -10,7 +10,7 @@ import { cellRaster } from '../game/art/render';
 import { pngDataUrl } from '../game/art/png';
 
 const RARITY_NAME: Record<Rarity, string> = { common: 'Comum', uncommon: 'Incomum', rare: 'Rara', epic: 'Épica', legendary: 'Lendária' };
-const FAMILY_NAME: Record<Family, string> = { espada: 'Espada', arco: 'Arco', cajado: 'Cajado' };
+const FAMILY_NAME = FAMILY_NAMES;
 const Pix = ({ src, alt, scale, native }: { src: string; alt: string; scale: number; native: number }) =>
   <img src={src} alt={alt} style={{ imageRendering: 'pixelated', width: native * scale, display: 'block' }} />;
 

@@ -84,7 +84,8 @@ export function assemble(recipe: Recipe, templates: Record<Family, Template> = T
       const gx = p.pos[0] + x + ox, gy = p.pos[1] + y + oy;
       if (fx?.modo === 'dentro' && cells[gy]?.[gx]?.slot !== fx.slot) return;
       if (fx?.modo === 'fora' && cells[gy]?.[gx]) return;
-      paint(gx, gy, ch as Role, p.mat, slot);
+      const liquid = p.def.fonteLiquido && recipe.partes[p.def.fonteLiquido] && (ch === 'l' || ch === 'L' || ch === 'd');
+      paint(gx, gy, ch as Role, liquid ? materialOf(recipe.partes[p.def.fonteLiquido!].material) : p.mat, slot);
     }));
   }
   // cordas por baixo das demais partes: pintadas antes e depois sobrescritas
