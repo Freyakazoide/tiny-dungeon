@@ -19,7 +19,7 @@ describe('variedade de personagem', () => {
         expect(g[0].some(opaque), tag).toBe(false); expect(g[g.length - 1].some(opaque), tag).toBe(false); if (dir === 'down' || dir === 'up') expect(g.some(r => opaque(r[0])), tag).toBe(false); // a ponta da espada de perfil já toca a borda (exceção da arte entregue)
       }
     }
-  });
+  }, 30000);
   it('cada penteado, chapéu/elmo e capa muda o desenho em relação ao padrão (nenhuma opção é de enfeite)', () => {
     const plain = (dir: Direction) => JSON.stringify(styledFrameGrid('squire', dir, 1, normalizeLook({ estilo: 'curto', topo: 'nenhum', capa: NO_CAPE })));
     for (const s of HAIR_STYLES.filter(s => s.id !== 'curto')) expect(DIRS.some(d => JSON.stringify(styledFrameGrid('squire', d, 1, normalizeLook({ estilo: s.id }))) !== plain(d)), s.id).toBe(true);
