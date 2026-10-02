@@ -93,6 +93,8 @@ export function heroRole(c: Character): Role {
   if (isMelee(c)) return 'melee';
   return c.spellSlots.some(id => { const s = spellById(id); return s && (s.kind === 'heal' || s.kind === 'regen'); }) ? 'healer' : 'ranged';
 }
+/** Raio (células) em volta do ponto de descanso dentro do qual o herói luta, desvia e recua. */
+export const roamOf = (role: Role, ai: AiConfig) => role === 'tank' ? 5 : Math.min(7, Math.max(3.5, ai.leash + 1.5));
 export const aiOf = (c: Character, role = heroRole(c)): AiConfig => ({ ...DEFAULT_AI[role], ...(c.helper.ai ?? {}) });
 /** Alcance do golpe básico (células). */
 export const reachOf = (c: Character) => isMelee(c) ? R.meleeReach : R.rangedReach;
@@ -260,17 +262,23 @@ export function stepRun(state: GameState, plan: RunPlan, dt: number, hooks: Worl
   for (const c of team) {
     const role = heroRole(c), ai = aiOf(c, role), body = heroBody.get(c.id)!, me = body.pt;
     const target = living.reduce<MonsterRuntime | null>((b, f) => !b || dist(me, { x: f.x!, y: f.y! }) < dist(me, { x: b.x!, y: b.y! }) ? f : b, null);
-    const back = role === 'tank' || role === 'melee' ? 0 : R.rear, slotAt = plan.pathPoint(run.anchor - back);
+    // posição de descanso pela FILA configurada (a mesma que o aggro usa): frente na linha do tanque, trás `rear` células atrás
+    const back = c.row === 'back' ? R.rear : 0, slotAt = plan.pathPoint(run.anchor - back);
     const lane = (team.indexOf(c) - (team.length - 1) / 2) * 1.25;
-    let tx = slotAt.x + side.x * lane, ty = slotAt.y + side.y * lane;
+    const home = { x: slotAt.x + side.x * lane, y: slotAt.y + side.y * lane };
+    let tx = home.x, ty = home.y;
     if (target) {
       const tp = { x: target.x!, y: target.y! }, d = dist(me, tp), want = role === 'tank' || role === 'melee' ? R.meleeReach * .75 : Math.max(ai.hold, 1);
       const hurt = ai.retreatAt > 0 && c.hp / stats.get(c.id)!.maxHp < ai.retreatAt;
-      if (hurt || (ai.dodge > 0 && d < ai.dodge)) { const ux = (me.x - tp.x) / (d || 1), uy = (me.y - tp.y) / (d || 1); tx = me.x + ux * 2.5; ty = me.y + uy * 2.5; }
+      if (hurt) { tx = home.x - fwd.x * 2; ty = home.y - fwd.y * 2; } // ferido: recua para trás da formação, nunca para longe dela
+      else if (ai.dodge > 0 && d < ai.dodge) { const ux = (me.x - tp.x) / (d || 1), uy = (me.y - tp.y) / (d || 1); tx = me.x + ux * 2.5; ty = me.y + uy * 2.5; }
       else if (d > want || role === 'tank') { const k = Math.max(0, d - want * .8) / (d || 1); tx = me.x + (tp.x - me.x) * k; ty = me.y + (tp.y - me.y) * k; }
       else { tx = me.x; ty = me.y; }
       if (role !== 'tank' && along({ x: tx, y: ty }) > ai.leash) { const over = along({ x: tx, y: ty }) - ai.leash; tx -= fwd.x * over; ty -= fwd.y * over; }
     }
+    // ninguém sai da zona da própria formação: perseguir, desviar e recuar acontecem dentro de `roam` células do ponto de descanso
+    const roam = roamOf(role, ai), off = Math.hypot(tx - home.x, ty - home.y);
+    if (off > roam) { tx = home.x + (tx - home.x) * roam / off; ty = home.y + (ty - home.y) * roam / off; }
     const speed = (engaged ? R.heroSpeed : R.travel) * dt;
     if (dist(me, { x: tx, y: ty }) > .08) moveToward(plan, body, tx, ty, speed, bodies);
   }

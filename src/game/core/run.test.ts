@@ -163,3 +163,37 @@ describe('Aggro: tanque primeiro, depois a frente, depois a backline', () => {
     expect(at).toBeGreaterThan(0); expect(at).toBeLessThan(6);
   });
 });
+
+describe('Ninguém foge do mapa: formação pela fila e zona de ação', () => {
+  const planOf = (e: GameEngine) => (e as unknown as { plan(): import('../run/plan').RunPlan }).plan();
+  it('mesmo com o tanque morrendo e o grupo apanhando, ninguém se afasta do grupo (antes um herói chegava a 60 células)', () => {
+    const e = new GameEngine(partyState()); e.selectHunt('floresta_sombria'); e.start();
+    for (const c of e.getSnapshot().characters) e.devSetLevel(c.id, 4);
+    e.setRow(e.getSnapshot().characters[1].id, 'front'); e.setRow(e.getSnapshot().characters[2].id, 'front');
+    let worst = 0;
+    for (let i = 0; i < 3000; i++) {
+      e.tick(100); const s = e.getSnapshot(), run = s.run!, here = planOf(e).pathPoint(run.anchor);
+      for (const c of s.characters.filter(x => x.hp > 0)) { const p = run.pos[c.id]; worst = Math.max(worst, Math.hypot(p.x - here.x, p.y - here.y)); }
+    }
+    expect(worst).toBeLessThan(9);
+  });
+  it('o herói ferido recua para trás da formação e não para longe dela', () => {
+    const e = new GameEngine(partyState()); e.start(); const s = e.getSnapshot();
+    for (const c of s.characters) e.devSetLevel(c.id, 25);
+    let fled = 0;
+    for (let i = 0; i < 1500; i++) {
+      e.tick(100); const st = e.getSnapshot(); for (const c of st.characters) if (st.monsters.some(m => m.alive)) c.hp = Math.min(c.hp, Math.round(c.hp * .995));
+      const here = planOf(e).pathPoint(st.run!.anchor); for (const c of st.characters.filter(x => x.hp > 0)) { const p = st.run!.pos[c.id]; fled = Math.max(fled, Math.hypot(p.x - here.x, p.y - here.y)); if (i % 200 === 0) c.hp = Math.max(1, Math.round(c.hp * .2)); }
+    }
+    expect(fled).toBeLessThan(9);
+  });
+  it('a posição de descanso segue a FILA, não a arma: arqueiro na frente fica na linha do tanque, espadachim atrás fica atrás', () => {
+    const e = new GameEngine(partyState()); e.start(); const [tank, bow, staff] = e.getSnapshot().characters;
+    e.setRow(bow.id, 'front'); e.setRow(staff.id, 'back'); const sword = e.getSnapshot().characters[2]; sword.equipment.weapon = 'rusty_sword';
+    for (let i = 0; i < 20; i++) e.tick(100);
+    const st = e.getSnapshot(), run = st.run!, fwd = planOf(e).forwardAt(run.anchor), along = (id: string) => run.pos[id].x * fwd.x + run.pos[id].y * fwd.y;
+    expect(st.monsters).toHaveLength(0);
+    expect(Math.abs(along(bow.id) - along(tank.id))).toBeLessThan(1.5);   // frente: na linha do tanque
+    expect(along(tank.id) - along(sword.id)).toBeGreaterThan(2);           // trás: `rear` células atrás (fwd aponta para a frente do grupo)
+  });
+});
