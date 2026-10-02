@@ -64,3 +64,6 @@ body { overflow: hidden; }
 @media (max-width: 720px) {
   .hud { gap: 8px; padding: 0 8px; } .hud .btn { padding: 6px 10px; font-size: 12px; } .hunt-title { flex: 1 1 auto; } .hunt-title strong { font-size: 13px; } .wave { min-width: 70px; }
 }
+
+.play-speed { display: flex; } .play-speed button { padding: 5px 8px; border-radius: 0; font-size: 11px; } .play-speed button.on { background: #49391f; border-color: #a98a4a; }
+@media (max-width: 720px) { .hud .play-speed { display: none; } }

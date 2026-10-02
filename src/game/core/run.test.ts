@@ -116,3 +116,50 @@ describe('Colisão e vagas ao redor do herói (estilo Tibia)', () => {
     expect(s.characters.filter(c => c.id !== tank.id).reduce((n, c) => n + byHero(c.id), 0)).toBeGreaterThan(0);
   });
 });
+
+describe('Aggro: tanque primeiro, depois a frente, depois a backline', () => {
+  const setup = (count: number, atkMul = 0, cooldown = 99) => {
+    const e = new GameEngine(partyState()); e.start(); const s = e.getSnapshot();
+    for (const c of s.characters) { c.hp = 99999; c.profile.level = 30; }
+    const plan = (e as unknown as { plan(): import('../run/plan').RunPlan }).plan(), anchor = s.run!.anchor;
+    s.monsters = Array.from({ length: count }, (_, i) => { const p = plan.spawnPoint(anchor + 8 + i * .5, () => (i * 0.37) % 1); return { uid: `t${i}`, defId: 'skeleton', hp: 1e9, maxHp: 1e9, cooldown, alive: true, x: p.x, y: p.y, atkMul }; });
+    s.run!.open = true;
+    return e;
+  };
+  it('a ordem dos grupos é tanque, resto da frente, backline; o anel tem 8 vagas a 1 célula do herói', async () => {
+    const { aggroGroups, ringPoint } = await import('../run/world'); const { RUN_CONFIG } = await import('../data/balance');
+    const s = partyState(), [aldric, kael, lyra] = s.characters; aldric.isTank = true;
+    const extra = { ...kael, id: 'x', row: 'front' as const, isTank: false };
+    expect(aggroGroups([kael, aldric, lyra, extra]).map(g => g.map(c => c.id))).toEqual([[aldric.id], ['x'], [kael.id, lyra.id]]);
+    expect(aggroGroups([kael, lyra]).map(g => g.length)).toEqual([2]);
+    const ring = Array.from({ length: 8 }, (_, k) => ringPoint({ x: 10, y: 5 }, k));
+    for (const p of ring) expect(Math.hypot(p.x - 10, p.y - 5)).toBeCloseTo(RUN_CONFIG.ringRadius, 6);
+    for (let i = 0; i < 8; i++) expect(Math.hypot(ring[i].x - ring[(i + 1) % 8].x, ring[i].y - ring[(i + 1) % 8].y)).toBeGreaterThan(.72);
+  });
+  it('com poucos monstros, todas as vagas são em volta do tanque e ninguém fica solto', () => {
+    const e = setup(5); for (let i = 0; i < 300; i++) e.tick(100);
+    const s = e.getSnapshot(), tank = s.characters.find(c => c.isTank)!, pos = s.run!.pos[tank.id];
+    expect(s.monsters).toHaveLength(5);
+    for (const m of s.monsters) { expect(m.slot?.hero, m.uid).toBe(tank.id); expect(Math.hypot(m.x! - pos.x, m.y! - pos.y), m.uid).toBeLessThan(1.3); }
+  });
+  it('lotou o anel do tanque: o excedente ocupa os outros anéis ou espera em fila colada, nunca solto pela tela', () => {
+    const e = setup(16); for (let i = 0; i < 500; i++) e.tick(100);
+    const s = e.getSnapshot(), tank = s.characters.find(c => c.isTank)!, tp = s.run!.pos[tank.id], heroes = s.characters.map(c => s.run!.pos[c.id]);
+    const atTank = s.monsters.filter(m => m.slot?.hero === tank.id).length; expect(atTank).toBeGreaterThanOrEqual(5); expect(atTank).toBeLessThanOrEqual(8);
+    for (const m of s.monsters) expect(Math.min(...heroes.map(h => Math.hypot(h.x - m.x!, h.y - m.y!))), `${m.uid} solto`).toBeLessThan(4.5);
+    const queue = s.monsters.filter(m => !m.slot); for (const m of queue) expect(Math.hypot(m.x! - tp.x, m.y! - tp.y)).toBeLessThan(5.5);
+    expect(s.monsters.filter(x => x.slot && x.slot.hero !== tank.id).every(() => atTank >= 5)).toBe(true);
+  });
+  it('quem tem vaga bate em quem está na vaga: com o anel do tanque, todo golpe de monstro cai no tanque', () => {
+    const e = setup(4, 1, 0.01), hits: Record<string, number> = {}, orig = (e as unknown as { emit(fx?: unknown): void }).emit.bind(e);
+    (e as unknown as { emit(fx?: { type?: string; source?: string; target?: string }): void }).emit = (fx) => { if (fx?.type === 'attack' && fx.source?.startsWith('t') && fx.target) hits[fx.target] = (hits[fx.target] ?? 0) + 1; orig(fx); };
+    for (let i = 0; i < 300; i++) e.tick(100);
+    const tank = e.getSnapshot().characters.find(c => c.isTank)!;
+    expect(hits[tank.id]).toBeGreaterThan(20); expect(Object.keys(hits)).toEqual([tank.id]);
+  });
+  it('ritmo: o monstro que nasce chega ao tanque em poucos segundos', () => {
+    const e = setup(1, 0); const s = e.getSnapshot(), tank = s.characters.find(c => c.isTank)!; let at = -1;
+    for (let i = 0; i < 300 && at < 0; i++) { e.tick(100); const mm = e.getSnapshot().monsters[0], p = e.getSnapshot().run!.pos[tank.id]; if (Math.hypot(mm.x! - p.x, mm.y! - p.y) < 1.4) at = i / 10; }
+    expect(at).toBeGreaterThan(0); expect(at).toBeLessThan(6);
+  });
+});

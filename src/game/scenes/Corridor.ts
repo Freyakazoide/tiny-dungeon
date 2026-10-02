@@ -14,7 +14,7 @@ import { lookKey, type Look } from '../art/look';
 import { cellTexture, characterTexture, characterWalkAnim, ensureLookTextures, monsterTexture, obstacleTexture, type CellKind } from '../art/textures';
 import type { FxKind } from '../systems/spellFx';
 import { CHUNK_LEN, RunPlan } from '../run/plan';
-import { freeNear } from '../run/world';
+import { aggroGroups, freeNear, radiusOf, RADIUS, ringPoint } from '../run/world';
 import { playAttackFx } from './effects';
 import { dominantDirection, type ArenaPoint } from './movement';
 
@@ -45,6 +45,7 @@ export class Game extends Scene {
   private bannerText!: Phaser.GameObjects.Text;
   private bannerUntil = 0;
   private visualPaused = false;
+  private debug?: Phaser.GameObjects.Graphics;
 
   constructor() { super('Game'); }
 
@@ -55,6 +56,7 @@ export class Game extends Scene {
     const bg = this.add.rectangle(0, 0, 470, 58, 0x0a0d12, .86).setStrokeStyle(2, 0xd1ad58, .8);
     this.bannerText = this.add.text(0, 0, '', { fontFamily: 'Georgia', fontSize: '19px', color: '#f1d796', align: 'center', stroke: '#050608', strokeThickness: 4 }).setOrigin(.5);
     this.banner = this.add.container(0, 0, [bg, this.bannerText]).setScrollFactor(0).setDepth(101).setVisible(false);
+    this.input.keyboard?.on('keydown-F3', (e: KeyboardEvent) => { e.preventDefault(); if (this.debug) { this.debug.destroy(); this.debug = undefined; } else this.debug = this.add.graphics().setDepth(60); });
     this.layoutHud();
     this.scale.on('resize', () => this.layoutHud());
     this.unsubscribe = gameStore.subscribe(() => this.renderState());
@@ -73,6 +75,7 @@ export class Game extends Scene {
   update(_time: number, delta: number) {
     gameStore.advance(delta, runtime.huntSpeed);
     this.drawWorld(gameStore.getSnapshot());
+    if (this.debug) this.drawDebug(gameStore.getSnapshot());
     if (this.bannerUntil && this.time.now > this.bannerUntil && gameStore.getSnapshot().status !== 'recovering') { this.bannerUntil = 0; this.banner.setVisible(false); }
   }
 
@@ -117,6 +120,24 @@ export class Game extends Scene {
     }
     for (const [key, img] of this.tiles) if (!keep.has(key)) { img.destroy(); this.tiles.delete(key); }
     for (const [key, img] of this.props) if (!propKeep.has(key)) { img.destroy(); this.props.delete(key); }
+  }
+
+  /** F3: corpos (círculos de colisão), anel de 8 vagas, vaga de cada monstro e uma linha de cada um até o herói que ele está atacando. */
+  private drawDebug(state: GameState) {
+    const g = this.debug!, run = state.run; g.clear(); if (!run) return;
+    const team = state.team.map(id => state.characters.find(c => c.id === id)).filter((c): c is Character => !!c && c.hp > 0), colors = [0xf0c24b, 0x5fd0ff, 0xb48cff, 0x7be08a];
+    const colorOf = (id: string) => colors[Math.max(0, team.findIndex(c => c.id === id)) % colors.length];
+    const rank = aggroGroups(team);
+    team.forEach(c => {
+      const p = run.pos[c.id]; if (!p) return; const col = colorOf(c.id), tier = rank.findIndex(gr => gr.includes(c));
+      g.lineStyle(2, col, .95).strokeCircle(px(p.x), px(p.y), px(RADIUS.unit));
+      for (let k = 0; k < 8; k++) { const q = ringPoint(p, k); g.lineStyle(1, col, tier === 0 ? .8 : .35).strokeCircle(px(q.x), px(q.y), px(RADIUS.unit)); }
+    });
+    for (const m of state.monsters) {
+      if (!m.alive || m.x === undefined || m.y === undefined) continue;
+      g.lineStyle(2, 0xff5a4a, .95).strokeCircle(px(m.x), px(m.y), px(radiusOf(m)));
+      if (m.slot) { const col = colorOf(m.slot.hero), hp = run.pos[m.slot.hero]; g.lineStyle(2, col, .9).lineBetween(px(m.x), px(m.y), px(m.slot.x), px(m.slot.y)); if (hp) g.lineStyle(1, col, .5).lineBetween(px(m.slot.x), px(m.slot.y), px(hp.x), px(hp.y)); g.fillStyle(col, 1).fillCircle(px(m.slot.x), px(m.slot.y), 4); }
+    }
   }
 
   private renderState() {

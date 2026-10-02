@@ -11,7 +11,16 @@ import { Icon } from '../components/Icon';
 import { potionPercent, potionTone } from '../badges';
 
 const SPEEDS = [1, 5, 25, 100];
+export const PLAY_SPEEDS = [1, 2, 3];
 const setSpeed = (n: number) => { runtime.huntSpeed = n; gameStore.devScaleChanged(); };
+
+/** Velocidade do jogo para o jogador: ×1, ×2 ou ×3 (acelera combate, andar, XP e loot na mesma proporção). Fica salvo neste navegador. */
+export function PlaySpeed() {
+  const [, tick] = useState(0);
+  useEffect(() => { try { const saved = Number(localStorage.getItem('td-speed')); if (PLAY_SPEEDS.includes(saved) && runtime.huntSpeed === 1) { setSpeed(saved); tick(n => n + 1); } } catch { /* sem armazenamento */ } }, []);
+  const pick = (n: number) => { setSpeed(n); try { localStorage.setItem('td-speed', String(n)); } catch { /* ignora */ } tick(x => x + 1); };
+  return <div className="play-speed" role="group" aria-label="Velocidade do jogo">{PLAY_SPEEDS.map(n => <button key={n} type="button" className={runtime.huntSpeed === n ? 'on' : ''} aria-pressed={runtime.huntSpeed === n} onClick={() => pick(n)}>×{n}</button>)}</div>;
+}
 
 /** Só em desenvolvimento: acelera a caçada e mostra os multiplicadores de teste. Atalhos `[` e `]`. Fora do DEV nada disto é montado. */
 export function DevBar() {
@@ -67,6 +76,7 @@ export function Hud({ state }: { state: GameState }) {
     <Chip className="hide-s" title="Ouro"><Icon name="stat_gold" size={24} /> <b>{state.gold.toLocaleString('pt-BR')}</b></Chip>
     <Chip tone={potionTone(potions)} className="hide-s" title="Estoque de poções de vida"><Icon name="stat_hp" size={24} /> Poções: {potions}%</Chip>
     <span className="grow" />
+    <PlaySpeed />
     {import.meta.env.DEV && <DevBar />}
     <button type="button" className="btn primary"
       onClick={() => state.status === 'idle' ? gameStore.start() : state.status === 'paused' ? gameStore.resume() : gameStore.pause()}>

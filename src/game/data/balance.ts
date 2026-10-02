@@ -58,13 +58,15 @@ export const WAVE_CONFIG = {
 export const RUN_CONFIG = {
   enabled: true,
   /** células por segundo: caminhada do grupo, monstros e heróis em combate */
-  walk: 5, foeSpeed: .9, heroSpeed: 2.4, travel: 7,
+  walk: 8, foeSpeed: 2.3, heroSpeed: 4.5, travel: 11,
+  /** raio (células) do anel de 8 vagas em volta de cada herói, onde os monstros corpo a corpo ficam batendo */
+  ringRadius: 1,
   /** alcances em células: golpe de monstro, arma corpo a corpo, arma à distância e magia ofensiva */
   foeReach: 1.55, meleeReach: 1.7, rangedReach: 5.5, spellReach: 6.5,
   /** monstros nascem tantas células à frente do grupo (fora da tela) */
-  spawnAhead: 11, rear: 3,
+  spawnAhead: 9, rear: 3,
   /** o grupo para de andar quando há inimigo a menos de tantas células à frente */
-  engage: 7,
+  engage: 4,
   /** XP e ouro por kill no corredor (depois da escala por profundidade); calibrado para ficar perto do ritmo de referência das hunts */
   reward: 1.05,
 };
