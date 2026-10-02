@@ -197,3 +197,36 @@ describe('Ninguém foge do mapa: formação pela fila e zona de ação', () => {
     expect(along(tank.id) - along(sword.id)).toBeGreaterThan(2);           // trás: `rear` células atrás (fwd aponta para a frente do grupo)
   });
 });
+
+describe('Revive ao fim do encontro (proposta A)', () => {
+  const clearEncounter = (e: GameEngine, fell: string) => {
+    for (let i = 0; i < 1500 && !e.getSnapshot().monsters.some(m => m.alive); i++) e.tick(100);
+    const c = e.getSnapshot().characters.find(x => x.id === fell)!; c.hp = 0;
+    for (let i = 0; i < 1800 && e.getSnapshot().run!.open; i++) e.tick(100);
+  };
+  it('quem caiu levanta ao limpar o encontro: 35% da vida, enfraquecido, de volta à formação, com aviso', () => {
+    const e = new GameEngine(partyState()); e.start(); const fx: { type: string; target?: string }[] = []; e.onFx(f => { if (f.type === 'revive') fx.push(f); });
+    for (const c of e.getSnapshot().characters) e.devSetLevel(c.id, 25);
+    const fallen = e.getSnapshot().characters[1].id; clearEncounter(e, fallen);
+    const s = e.getSnapshot(), c = s.characters.find(x => x.id === fallen)!, max = Math.round(c.hp / RUN_CONFIG.reviveHp);
+    expect(s.run!.open).toBe(false); expect(c.hp).toBeGreaterThan(0); expect(c.hp / max).toBeCloseTo(RUN_CONFIG.reviveHp, 1); expect(fx).toEqual([expect.objectContaining({ target: fallen })]);
+    expect(c.effects.find(x => x.id === 'revive-weak')?.value).toBeCloseTo(-RUN_CONFIG.reviveWeak, 5);
+    const here = (e as unknown as { plan(): import('../run/plan').RunPlan }).plan().pathPoint(s.run!.anchor), p = s.run!.pos[fallen]; expect(Math.hypot(p.x - here.x, p.y - here.y)).toBeLessThan(6);
+  });
+  it('a penalidade dura até o fim do encontro seguinte e quem não caiu não é afetado', () => {
+    const e = new GameEngine(partyState()); e.start();
+    for (const c of e.getSnapshot().characters) e.devSetLevel(c.id, 25);
+    const fallen = e.getSnapshot().characters[2].id; clearEncounter(e, fallen);
+    expect(e.getSnapshot().characters.filter(c => c.effects.some(x => x.id === 'revive-weak')).map(c => c.id)).toEqual([fallen]);
+    for (let i = 0; i < 1500 && !e.getSnapshot().run!.open; i++) e.tick(100);
+    for (let i = 0; i < 1800 && e.getSnapshot().run!.open; i++) e.tick(100);
+    expect(e.getSnapshot().run!.open).toBe(false); expect(e.getSnapshot().characters.some(c => c.effects.some(x => x.id === 'revive-weak'))).toBe(false);
+  });
+  it('o morto fica parado onde caiu durante a luta (não vai atrás do grupo nem foge)', () => {
+    const e = new GameEngine(partyState()); e.start(); for (const c of e.getSnapshot().characters) e.devSetLevel(c.id, 25);
+    for (let i = 0; i < 1500 && !e.getSnapshot().monsters.some(m => m.alive); i++) e.tick(100);
+    const c = e.getSnapshot().characters[1]; c.hp = 0; const at = { ...e.getSnapshot().run!.pos[c.id] };
+    for (let i = 0; i < 20; i++) e.tick(100); const p = e.getSnapshot().run!.pos[c.id];
+    if (e.getSnapshot().run!.open) expect(Math.hypot(p.x - at.x, p.y - at.y)).toBeLessThan(.05);
+  });
+});

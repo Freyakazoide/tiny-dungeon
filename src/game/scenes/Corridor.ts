@@ -11,7 +11,7 @@ import { ART } from '../art/data';
 import { ART_SCALE, CELL_PX } from '../art/geometry';
 import { obstacleArt } from '../data/obstacles';
 import { lookKey, type Look } from '../art/look';
-import { cellTexture, characterTexture, characterWalkAnim, ensureLookTextures, monsterTexture, obstacleTexture, type CellKind } from '../art/textures';
+import { TOMBSTONE_TEXTURE, cellTexture, characterTexture, characterWalkAnim, ensureLookTextures, monsterTexture, obstacleTexture, type CellKind } from '../art/textures';
 import type { FxKind } from '../systems/spellFx';
 import { CHUNK_LEN, RunPlan } from '../run/plan';
 import { aggroGroups, freeNear, radiusOf, RADIUS, ringPoint } from '../run/world';
@@ -24,7 +24,7 @@ import { dominantDirection, type ArenaPoint } from './movement';
  * só o que a câmera enxerga existe como objeto (reaproveitado ao andar). O tamanho do jogo acompanha a janela (modo RESIZE).
  */
 const SPRITE_PX = 32 * ART_SCALE, BAR_W = 56;
-type HeroView = { container: Phaser.GameObjects.Container; look: Look; key: string; body: Phaser.GameObjects.Sprite; name: Phaser.GameObjects.Text; direction: CharacterDirection; walking: boolean; last?: { x: number; y: number } };
+type HeroView = { container: Phaser.GameObjects.Container; look: Look; key: string; body: Phaser.GameObjects.Sprite; name: Phaser.GameObjects.Text; direction: CharacterDirection; walking: boolean; dead?: boolean; last?: { x: number; y: number } };
 type MonsterView = { body: Phaser.GameObjects.Arc | Phaser.GameObjects.Sprite; name: Phaser.GameObjects.Text; hpBg: Phaser.GameObjects.Rectangle; hp: Phaser.GameObjects.Rectangle; art?: string; height: number; facing: CharacterDirection; barW: number; barDy: number; nameDy: number; big: boolean; last?: { x: number; y: number } };
 const px = (v: number) => v * CELL_PX;
 
@@ -160,13 +160,16 @@ export class Game extends Scene {
       const pos = this.heroPos(state, c, i);
       let v = this.heroes.get(c.id); if (!v) { v = this.createHero(c); this.heroes.set(c.id, v); }
       if (v.key !== lookKey(c.look)) { v.look = ensureLookTextures(this, c.look, new Set([...this.heroes.values()].map(h => h.key))); v.key = lookKey(v.look); }
-      v.name.setText(`${c.name}${c.hp <= 0 ? '  ☠' : ''}`); v.body.setAlpha(c.hp > 0 ? 1 : .25);
+      v.name.setText(`${c.name}${c.hp <= 0 ? '  ☠' : ''}`);
+      if (c.hp <= 0 && !v.dead) { v.dead = true; v.body.stop(); v.body.setTexture(TOMBSTONE_TEXTURE).setAlpha(1); }   // lápide no lugar onde caiu
+      else if (c.hp > 0 && v.dead) { v.dead = false; v.walking = true; this.setDirection(v, 'down', false); v.last = undefined; }
       const moved = v.last ? Math.hypot(pos.x - v.last.x, pos.y - v.last.y) > .004 : false;
       v.container.setPosition(px(pos.x), px(pos.y)).setDepth(6 + pos.y / 1000);
       const foe = state.monsters.filter(m => m.alive && m.x !== undefined).sort((a, b) => Math.hypot(a.x! - pos.x, a.y! - pos.y) - Math.hypot(b.x! - pos.x, b.y! - pos.y))[0];
       const fwd = this.plan?.forwardAt(state.run?.anchor ?? 4) ?? { x: -1, y: 0 };
       const dir: CharacterDirection = moved && v.last ? dominantDirection({ x: px(v.last.x), y: px(v.last.y) }, { x: px(pos.x), y: px(pos.y) }, v.direction) : foe ? dominantDirection({ x: px(pos.x), y: px(pos.y) }, { x: px(foe.x!), y: px(foe.y!) }, v.direction) : dominantDirection({ x: 0, y: 0 }, fwd, 'left');
-      this.setDirection(v, dir, moved && c.hp > 0); v.last = { x: pos.x, y: pos.y };
+      if (!v.dead) this.setDirection(v, dir, moved && c.hp > 0);
+      v.last = { x: pos.x, y: pos.y };
     });
 
     const ids = new Set(state.monsters.filter(m => m.x !== undefined).map(m => m.uid));
@@ -248,6 +251,7 @@ export class Game extends Scene {
     }
     if (fx.type === 'damage' && target) { const body = this.entityBody(fx.target); if (body) { const x0 = body.x; this.tweens.add({ targets: body, x: x0 + 5, duration: 45, yoyo: true, repeat: 2, onComplete: () => body.setX(x0) }); } this.floatText(fx.target ?? '', target.x, target.y - 42, `-${fx.value ?? 0}`, '#ff7d7d'); }
     if (fx.type === 'heal' && target) { const pulse = this.add.circle(target.x, target.y, 22, 0x62dd94, .18).setStrokeStyle(3, 0x8ff0b1).setDepth(9); this.tweens.add({ targets: pulse, scale: 1.8, alpha: 0, duration: 520, onComplete: () => pulse.destroy() }); this.floatText(fx.target ?? '', target.x, target.y - 42, `+${fx.value ?? 0}`, '#82f0aa'); }
+    if (fx.type === 'revive' && target) { const glow = this.add.circle(target.x, target.y, 18, 0xf5e6a8, .5).setStrokeStyle(3, 0xfff3c4).setDepth(12); this.tweens.add({ targets: glow, scale: 3, alpha: 0, duration: 800, ease: 'Cubic.easeOut', onComplete: () => glow.destroy() }); this.floatText(fx.target ?? 'revive', target.x, target.y - 30, fx.text ?? 'Revive!', '#ffe9a0'); }
     if (fx.type === 'death' && target) { for (let i = 0; i < 7; i++) { const shard = this.add.circle(target.x, target.y, 3, 0xdcc89c).setDepth(10), angle = Math.PI * 2 / 7 * i; this.tweens.add({ targets: shard, x: target.x + Math.cos(angle) * 45, y: target.y + Math.sin(angle) * 45, alpha: 0, duration: 480, onComplete: () => shard.destroy() }); } }
     if (fx.type === 'drop' && fx.text) { const l = this.add.text(this.scale.width / 2, this.scale.height - 60, fx.text, { fontFamily: 'Arial Black', fontSize: '15px', color: '#ffd36e', stroke: '#08090b', strokeThickness: 5 }).setOrigin(.5).setScrollFactor(0).setDepth(100); this.tweens.add({ targets: l, y: l.y - 30, alpha: 0, duration: 1400, onComplete: () => l.destroy() }); }
     if ((fx.type === 'stairs' || fx.type === 'wave') && fx.text) { this.bannerText.setText(fx.text); this.banner.setVisible(true).setAlpha(1); this.bannerUntil = this.time.now + (fx.type === 'wave' ? 1600 : 2200); }

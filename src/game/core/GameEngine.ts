@@ -8,7 +8,7 @@ import { goalOfflineTargets, isGoalId, trainRingId, gateSkillOf, GOAL_NODES } fr
 import { DEFAULT_HUNT, HUNT_BY_ID, HUNTS, huntScale, huntWaves } from '../data/hunts';
 import { RUN_CONFIG, WAVE_CONFIG } from '../data/balance';
 import { RunPlan, bossPowerFor, BOSS_HP_MUL, depthScale, CHUNK_LEN } from '../run/plan';
-import { createRun, foesInReach, heroesInReach, placeParty, reachOf, stepRun } from '../run/world';
+import { createRun, foesInReach, heroesInReach, placeHero, placeParty, reachOf, stepRun } from '../run/world';
 import { lateWaveBonus, batchToSpawn, composeExtras, drawFromBag, extrasTableFor, limitExtra, newBag, rollExtra, splitBatches, tierOfExtra, TIER_NAMES, waveRewards } from '../systems/waves';
 import { SPELLS, spellById } from '../data/spells';
 import { itemById } from '../data/items';
@@ -40,7 +40,7 @@ import { FORMATION_PRESETS } from '../systems/group';
 import type { FormationPlan } from '../systems/group';
 import { createAnalyzer, hasAnalyzerActivity } from '../systems/analyzer';
 
-export type GameFx = { type:'attack'|'damage'|'heal'|'death'|'drop'|'stairs'|'wave'|'recovery'; source?:string; target?:string; value?:number; text?:string; fx?:FxKind; targets?:string[] };
+export type GameFx = { type:'attack'|'damage'|'heal'|'death'|'drop'|'stairs'|'wave'|'recovery'|'revive'; source?:string; target?:string; value?:number; text?:string; fx?:FxKind; targets?:string[] };
 export const defaultAutoBuy=():AutoBuyConfig=>({enabled:false,reserve:0,refillAt:50,targets:{},spent:0,bought:0});
 const helper=():HelperConfig=>({hpPotionAt:35,manaPotionAt:25,healAllies:true,autoSupplies:true,defensiveAmuletAt:25,emergencyAt:15,outOfSupplies:'continue'});
 const defaultCondition=(s:NonNullable<ReturnType<typeof spellById>>):SpellCondition=>s.kind==='heal'||s.kind==='regen'?{allyInjured:true,manaAbove:10}:s.target==='allEnemies'?{minEnemies:2,manaAbove:15}:s.kind==='shield'?{hpBelow:65,manaAbove:10}:{manaAbove:10};
@@ -144,10 +144,21 @@ export class GameEngine {
   private completeEncounter(){
     const run=this.state.run!,boss=!!this.plan().chunk(run.lastTrigger).encounter?.boss;run.open=false;this.waveBonus();
     for(const id of this.state.team){const c=this.state.characters.find(x=>x.id===id);if(c&&c.hp>0){const st=characterStats(c,this.state);c.hp=Math.min(st.maxHp,c.hp+st.maxHp*.12);c.mana=Math.min(st.maxMana,c.mana+st.maxMana*.18);}}
+    this.reviveFallen();
     this.state.monsters=this.state.monsters.filter(m=>m.alive);
     if(boss){this.state.analyzer.cycles++;this.state.cycle++;this.state.message=`Chefe derrotado! ${this.state.analyzer.lootValue} de valor em loot.`;this.applyPendingHunt();}
     else this.state.message='Encontro concluído — o grupo segue em frente.';
     this.emit({type:'stairs',text:this.state.message});
+  }
+  /** Fim do encontro: quem caiu levanta no ponto da fila dele com parte da vida e enfraquecido até o fim do próximo encontro (a penalidade da vez anterior sai). */
+  private reviveFallen(){
+    const weak='revive-weak',team=this.state.team.map(id=>this.state.characters.find(x=>x.id===id)).filter(Boolean) as Character[];
+    for(const c of team)c.effects=c.effects.filter(e=>e.id!==weak);
+    for(const c of team){
+      if(c.hp>0)continue;const st=characterStats(c,this.state);
+      c.hp=Math.max(1,Math.round(st.maxHp*RUN_CONFIG.reviveHp));c.mana=Math.max(c.mana,Math.round(st.maxMana*.4));c.effects=[{id:weak,type:'buffAttack',value:-RUN_CONFIG.reviveWeak,remaining:3600,source:c.id}];c.cooldowns.basic=0;
+      placeHero(this.state,this.plan(),c);this.emit({type:'revive',target:c.id,text:`${c.name} se levantou!`});
+    }
   }
   /** Depois de cair: recomeça no início do chunk atual, com o encontro de novo. */
   private resetRunAfterDefeat(){

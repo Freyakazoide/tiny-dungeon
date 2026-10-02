@@ -19,6 +19,10 @@ const CELL_TILES: Record<CellKind, [string, string, string, string]> = {
   floor0: ['piso', 'piso', 'piso', 'piso'], floor1: ['piso', 'piso', 'piso', 'piso_rachado'], floor2: ['piso', 'piso_ossos', 'piso', 'piso'], floor3: ['piso_rachado', 'piso', 'piso', 'piso'],
   wall: ['parede', 'parede', 'parede', 'parede'], torch: ['parede', 'parede_tocha', 'parede', 'parede'], top: ['muro_topo', 'muro_topo', 'muro_topo', 'muro_topo'], fill: ['piso', 'piso_rachado', 'piso', 'piso'],
 };
+/** Lápide de quem caiu na arena: pedra com uma cruz; o contorno vem do motor de arte. */
+export const TOMBSTONE_TEXTURE = 'art-tombstone';
+const TOMBSTONE = ['....1111....', '..11222211..', '.1122222211.', '.1222332221.', '.1222332221.', '.1223333221.', '.1223333221.', '.1222332221.', '.1222332221.', '.1222222221.', '.1222222221.', '.1111111111.', '333333333333'];
+export const tombstoneGrid = (): string[][] => { const w = TOMBSTONE[0].length + 2, pad = Array<string>(w).fill('.'); return [pad, ...TOMBSTONE.map(r => ['.', ...r, '.']), [...pad]]; };
 export const obstacleTexture = (id: string) => `art-o-${id}`;
 export const monsterTexture = (monsterArtId: string, dir: Direction, pose: 1 | 2) => `art-m-${monsterArtId}-${dir}-${pose}`;
 export const characterTexture = (look: Look, dir: Direction, pose: 1 | 2) => `art-c-${lookKey(look)}-${dir}-${pose}`;
@@ -32,6 +36,7 @@ const addCanvas = (scene: Scene, key: string, canvas: HTMLCanvasElement) => {
 
 /** Mapas das 7 hunts e todos os monstros com arte (síncrono e barato: poucas centenas de pixels por quadro). */
 export function ensureArtTextures(scene: Scene) {
+  addCanvas(scene, TOMBSTONE_TEXTURE, rasterToCanvas(rasterize(outline(toPixels(tombstoneGrid(), ART.palette)))));
   for (const [id, grid] of Object.entries(ART.obstacles)) addCanvas(scene, obstacleTexture(id), rasterToCanvas(rasterize(outline(toPixels(grid, ART.palette)))));
   for (const hunt of HUNTS) addCanvas(scene, mapTexture(hunt.id), rasterToCanvas(mapRaster(hunt.id, hunt.color)));
   for (const hunt of HUNTS) for (const kind of CELL_KINDS) addCanvas(scene, cellTexture(hunt.id, kind), rasterToCanvas(cellRaster(hunt.id, hunt.color, CELL_TILES[kind], undefined, kind === 'fill' ? .38 : 1)));

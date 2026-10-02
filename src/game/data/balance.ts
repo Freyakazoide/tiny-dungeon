@@ -61,6 +61,8 @@ export const RUN_CONFIG = {
   walk: 8, foeSpeed: 2.3, heroSpeed: 4.5, travel: 11,
   /** raio (células) do anel de 8 vagas em volta de cada herói, onde os monstros corpo a corpo ficam batendo */
   ringRadius: 1,
+  /** quem caiu levanta ao fim do encontro com esta fração da vida, enfraquecido (-dano) até o fim do encontro seguinte */
+  reviveHp: .35, reviveWeak: .2,
   /** alcances em células: golpe de monstro, arma corpo a corpo, arma à distância e magia ofensiva */
   foeReach: 1.55, meleeReach: 1.7, rangedReach: 5.5, spellReach: 6.5,
   /** monstros nascem tantas células à frente do grupo (fora da tela) */

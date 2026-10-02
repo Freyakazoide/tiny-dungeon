@@ -125,6 +125,13 @@ export function placeParty(state: GameState, plan: RunPlan) {
   });
   put(team.filter(c => c.row === 'front'), 0); put(team.filter(c => c.row === 'back'), R.rear);
 }
+/** Coloca (ou recoloca) um herói só, no ponto da fila dele em volta da âncora: usado ao reviver. */
+export function placeHero(state: GameState, plan: RunPlan, c: Character) {
+  const run = state.run!, team = state.team.map(id => state.characters.find(x => x.id === id)).filter(Boolean) as Character[];
+  plan.ensure(plan.indexAt(run.anchor));
+  const side = perp(plan.forwardAt(run.anchor)), list = team.filter(x => x.row === c.row), base = plan.pathPoint(run.anchor - (c.row === 'back' ? R.rear : 0)), off = (list.indexOf(c) - (list.length - 1) / 2) * 1.25;
+  run.pos[c.id] = freeNear(plan, { x: base.x + side.x * off, y: base.y + side.y * off });
+}
 export const posOf = (run: RunState, c: Character): Pt => run.pos[c.id] ??= { ...{ x: 0, y: 0 } };
 
 /** Monstros ao alcance `reach` de `c`, do mais perto para o mais longe. */
