@@ -46,6 +46,8 @@ export class Game extends Scene {
   private bannerUntil = 0;
   private visualPaused = false;
   private debug?: Phaser.GameObjects.Graphics;
+  /** a cena foi desligada/destruída: nada mais deve tocar nos objetos dela */
+  private dead = false;
 
   constructor() { super('Game'); }
 
@@ -59,10 +61,14 @@ export class Game extends Scene {
     this.input.keyboard?.on('keydown-F3', (e: KeyboardEvent) => { e.preventDefault(); if (this.debug) { this.debug.destroy(); this.debug = undefined; } else this.debug = this.add.graphics().setDepth(60); });
     this.layoutHud();
     this.scale.on('resize', () => this.layoutHud());
-    this.unsubscribe = gameStore.subscribe(() => this.renderState());
-    this.unsubscribeFx = gameStore.onFx(fx => this.animateFx(fx));
+    this.dead = false;
+    this.unsubscribe = gameStore.subscribe(() => { if (!this.dead) this.renderState(); });
+    this.unsubscribeFx = gameStore.onFx(fx => { if (!this.dead) this.animateFx(fx); });
     if (import.meta.env.DEV) { (window as unknown as { __scene?: unknown }).__scene = this; (window as unknown as { __fx?: unknown }).__fx = (kind: FxKind, a: ArenaPoint, b: ArenaPoint) => playAttackFx(this, kind, a, b); }
-    this.events.once('shutdown', () => { this.unsubscribe?.(); this.unsubscribeFx?.(); this.heroes.clear(); this.enemies.clear(); this.tiles.clear(); this.props.clear(); this.floatLanes.clear(); });
+    // Fechar o jogo (ex.: "apagar tudo" volta à criação e desmonta a arena) destrói a cena sem passar por 'shutdown': solta as
+    // inscrições nos dois eventos, senão o estado novo mandaria escrever em textos já destruídos.
+    const cleanup = () => { this.dead = true; this.unsubscribe?.(); this.unsubscribeFx?.(); this.heroes.clear(); this.enemies.clear(); this.tiles.clear(); this.props.clear(); this.floatLanes.clear(); this.debug = undefined; };
+    this.events.once('shutdown', cleanup); this.events.once('destroy', cleanup);
     this.renderState();
     EventBus.emit('current-scene-ready', this);
   }
@@ -73,6 +79,7 @@ export class Game extends Scene {
   }
 
   update(_time: number, delta: number) {
+    if (this.dead) return;
     gameStore.advance(delta, runtime.huntSpeed);
     this.drawWorld(gameStore.getSnapshot());
     if (this.debug) this.drawDebug(gameStore.getSnapshot());
