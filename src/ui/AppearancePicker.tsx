@@ -2,8 +2,9 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { ART } from '../game/art/data';
 import { LOOK_REGIONS, addCustomColor, colorChoices, normalizeLook, randomLook, removeCustomColor, type Look, type LookRegion } from '../game/art/look';
 import { frameDataUrl, type Direction } from '../game/art/render';
+import { HAIR_STYLES, HEADGEAR, type StyleOption } from '../game/art/styles';
 
-const REGION_LABEL: Record<LookRegion, string> = { pele: 'Pele', cabelo: 'Cabelo', armadura: 'Armadura' };
+const REGION_LABEL: Record<LookRegion, string> = { pele: 'Pele', cabelo: 'Cabelo', armadura: 'Armadura', capa: 'Capa' };
 const DIRS: Direction[] = ['down', 'up', 'left', 'right'];
 const DIR_LABEL: Record<Direction, string> = { down: 'baixo', up: 'cima', left: 'esquerda', right: 'direita' };
 
@@ -53,13 +54,28 @@ function Carousel({ region, value, onPick }: { region: LookRegion; value: string
   </div>;
 }
 
-/** Aparência do Squire: três carrosséis de cor (pele, cabelo, armadura) com prévia animada, Aleatório e Restaurar. */
+/** Escolha entre opções com nome (penteado, chapéu/elmo): ◀ nome ▶. */
+function StyleCarousel({ label, options, value, onPick }: { label: string; options: readonly StyleOption[]; value: string; onPick: (id: string) => void }) {
+  const index = Math.max(0, options.findIndex(o => o.id === value)), go = (delta: number) => onPick(options[(index + delta + options.length) % options.length].id);
+  const onKey = (e: KeyboardEvent) => { if (e.key === 'ArrowRight') { e.preventDefault(); go(1); } else if (e.key === 'ArrowLeft') { e.preventDefault(); go(-1); } };
+  return <div className="ap-carousel" role="group" aria-label={label} tabIndex={0} onKeyDown={onKey}>
+    <span className="ap-label">{label}</span>
+    <button type="button" className="pk-btn sm" aria-label={`${label} anterior`} onClick={() => go(-1)}>◀</button>
+    <span className="ap-name"><b>{options[index].nome}</b><small>{index + 1} / {options.length}</small></span>
+    <button type="button" className="pk-btn sm" aria-label={`${label} próximo`} onClick={() => go(1)}>▶</button>
+    <span className="ap-live" aria-live="polite">{`${label}: ${options[index].nome}, ${index + 1} de ${options.length}`}</span>
+  </div>;
+}
+
+/** Aparência do Squire: carrosséis de cor (pele, cabelo, armadura, capa) e de estilo (penteado, chapéu/elmo) de cor (pele, cabelo, armadura) com prévia animada, Aleatório e Restaurar. */
 export function AppearancePicker({ value, onChange, restore, label = 'Aparência' }: { value: Look; onChange: (look: Look) => void; restore?: Look; label?: string }) {
   const look = normalizeLook(value);
   return <div className="ap" role="group" aria-label={label}>
     <LookPreview look={look} />
     <div className="ap-controls">
       {LOOK_REGIONS.map(region => <Carousel key={region} region={region} value={look[region]} onPick={id => onChange({ ...look, [region]: id })} />)}
+      <StyleCarousel label="Penteado" options={HAIR_STYLES} value={look.estilo} onPick={estilo => onChange({ ...look, estilo })} />
+      <StyleCarousel label="Cabeça" options={HEADGEAR} value={look.topo} onPick={topo => onChange({ ...look, topo })} />
       <div className="pk-row"><button type="button" className="pk-btn sm" onClick={() => onChange(randomLook())}>Aleatório</button>
         {restore && <button type="button" className="pk-btn sm" onClick={() => onChange(restore)}>Restaurar</button>}</div>
     </div>

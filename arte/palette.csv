@@ -61,3 +61,6 @@ G,#5a3b22,pelo marrom escuro
 R,#d94a2a,lava
 U,#e9e4d6,pelo branco
 K,#b9b2a2,pelo branco sombra
+Z,#a83a3a,capa (regiao capa)
+&,#d46a6a,capa clara (regiao capa)
+%,#6a2424,capa escura (regiao capa)

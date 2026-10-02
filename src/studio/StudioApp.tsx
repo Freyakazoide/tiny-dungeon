@@ -1,7 +1,8 @@
 import { Component, lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ArtError, buildArtData, type ArtData } from '../game/art/data';
 import { ARENA, CELL_PX, CANVAS_H, CANVAS_W, cellAt, type Cell } from '../game/art/geometry';
-import { defaultLookFor, type Look } from '../game/art/look';
+import { defaultLookFor, randomLook, type Look } from '../game/art/look';
+import { mulberry32 } from '../game/run/rng';
 import { frameRaster, mapRaster, toPixels, rasterize, type Direction } from '../game/art/render';
 import { pngDataUrl } from '../game/art/png';
 import { HUNTS } from '../game/data/hunts';
@@ -26,6 +27,15 @@ function SpriteBlock({ data, kind, id, look }: { data: ArtData; kind: 'personage
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, auto)', gap: 6, width: 'max-content' }}>{DIRS.flatMap(dir => ([1, 2] as const).map(p => <figure key={`${dir}${p}`} style={{ margin: 0 }}><Img src={raster(dir, p, 4)} alt={`${id} ${dir}_${p}`} /><figcaption style={{ fontSize: 10 }}>{dir}_{p}</figcaption></figure>))}</div>
     <div style={{ display: 'flex', gap: 10 }} aria-label={`animação de ${id}`}>{DIRS.map(dir => <Img key={dir} src={raster(dir, pose, 4)} alt={`${id} andando ${dir}`} />)}</div>
   </div>;
+}
+
+/** Galeria de variedade: 24 personagens sorteados (penteado, cabeça, capa e cores), com uma semente que dá sempre o mesmo grupo. */
+function LookGallery({ data }: { data: ArtData }) {
+  const [seed, setSeed] = useState(1);
+  const looks = useMemo(() => { const rng = mulberry32(seed); return Array.from({ length: 24 }, () => randomLook(rng, data)); }, [seed, data]);
+  return <section><h3>Variedade de personagens</h3>
+    <button onClick={() => setSeed(s => s + 1)}>Sortear outros 24 (semente {seed})</button>
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, background: '#1a1f27', padding: 12, marginTop: 8 }}>{looks.map((look, i) => <Img key={`${seed}-${i}`} src={url(frameRaster('personagens', look.body, DIRS[i % 2 === 0 ? 0 : 3], 1, look, 4, data))} alt={`personagem sorteado ${i + 1}`} />)}</div></section>;
 }
 
 function MapView({ data }: { data: ArtData }) {
@@ -60,6 +70,7 @@ export function StudioApp({ files }: { files: Record<string, string> }) {
     {error && <pre role="alert" style={{ background: '#3a1212', color: '#ffb4b4', padding: 10, border: '1px solid #a33', whiteSpace: 'pre-wrap' }}>{error}</pre>}
     {data && <>
       <h2>Oficina de itens (arte por partes)</h2><Guard><GearWorkshop data={data} /></Guard>
+      <h2>Personagens</h2><LookGallery data={data} />
       <h2>Sprites</h2>
       {data.meta.map(m => <section key={m.id} style={{ marginBottom: 18 }}><h3>{m.id} <small>({m.tipo}, {m.largura}×{m.altura}, {m.celulas})</small></h3>
         <SpriteBlock data={data} kind={m.tipo === 'personagem' ? 'personagens' : 'monstros'} id={m.id} look={m.tipo === 'personagem' ? look : undefined} />

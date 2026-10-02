@@ -20,7 +20,7 @@ describe('motor de arte', () => {
 
   it('applyLook muda só as chaves de regioes.csv', () => {
     const look = { body: 'squire', pele: 'escura', cabelo: 'rosa', armadura: 'azul' };
-    const out = applyLook(ART.palette, { ...look, armadura: ART.colors.armadura[ART.colors.armadura.length - 1].id }, ART);
+    const out = applyLook(ART.palette, normalizeLook({ ...look, armadura: ART.colors.armadura[ART.colors.armadura.length - 1].id }), ART);
     const changed = Object.keys(ART.palette).filter(k => out[k] !== ART.palette[k]);
     const regionKeys = ART.regions.map(r => r.chave);
     for (const k of changed) expect(regionKeys).toContain(k);
@@ -44,7 +44,7 @@ describe('motor de arte', () => {
   it('dado inválido ⇒ erro com o caminho do arquivo', () => {
     const base = files();
     const bad = (path: string, text: string) => { try { buildArtData({ ...base, [path]: text }); return ''; } catch (e) { expect(e).toBeInstanceOf(ArtError); return (e as Error).message; } };
-    expect(bad('/arte/personagens/squire/down_1.csv', '.,.,Z\n.,.,.')).toContain('arte/personagens/squire/down_1.csv:1');
+    expect(bad('/arte/personagens/squire/down_1.csv', '.,.,@\n.,.,.')).toContain('arte/personagens/squire/down_1.csv:1');
     expect(bad('/arte/personagens/squire/down_1.csv', '.,.,.\n.,.')).toContain('down_1.csv:2');
     expect(bad('/arte/mapas/catacumbas.csv', 'parede,nao_existe')).toContain('arte/mapas/catacumbas.csv:1');
     expect(bad('/arte/cores.csv', 'regiao,id,nome,cor\npele,x,X,azul')).toContain('arte/cores.csv');

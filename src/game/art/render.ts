@@ -1,5 +1,6 @@
 import { ART, ArtError, type ArtData, type FrameName, type Grid, type Palette } from './data';
-import { LOOK_REGIONS, optionsOf, resolveOption, type Look } from './look';
+import { LOOK_REGIONS, lookKey, optionsOf, resolveOption, type Look } from './look';
+import { styleGrid, type FrameDir } from './styles';
 import { pngDataUrl } from './png';
 
 export type Rgb = [number, number, number];
@@ -56,9 +57,18 @@ export function frameGrid(kind: 'personagens' | 'monstros', id: string, dir: Dir
   throw new ArtError(`arte/${kind}/${id}/${dir}_${pose}.csv`, undefined, 'quadro ausente');
 }
 
+/** Quadro do personagem com penteado, chapéu/elmo e capa do `look` (o `left` espelhado é estilizado como `right` e depois espelhado). */
+export function styledFrameGrid(id: string, dir: Direction, pose: 1 | 2, look: Look, data: ArtData = ART): Grid {
+  const set = data.sprites.personagens[id], mirrored = dir === 'left' && !set?.[`left_${pose}` as FrameName];
+  const base = mirrored ? 'right' : dir, grid = frameGrid('personagens', id, base, pose, data);
+  const styled = base === 'left' ? grid : styleGrid(grid, base as FrameDir, look);
+  return mirrored ? mirror(styled) : styled;
+}
+
 export function frameRaster(kind: 'personagens' | 'monstros', id: string, dir: Direction, pose: 1 | 2, look?: Look, scale = 1, data: ArtData = ART): Raster {
   const palette = kind === 'personagens' && look ? applyLook(data.palette, look, data) : data.palette;
-  return rasterize(outline(toPixels(frameGrid(kind, id, dir, pose, data), palette)), scale);
+  const grid = kind === 'personagens' && look ? styledFrameGrid(id, dir, pose, look, data) : frameGrid(kind, id, dir, pose, data);
+  return rasterize(outline(toPixels(grid, palette)), scale);
 }
 
 /** Pinta um raster num canvas (só no navegador). */
@@ -102,7 +112,7 @@ const urlCache = new Map<string, string>();
 export interface SpriteSpec { kind: 'personagens' | 'monstros'; id: string; look?: Look }
 /** Data URL PNG de um quadro para a interface (cache por chave). */
 export function frameDataUrl(spec: SpriteSpec, dir: Direction, pose: 1 | 2, scale = 1): string {
-  const key = `${spec.kind}.${spec.id}.${spec.look ? `${spec.look.pele}.${spec.look.cabelo}.${spec.look.armadura}` : ''}.${dir}.${pose}.${scale}`;
+  const key = `${spec.kind}.${spec.id}.${spec.look ? lookKey(spec.look) : ''}.${dir}.${pose}.${scale}`;
   let url = urlCache.get(key);
   if (!url) { const r = frameRaster(spec.kind, spec.id, dir, pose, spec.look, scale); url = pngDataUrl(r.width, r.height, r.data); if (urlCache.size > 400) urlCache.clear(); urlCache.set(key, url); }
   return url;

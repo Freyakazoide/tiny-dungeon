@@ -41,7 +41,7 @@ export function ensureArtTextures(scene: Scene) {
 
 /** Aparências vivas (LRU): ao passar de MAX_LOOKS remove as mais antigas que não estão em uso. */
 const live = new Map<string, Look>();
-export function ensureLookTextures(scene: Scene, rawLook: Look, inUse: ReadonlySet<string> = new Set()): Look {
+export function ensureLookTextures(scene: Scene, rawLook: Partial<Look>, inUse: ReadonlySet<string> = new Set()): Look {
   const look = normalizeLook(rawLook), key = lookKey(look);
   if (live.has(key)) { live.delete(key); live.set(key, look); }
   else {

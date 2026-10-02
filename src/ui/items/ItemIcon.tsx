@@ -1,4 +1,6 @@
 import { Icon } from '../components/Icon';
+import { gearIconDataUrl } from '../../game/art/gear/icon';
+import { recipeForItem } from './gearIcon';
 import type { ItemView } from './itemView';
 
 /** PNGs de item (`item_*`/`loot_*`) presentes em public/assets/ui/icons, sem ".png". Um teste confere com o diretório. */
@@ -35,6 +37,8 @@ export function itemIconName(view: Pick<ItemView, 'kind' | 'slot' | 'name'> & { 
 }
 
 /** Ícone do item: sempre um PNG que existe (nunca o SVG genérico). */
-export function ItemIcon({ view, size = 48, className }: { view: Parameters<typeof itemIconName>[0]; size?: number; className?: string }) {
+export function ItemIcon({ view, size = 48, className }: { view: Parameters<typeof itemIconName>[0] & { rarity?: string; key?: string }; size?: number; className?: string }) {
+  const recipe = recipeForItem(view);
+  if (recipe) return <img className={`icon icon-gear ${className ?? ''}`} style={{ width: size, height: size, imageRendering: 'pixelated' }} src={gearIconDataUrl(recipe, 48)} alt="" data-icon={itemIconName(view)} data-gear={recipe.id} draggable={false} aria-hidden="true" />;
   return <Icon name={itemIconName(view)} size={size} className={className} />;
 }

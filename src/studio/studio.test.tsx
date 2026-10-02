@@ -32,7 +32,7 @@ describe('Fase 13 F — Estúdio de arte', () => {
     expect(screen.getByLabelText('Braço: parte')).toBeTruthy();
   }, 30000);
   it('CSV com chave inexistente mostra o erro (arquivo e linha) e não derruba a página', () => {
-    const f = files(); f['/arte/monstros/esqueleto/down_1.csv'] = '.,.,Z\n.,.,.';
+    const f = files(); f['/arte/monstros/esqueleto/down_1.csv'] = '.,.,@\n.,.,.';
     render(<StudioApp files={f} />);
     expect(screen.getByRole('alert').textContent).toContain('arte/monstros/esqueleto/down_1.csv:1');
     expect(screen.getByText('Estúdio de arte')).toBeTruthy();
