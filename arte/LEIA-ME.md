@@ -25,3 +25,6 @@ Tudo aqui é editável no Excel/Sheets. O jogo lê estes arquivos e desenha a ar
 - **Novo monstro:** copie uma pasta de `monstros/`, renomeie, edite as chaves e acrescente uma linha em `meta.csv`.
 - **Nova sala:** crie `mapas/<id da hunt>.csv` com os nomes dos arquivos de `tiles/`.
 - **Mudar a cor de uma hunt:** linha em `tilesets.csv`.
+
+
+> Itens (armas) não usam estes CSV: são montados por partes e materiais em código. Veja `docs/arte-por-partes.md` e a seção **Oficina de itens** do estúdio (`/arte.html`).

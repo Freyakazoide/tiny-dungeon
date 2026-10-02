@@ -5,6 +5,7 @@ import { defaultLookFor, type Look } from '../game/art/look';
 import { frameRaster, mapRaster, toPixels, rasterize, type Direction } from '../game/art/render';
 import { pngDataUrl } from '../game/art/png';
 import { HUNTS } from '../game/data/hunts';
+import { GearWorkshop } from './GearWorkshop';
 
 const AppearancePicker = lazy(() => import('../ui/AppearancePicker').then(m => ({ default: m.AppearancePicker })));
 class Guard extends Component<{ children: ReactNode }, { error?: string }> {
@@ -58,6 +59,7 @@ export function StudioApp({ files }: { files: Record<string, string> }) {
     <h1 style={{ marginTop: 0 }}>Estúdio de arte</h1>
     {error && <pre role="alert" style={{ background: '#3a1212', color: '#ffb4b4', padding: 10, border: '1px solid #a33', whiteSpace: 'pre-wrap' }}>{error}</pre>}
     {data && <>
+      <h2>Oficina de itens (arte por partes)</h2><Guard><GearWorkshop data={data} /></Guard>
       <h2>Sprites</h2>
       {data.meta.map(m => <section key={m.id} style={{ marginBottom: 18 }}><h3>{m.id} <small>({m.tipo}, {m.largura}×{m.altura}, {m.celulas})</small></h3>
         <SpriteBlock data={data} kind={m.tipo === 'personagem' ? 'personagens' : 'monstros'} id={m.id} look={m.tipo === 'personagem' ? look : undefined} />
