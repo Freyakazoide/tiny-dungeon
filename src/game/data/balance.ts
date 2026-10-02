@@ -63,6 +63,8 @@ export const RUN_CONFIG = {
   ringRadius: 1,
   /** quem caiu levanta ao fim do encontro com esta fração da vida, enfraquecido (-dano) até o fim do encontro seguinte */
   reviveHp: .35, reviveWeak: .2,
+  /** corpo a corpo: o golpe é um arco à frente do herói (±`cleaveArc` rad) que também acerta até `cleaveMax` vizinhos com `cleave` do dano. Flecha: voa `shotSpeed` células/s e acerta o 1º monstro no caminho */
+  cleave: .5, cleaveMax: 2, cleaveArc: 1.3, shotSpeed: 22,
   /** alcances em células: golpe de monstro, arma corpo a corpo, arma à distância e magia ofensiva */
   foeReach: 1.55, meleeReach: 1.7, rangedReach: 5.5, spellReach: 6.5,
   /** monstros nascem tantas células à frente do grupo (fora da tela) */

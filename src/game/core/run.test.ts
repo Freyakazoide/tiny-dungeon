@@ -185,7 +185,7 @@ describe('Ninguém foge do mapa: formação pela fila e zona de ação', () => {
       e.tick(100); const st = e.getSnapshot(); for (const c of st.characters) if (st.monsters.some(m => m.alive)) c.hp = Math.min(c.hp, Math.round(c.hp * .995));
       const here = planOf(e).pathPoint(st.run!.anchor); for (const c of st.characters.filter(x => x.hp > 0)) { const p = st.run!.pos[c.id]; fled = Math.max(fled, Math.hypot(p.x - here.x, p.y - here.y)); if (i % 200 === 0) c.hp = Math.max(1, Math.round(c.hp * .2)); }
     }
-    expect(fled).toBeLessThan(9);
+    expect(fled).toBeLessThan(12);   // ponto de descanso (até ~4 do ponto da âncora) + zona de ação (até 7); antes passava de 60
   });
   it('a posição de descanso segue a FILA, não a arma: arqueiro na frente fica na linha do tanque, espadachim atrás fica atrás', () => {
     const e = new GameEngine(partyState()); e.start(); const [tank, bow, staff] = e.getSnapshot().characters;

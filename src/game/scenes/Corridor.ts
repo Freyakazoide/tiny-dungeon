@@ -46,6 +46,8 @@ export class Game extends Scene {
   private bannerUntil = 0;
   private visualPaused = false;
   private debug?: Phaser.GameObjects.Graphics;
+  private telegraph?: Phaser.GameObjects.Graphics;
+  private shotsG?: Phaser.GameObjects.Graphics;
   /** a cena foi desligada/destruída: nada mais deve tocar nos objetos dela */
   private dead = false;
 
@@ -59,6 +61,8 @@ export class Game extends Scene {
     this.bannerText = this.add.text(0, 0, '', { fontFamily: 'Georgia', fontSize: '19px', color: '#f1d796', align: 'center', stroke: '#050608', strokeThickness: 4 }).setOrigin(.5);
     this.banner = this.add.container(0, 0, [bg, this.bannerText]).setScrollFactor(0).setDepth(101).setVisible(false);
     this.input.keyboard?.on('keydown-F3', (e: KeyboardEvent) => { e.preventDefault(); if (this.debug) { this.debug.destroy(); this.debug = undefined; } else this.debug = this.add.graphics().setDepth(60); });
+    this.telegraph = this.add.graphics().setDepth(3);
+    this.shotsG = this.add.graphics().setDepth(40);
     this.layoutHud();
     this.scale.on('resize', () => this.layoutHud());
     this.dead = false;
@@ -82,6 +86,8 @@ export class Game extends Scene {
     if (this.dead) return;
     gameStore.advance(delta, runtime.huntSpeed);
     this.drawWorld(gameStore.getSnapshot());
+    this.drawTelegraphs(gameStore.getSnapshot());
+    this.drawShots(gameStore.getSnapshot());
     if (this.debug) this.drawDebug(gameStore.getSnapshot());
     if (this.bannerUntil && this.time.now > this.bannerUntil && gameStore.getSnapshot().status !== 'recovering') { this.bannerUntil = 0; this.banner.setVisible(false); }
   }
@@ -127,6 +133,23 @@ export class Game extends Scene {
     }
     for (const [key, img] of this.tiles) if (!keep.has(key)) { img.destroy(); this.tiles.delete(key); }
     for (const [key, img] of this.props) if (!propKeep.has(key)) { img.destroy(); this.props.delete(key); }
+  }
+
+  /** Golpes avisados: círculo vermelho no chão que enche até o dano cair (quem sair de dentro a tempo não apanha). */
+  private drawTelegraphs(state: GameState) {
+    const g = this.telegraph; if (!g) return; g.clear();
+    for (const w of state.run?.windups ?? []) {
+      const k = 1 - Math.max(0, w.t) / w.total, r = px(w.r);
+      g.fillStyle(0xd23a2a, .16 + .12 * k).fillCircle(px(w.x), px(w.y), r);
+      g.fillStyle(0xe85a3a, .22 + .2 * k).fillCircle(px(w.x), px(w.y), r * k);
+      g.lineStyle(3, 0xff7a5a, .55 + .4 * k).strokeCircle(px(w.x), px(w.y), r);
+    }
+  }
+
+  /** Projéteis em voo (flechas, tiros): um traço claro com a ponta na posição atual. */
+  private drawShots(state: GameState) {
+    const g = this.shotsG; if (!g) return; g.clear();
+    for (const sh of state.run?.shots ?? []) { g.lineStyle(3, 0xfff1c0, .95).lineBetween(px(sh.x - sh.vx * .55), px(sh.y - sh.vy * .55), px(sh.x), px(sh.y)); g.fillStyle(0xffffff, 1).fillCircle(px(sh.x), px(sh.y), 3); }
   }
 
   /** F3: corpos (círculos de colisão), anel de 8 vagas, vaga de cada monstro e uma linha de cada um até o herói que ele está atacando. */
@@ -245,7 +268,7 @@ export class Game extends Scene {
     if (fx.type === 'attack' && source) {
       const hero = fx.source ? this.heroes.get(fx.source) : undefined, monster = fx.source ? this.enemies.get(fx.source) : undefined;
       if (fx.fx) { const aims = (fx.targets?.length ? fx.targets : fx.target ? [fx.target] : []).map(id => this.focus(id)).filter((p): p is ArenaPoint => !!p); aims.forEach((p, i) => this.time.delayedCall(i * 70, () => playAttackFx(this, fx.fx!, source, p))); }
-      else if (target) { const projectile = this.add.circle(source.x, source.y, 5, 0xf2ce72).setDepth(10).setStrokeStyle(2, 0xffffff, .8); this.tweens.add({ targets: projectile, x: target.x, y: target.y, duration: 150, ease: 'Quad.easeIn', onComplete: () => projectile.destroy() }); }
+      else if (target && !fx.shot) { const projectile = this.add.circle(source.x, source.y, 5, 0xf2ce72).setDepth(10).setStrokeStyle(2, 0xffffff, .8); this.tweens.add({ targets: projectile, x: target.x, y: target.y, duration: 150, ease: 'Quad.easeIn', onComplete: () => projectile.destroy() }); }
       const body = hero?.body ?? monster?.body;
       if (body && target) { const dx = PhaserMath.Clamp(target.x - source.x, -8, 8); this.tweens.add({ targets: body, x: body.x + dx, duration: 70, yoyo: true, ease: 'Sine.easeOut' }); }
     }

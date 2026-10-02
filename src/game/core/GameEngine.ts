@@ -8,12 +8,13 @@ import { goalOfflineTargets, isGoalId, trainRingId, gateSkillOf, GOAL_NODES } fr
 import { DEFAULT_HUNT, HUNT_BY_ID, HUNTS, huntScale, huntWaves } from '../data/hunts';
 import { RUN_CONFIG, WAVE_CONFIG } from '../data/balance';
 import { RunPlan, bossPowerFor, BOSS_HP_MUL, depthScale, CHUNK_LEN } from '../run/plan';
-import { createRun, foesInReach, heroesInReach, placeHero, placeParty, reachOf, stepRun } from '../run/world';
+import { FOE_ATTACK, foeRole, hasWindup, type WindupRole } from '../run/foes';
+import { createRun, dist, foesInReach, heroesInReach, placeHero, placeParty, radiusOf, reachOf, stepRun } from '../run/world';
 import { lateWaveBonus, batchToSpawn, composeExtras, drawFromBag, extrasTableFor, limitExtra, newBag, rollExtra, splitBatches, tierOfExtra, TIER_NAMES, waveRewards } from '../systems/waves';
 import { SPELLS, spellById } from '../data/spells';
 import { itemById } from '../data/items';
 import { CHARMS } from '../data/charms';
-import type { AutoBuyConfig, Character, CharacterRow, ClassId, GameState, HelperConfig, InventoryStack, ItemInstance, MonsterDef, MonsterRuntime, Slot, SpellCondition } from './types';
+import type { AutoBuyConfig, Character, CharacterRow, ClassId, GameState, HelperConfig, InventoryStack, ItemInstance, MonsterDef, MonsterRuntime, Shot, Slot, SpellCondition, Windup } from './types';
 import { evolveClass } from '../rpg/evolution';
 import { CLASS_BY_ID, isPlayable } from '../rpg/classTree';
 import { passiveBonus } from '../rpg/passives';
@@ -40,7 +41,7 @@ import { FORMATION_PRESETS } from '../systems/group';
 import type { FormationPlan } from '../systems/group';
 import { createAnalyzer, hasAnalyzerActivity } from '../systems/analyzer';
 
-export type GameFx = { type:'attack'|'damage'|'heal'|'death'|'drop'|'stairs'|'wave'|'recovery'|'revive'; source?:string; target?:string; value?:number; text?:string; fx?:FxKind; targets?:string[] };
+export type GameFx = { type:'attack'|'damage'|'heal'|'death'|'drop'|'stairs'|'wave'|'recovery'|'revive'; /** o golpe é um projétil real (desenhado a partir de run.shots) */ shot?:boolean; source?:string; target?:string; value?:number; text?:string; fx?:FxKind; targets?:string[] };
 export const defaultAutoBuy=():AutoBuyConfig=>({enabled:false,reserve:0,refillAt:50,targets:{},spent:0,bought:0});
 const helper=():HelperConfig=>({hpPotionAt:35,manaPotionAt:25,healAllies:true,autoSupplies:true,defensiveAmuletAt:25,emergencyAt:15,outOfSupplies:'continue'});
 const defaultCondition=(s:NonNullable<ReturnType<typeof spellById>>):SpellCondition=>s.kind==='heal'||s.kind==='regen'?{allyInjured:true,manaAbove:10}:s.target==='allEnemies'?{minEnemies:2,manaAbove:15}:s.kind==='shield'?{hpBelow:65,manaAbove:10}:{manaAbove:10};
@@ -136,6 +137,7 @@ export class GameEngine {
       trigger:(chunk,enc)=>this.startEncounter(chunk,enc),
       spawn:(chunk,ids,at)=>{const base=this.state.monsters.length,fresh=ids.map((id,i)=>this.makeMonster(id,base+i,chunk,at[i]));const credit=this.mech.takePending();if(credit>0)for(const f of fresh)f.hp=Math.max(Math.round(f.maxHp*.4),f.hp-Math.round(credit));this.state.monsters.push(...fresh);},
     });
+    this.tickWindups(dt);this.tickShots(dt);
     const run=this.state.run!;
     if(run.open&&!livingMonsters(this.state).length&&!run.queue.length)this.completeEncounter();
     if(this.state.monsters.length>24)this.state.monsters=this.state.monsters.filter(m=>m.alive);
@@ -150,6 +152,87 @@ export class GameEngine {
     else this.state.message='Encontro concluído — o grupo segue em frente.';
     this.emit({type:'stairs',text:this.state.message});
   }
+  /** Ataques dos monstros: o golpe normal bate em quem está ao alcance (de preferência o da vaga); brutamontes, atiradores e magos fazem um golpe avisado (windup). */
+  private monsterPhase(dt:number){
+    for(const m of livingMonsters(this.state)){
+      if((m.statuses?.frozen??0)>0||(m.statuses?.stunned??0)>0)continue;
+      m.cooldown-=dt;
+      if(m.cooldown>0)continue;
+      const all=livingTeam(this.state);if(!all.length){this.defeat();return;}
+      const role=foeRole(m.defId);
+      if(this.runOn()&&hasWindup(role)){if(this.beginWindup(m,role,all))m.cooldown+=1/MONSTERS[m.defId].speed;else m.cooldown=Math.max(0,m.cooldown);continue;}
+      const pool=this.runOn()?heroesInReach(this.state,m,all):all;
+      if(!pool.length){m.cooldown=Math.max(0,m.cooldown);continue;}
+      if(this.runOn()&&m.slot&&all.some(x=>x.id===m.slot!.hero)&&!pool.some(x=>x.id===m.slot!.hero)){m.cooldown=Math.max(0,m.cooldown);continue;}
+      const hidden=pool.filter(x=>!this.mech.untargetable(x));const targets=hidden.length?hidden:pool;
+      if(m.statuses?.confused){const others=livingMonsters(this.state).filter(x=>x!==m),src=this.state.characters.find(x=>x.id===m.statuses!.confused!.source);if(others.length&&src){this.hit(src,others[Math.floor(Math.random()*others.length)],Math.max(1,Math.round(MONSTERS[m.defId].attack*3*runtime.monsterAtk)),false,true);m.cooldown+=1/MONSTERS[m.defId].speed;if(!livingMonsters(this.state).length)return;continue;}}
+      const target=(m.slot&&targets.find(x=>x.id===m.slot!.hero))||pickMonsterTarget(targets)!;
+      this.monsterStrike(m,target,1);
+      m.cooldown+=1/MONSTERS[m.defId].speed;
+      if(!livingTeam(this.state).length){this.defeat();return;}
+    }
+  }
+  /** Um golpe de `m` em `target` (com os efeitos de esquiva, escudo, espinhos…); `mult` escala o dano (golpes de área). */
+  private monsterStrike(m:MonsterRuntime,target:Character,mult:number){
+    const absorbed=this.mech.monsterMisses(m)||this.mech.decoyAbsorbs();const inMult=absorbed?0:this.mech.incoming(target);
+    const dealt=inMult<=0?0:monsterHit(m,target,this.state,inMult*mult);
+    this.emit({type:'attack',source:m.uid,target:target.id,fx:monsterFx(m.defId)});this.emit({type:'damage',source:m.uid,target:target.id,value:dealt});
+    const thorns=talentValue(target,'thorns');if(thorns>0&&m.alive&&dealt>0)this.hit(target,m,Math.max(1,Math.round(dealt*thorns)));
+    this.mech.afterDamaged(target,m,dealt);if(dealt>0)this.mech.afterMonsterAttack(m);
+  }
+  /** Começa um golpe avisado: o brutamonte mira o herói da vaga dele; atiradores e magos miram a backline ao alcance. Falso se não há alvo. */
+  private beginWindup(m:MonsterRuntime,role:WindupRole,all:Character[]){
+    const run=this.state.run!,cfg=FOE_ATTACK[role];if((run.windups??[]).some(w=>w.src===m.uid))return false;
+    const me={x:m.x!,y:m.y!};let target:Character|undefined;
+    if(role==='brute'){target=m.slot?all.find(x=>x.id===m.slot!.hero):undefined;if(!target||!heroesInReach(this.state,m,all).includes(target))return false;}
+    else{const near=all.filter(h=>run.pos[h.id]&&dist(run.pos[h.id],me)<=cfg.range),back=near.filter(h=>h.row==='back'),pool=back.length?back:near;if(!pool.length)return false;target=pool.reduce((b,h)=>dist(run.pos[h.id],me)<dist(run.pos[b.id],me)?h:b);}
+    const p=run.pos[target.id];(run.windups??=[]).push({id:`w${this.nextUid()}`,src:m.uid,x:p.x,y:p.y,r:cfg.r,t:cfg.windup,total:cfg.windup,mult:cfg.mult,role});return true;
+  }
+  /** Avança os golpes avisados: atordoar/congelar/matar quem vai bater cancela; ao zerar, causa dano a todos que ainda estão dentro do círculo. */
+  private tickWindups(dt:number){
+    const run=this.state.run;if(!run?.windups?.length)return;
+    const keep:Windup[]=[];
+    for(const w of run.windups){
+      const m=this.state.monsters.find(x=>x.uid===w.src);
+      if(!m||!m.alive||(m.statuses?.frozen??0)>0||(m.statuses?.stunned??0)>0)continue;
+      w.t-=dt;if(w.t>0){keep.push(w);continue;}
+      for(const h of livingTeam(this.state)){const p=run.pos[h.id];if(p&&dist(p,w)<=w.r+.2)this.monsterStrike(m,h,w.mult);}
+      if(!livingTeam(this.state).length){run.windups=[];this.defeat();return;}
+    }
+    run.windups=keep;
+  }
+  /** Entrega o dano do ataque básico: à distância na arena é um projétil que viaja; corpo a corpo acerta o alvo e vizinhos no arco; fora da arena é instantâneo. */
+  private deliverBasic(c:Character,target:MonsterRuntime,damage:number,crit:boolean,skill:string){
+    if(this.runOn()&&skill==='ranged'){this.fireShot(c,target,damage,crit);return;}
+    this.mctx='basic';this.hit(c,target,damage,crit);this.mctx='';
+    if(this.runOn()&&skill==='melee'&&!meleeInBackRow(c))this.cleave(c,target,damage);
+  }
+  /** Golpe em arco: além do alvo, até `cleaveMax` monstros ao alcance e dentro de ±`cleaveArc` rad da direção do golpe levam `cleave` do dano. */
+  private cleave(c:Character,target:MonsterRuntime,damage:number){
+    const run=this.state.run!,me=run.pos[c.id];if(!me||target.x===undefined)return;
+    const face=Math.atan2(target.y!-me.y,target.x-me.x),reach=reachOf(c);
+    const others=foesInReach(this.state,c,reach).filter(m=>m!==target&&m.x!==undefined).filter(m=>{let d=Math.atan2(m.y!-me.y,m.x!-me.x)-face;while(d>Math.PI)d-=2*Math.PI;while(d<-Math.PI)d+=2*Math.PI;return Math.abs(d)<=RUN_CONFIG.cleaveArc;}).slice(0,RUN_CONFIG.cleaveMax);
+    for(const m of others){if(!m.alive)continue;this.hit(c,m,Math.max(1,Math.round(damage*RUN_CONFIG.cleave)),false,true);this.emit({type:'attack',source:c.id,target:m.uid,fx:'slash'});}
+  }
+  private fireShot(c:Character,target:MonsterRuntime,damage:number,crit:boolean){
+    const run=this.state.run!,me=run.pos[c.id];if(!me||target.x===undefined)return;
+    const d=dist(me,{x:target.x,y:target.y!})||1;(run.shots??=[]).push({id:`s${this.nextUid()}`,hero:c.id,x:me.x,y:me.y,vx:(target.x-me.x)/d,vy:(target.y!-me.y)/d,left:RUN_CONFIG.rangedReach+1.5,dmg:damage,crit});
+  }
+  /** Voo dos projéteis: avança em passos curtos; para no primeiro monstro vivo que toca (acerta) ou no primeiro obstáculo/parede (perde). */
+  private tickShots(dt:number){
+    const run=this.state.run;if(!run?.shots?.length)return;const plan=this.plan(),keep:Shot[]=[];
+    for(const sh of run.shots){
+      let dist2go=Math.min(sh.left,RUN_CONFIG.shotSpeed*dt),alive=true;
+      while(dist2go>0&&alive){
+        const step=Math.min(.25,dist2go);sh.x+=sh.vx*step;sh.y+=sh.vy*step;sh.left-=step;dist2go-=step;
+        if(plan.isBlocked(sh.x,sh.y)){alive=false;break;}
+        const m=livingMonsters(this.state).find(f=>f.x!==undefined&&dist({x:sh.x,y:sh.y},{x:f.x,y:f.y!})<=radiusOf(f)+.25);
+        if(m){const hero=this.state.characters.find(x=>x.id===sh.hero);if(hero){this.mctx='basic';this.hit(hero,m,sh.dmg,sh.crit);this.mctx='';}alive=false;}
+      }
+      if(alive&&sh.left>0)keep.push(sh);
+    }
+    run.shots=keep;
+  }
   /** Fim do encontro: quem caiu levanta no ponto da fila dele com parte da vida e enfraquecido até o fim do próximo encontro (a penalidade da vez anterior sai). */
   private reviveFallen(){
     const weak='revive-weak',team=this.state.team.map(id=>this.state.characters.find(x=>x.id===id)).filter(Boolean) as Character[];
@@ -162,7 +245,7 @@ export class GameEngine {
   }
   /** Depois de cair: recomeça no início do chunk atual, com o encontro de novo. */
   private resetRunAfterDefeat(){
-    const run=this.state.run!,idx=this.plan().indexAt(run.anchor);run.anchor=Math.max(4,idx*CHUNK_LEN+(idx?1:4));run.lastTrigger=Math.min(run.lastTrigger,idx-1);run.open=false;run.queue=[];this.state.monsters=[];placeParty(this.state,this.plan());
+    const run=this.state.run!,idx=this.plan().indexAt(run.anchor);run.anchor=Math.max(4,idx*CHUNK_LEN+(idx?1:4));run.lastTrigger=Math.min(run.lastTrigger,idx-1);run.open=false;run.queue=[];run.windups=[];run.shots=[];this.state.monsters=[];placeParty(this.state,this.plan());
   }
   private spawnWave(){
     const waves=this.waves(),isBoss=this.state.wave===waves.length-1;
@@ -227,7 +310,7 @@ export class GameEngine {
     this.state.analyzer.activeMs+=ms;this.huntStat().activeMs+=ms;
     this.tickStatuses(dt);if(this.state.status!=='running')return this.emit();this.mech.tick(dt);if(this.runOn())this.tickRun(dt);else this.tickReinforcements(dt);this.autoBuyT+=dt;if(this.autoBuyT>=3){this.autoBuyT=0;this.runAutoBuy();}
     for(const c of livingTeam(this.state)){this.updateCharacter(c,dt);if(this.state.status!=='running')break;}
-    if(this.state.status==='running')for(const m of livingMonsters(this.state)){if((m.statuses?.frozen??0)>0||(m.statuses?.stunned??0)>0)continue;m.cooldown-=dt;if(m.cooldown<=0){const all=livingTeam(this.state);if(!all.length){this.defeat();break;}const pool=this.runOn()?heroesInReach(this.state,m,all):all;if(!pool.length){m.cooldown=Math.max(0,m.cooldown);continue;}if(this.runOn()&&m.slot&&all.some(x=>x.id===m.slot!.hero)&&!pool.some(x=>x.id===m.slot!.hero)){m.cooldown=Math.max(0,m.cooldown);continue;}const hidden=pool.filter(x=>!this.mech.untargetable(x));const targets=hidden.length?hidden:pool;if(m.statuses?.confused){const others=livingMonsters(this.state).filter(x=>x!==m),src=this.state.characters.find(x=>x.id===m.statuses!.confused!.source);if(others.length&&src){this.hit(src,others[Math.floor(Math.random()*others.length)],Math.max(1,Math.round(MONSTERS[m.defId].attack*3*runtime.monsterAtk)),false,true);m.cooldown+=1/MONSTERS[m.defId].speed;if(!livingMonsters(this.state).length)break;continue;}}const target=(m.slot&&targets.find(x=>x.id===m.slot!.hero))||pickMonsterTarget(targets)!;const absorbed=this.mech.monsterMisses(m)||this.mech.decoyAbsorbs();const inMult=absorbed?0:this.mech.incoming(target);const dealt=inMult<=0?0:monsterHit(m,target,this.state,inMult);this.emit({type:'attack',source:m.uid,target:target.id,fx:monsterFx(m.defId)});this.emit({type:'damage',source:m.uid,target:target.id,value:dealt});const thorns=talentValue(target,'thorns');if(thorns>0&&m.alive&&dealt>0)this.hit(target,m,Math.max(1,Math.round(dealt*thorns)));this.mech.afterDamaged(target,m,dealt);if(dealt>0)this.mech.afterMonsterAttack(m);m.cooldown+=1/MONSTERS[m.defId].speed;if(!livingTeam(this.state).length){this.defeat();break;}}}
+    if(this.state.status==='running')this.monsterPhase(dt);
     this.emit();
   }
   private updateCharacter(c:Character,dt:number){
@@ -255,7 +338,7 @@ export class GameEngine {
   }
   /** Multiplicador de crítico: base + talento, no máximo ×4,0. */
   private critMultiplier(c:Character,base=1.65){return Math.min(4,base+talentValue(c,'critdmg'));}
-  private basicAttack(c:Character){const target=this.runOn()?foesInReach(this.state,c,reachOf(c))[0]:livingMonsters(this.state)[0];if(!target)return;const stats=characterStats(c,this.state);const crit=Math.random()<stats.crit||this.mech.forceCritNow(c)||this.mech.critReady(c);const weapon=itemById(c.equipment.weapon??'');const skill=weapon?.trains??CLASSES[c.classId].weaponSkill;const skillBonus=1+(c.profile.proficiencies[skill].level+gearLevels(c,skill))*PROFICIENCY_LEVEL_DAMAGE;const styleBonus=skill==='melee'?talentValue(c,'melee'):skill==='ranged'?talentValue(c,'ranged'):0;const raw=Math.round(this.talentDamage(c,target,physicalDamage(stats.attack*skillBonus,MONSTERS[target.defId].defense,crit,this.critMultiplier(c))*(1+styleBonus))*((target.statuses?.frozen??0)>0?1+STATUS.frozenPhysicalBonus:1))+Math.round(this.mech.basicExtra(c));const damage=meleeInBackRow(c)?Math.max(1,Math.round(raw*MELEE_BACK_ROW_DAMAGE)):raw;c.profile.trainingFocus=skill;this.mctx='basic';this.hit(c,target,damage,crit);this.mctx='';const after=this.mech.onBasic(c,target,damage);c.cooldowns.basic=after.haste?.05:1/Math.max(.2,stats.attackSpeed*(1+this.mech.aspdBonus(c)));this.emit({type:'attack',source:c.id,target:target.uid,value:damage,text:crit?'CRÍTICO':'',fx:basicFx(skill)});if(after.repeat&&!this.repeating&&this.state.status==='running'){this.repeating=true;try{this.basicAttack(c);}finally{this.repeating=false;}}}
+  private basicAttack(c:Character){const target=this.runOn()?foesInReach(this.state,c,reachOf(c))[0]:livingMonsters(this.state)[0];if(!target)return;const stats=characterStats(c,this.state);const crit=Math.random()<stats.crit||this.mech.forceCritNow(c)||this.mech.critReady(c);const weapon=itemById(c.equipment.weapon??'');const skill=weapon?.trains??CLASSES[c.classId].weaponSkill;const skillBonus=1+(c.profile.proficiencies[skill].level+gearLevels(c,skill))*PROFICIENCY_LEVEL_DAMAGE;const styleBonus=skill==='melee'?talentValue(c,'melee'):skill==='ranged'?talentValue(c,'ranged'):0;const raw=Math.round(this.talentDamage(c,target,physicalDamage(stats.attack*skillBonus,MONSTERS[target.defId].defense,crit,this.critMultiplier(c))*(1+styleBonus))*((target.statuses?.frozen??0)>0?1+STATUS.frozenPhysicalBonus:1))+Math.round(this.mech.basicExtra(c));const damage=meleeInBackRow(c)?Math.max(1,Math.round(raw*MELEE_BACK_ROW_DAMAGE)):raw;c.profile.trainingFocus=skill;this.deliverBasic(c,target,damage,crit,skill);const after=this.mech.onBasic(c,target,damage);c.cooldowns.basic=after.haste?.05:1/Math.max(.2,stats.attackSpeed*(1+this.mech.aspdBonus(c)));this.emit({type:'attack',source:c.id,target:target.uid,value:damage,text:crit?'CRÍTICO':'',...(this.runOn()&&skill==='ranged'?{shot:true}:{fx:basicFx(skill)})});if(after.repeat&&!this.repeating&&this.state.status==='running'){this.repeating=true;try{this.basicAttack(c);}finally{this.repeating=false;}}}
   private cast(c:Character,s:NonNullable<ReturnType<typeof spellById>>){const mo=this.mech.onCast(c,s.id,s.kind==='damage',!!s.element&&s.element===elementFocus(c),s.target==='allEnemies');this.mel=s.element;c.mana-=mo.free?0:this.mech.castCost(c,s.mana,s);this.noCd=mo.noCd;this.trainCast(c,s);const stats=characterStats(c,this.state);if(s.kind==='damage'){const pool=this.foesFor(c),aimed=(s.target==='allEnemies'?pool:pool.slice(0,1)).map(m=>m.uid);this.emit({type:'attack',source:c.id,target:aimed[0],targets:aimed,text:s.name,fx:spellFx(s)});this.mctx='spell';this.castDamage(c,s,stats.magicPower+stats.attack*.45,stats.crit);if(mo.again)this.castDamage(c,s,stats.magicPower+stats.attack*.45,stats.crit);this.mctx='';return;}const allies=s.target==='allAllies'||(s.kind==='buff'&&this.mech.buffsTeam(c))?livingTeam(this.state):s.target==='ally'?[livingTeam(this.state).sort((a,b)=>a.hp/characterStats(a,this.state).maxHp-b.hp/characterStats(b,this.state).maxHp)[0]]:[c];const healingMultiplier=(1+talentValue(c,'heal'))*this.mech.healMult(c,s.target==='allAllies');const buffPower=1+talentValue(c,'buffpow'),buffTime=1+talentValue(c,'buffdur'),shieldPower=1+talentValue(c,'shield');for(const ally of allies.filter(Boolean)){const received=1+talentValue(ally,'healrec');if(s.kind==='heal'){const before=ally.hp,wanted=Math.round(healAmount(stats.magicPower,s.power)*healingMultiplier*received);ally.hp=Math.min(characterStats(ally,this.state).maxHp,ally.hp+wanted);const amount=ally.hp-before;this.mech.afterHeal(c,ally,wanted,amount,s.target==='ally');this.mech.afterHealApplied(c,ally,amount);this.state.analyzer.healing+=amount;addCounter(c.profile,'healingDone',amount);this.emit({type:'heal',source:c.id,target:ally.id,value:amount,text:s.name});}else{addCounter(c.profile,'buffsApplied');ally.effects.push({id:`${s.id}-${this.nextUid()}`,type:s.kind==='regen'?'regen':s.kind==='shield'?'shield':s.power>.25?'buffAttack':'buffDefense',value:s.kind==='regen'?Math.round(healAmount(stats.magicPower,s.power)*healingMultiplier*received*this.mech.regenMult(c)):s.kind==='shield'?s.power*shieldPower:s.power*buffPower,remaining:(s.duration??5)*(s.kind==='regen'?1:s.kind==='shield'?(s.target==='allAllies'?this.mech.shieldDurMult(c):1):buffTime*this.mech.buffDuration(c,1)),source:c.id});if(s.kind==='shield'&&s.target==='self'&&ally===c)this.mech.shieldShared(c,s.power*shieldPower);}}if(s.kind==='buff'){this.mech.onBuffCast(c);this.mech.buffMana(c);}}
   /** Dano de magia: talentos, foco, afinidade elemental, crítico do Arcanista, status (Combustão/Congelado/Atordoado) e barreira do Criomante. */
   private castDamage(c:Character,s:NonNullable<ReturnType<typeof spellById>>,power:number,critStat:number){

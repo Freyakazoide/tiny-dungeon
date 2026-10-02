@@ -7,6 +7,7 @@ import { livingMonsters, livingTeam } from '../systems/combat';
 import { characterStats } from '../systems/progression';
 import type { Character, GameState, MonsterRuntime, RunState } from '../core/types';
 import { BAND, RunPlan, type Encounter, type Pt } from './plan';
+import { FOE_ATTACK, foeRole, isRanged } from './foes';
 
 /**
  * Mundo do corredor: posições em células do mundo (x, y), movimento, colisão e IA de quem anda no mapa. Só lê CONFIGURAÇÃO (nunca ordens ao
@@ -65,6 +66,20 @@ export function moveToward(plan: RunPlan, u: Body, tx: number, ty: number, step:
     return true;
   };
   for (const [ax, ay] of [[mx * k, my * k], [mx * k, 0], [0, my * k]]) if ((ax || ay) && ok(u.pt.x + ax, u.pt.y + ay)) { u.pt.x += ax; u.pt.y += ay; return; }
+}
+/** Folga (células) além do raio de um círculo avisado em que o herói já se considera dentro: um passo de ~.45 não o coloca de volta ao alcance do golpe. */
+const SAFE = .9;
+/** Saída de um círculo avisado: de 16 pontos logo fora dele, o mais perto de quem está dentro cujo caminho não esbarra em ninguém e cabe no chão. */
+function escapePoint(plan: RunPlan, self: Body, w: { x: number; y: number; r: number }, bodies: Body[]): Pt | null {
+  const out = w.r + SAFE + .1; let best: Pt | null = null, bestD = Infinity;
+  for (let k = 0; k < 16; k++) {
+    const a = k * Math.PI / 8, p = { x: w.x + Math.cos(a) * out, y: w.y + Math.sin(a) * out };
+    if (!fits(plan, p.x, p.y, self.r)) continue;
+    let free = true;
+    for (let t = .25; t <= 1 && free; t += .25) { const q = { x: self.pt.x + (p.x - self.pt.x) * t, y: self.pt.y + (p.y - self.pt.y) * t }; free = bodies.every(o => o === self || dist(q, o.pt) >= o.r + self.r - .05) && fits(plan, q.x, q.y, self.r); }
+    const d = dist(self.pt, p); if (free && d < bestD) { bestD = d; best = p; }
+  }
+  return best;
 }
 /** Empurra para fora quem nasceu ou ficou sobreposto a outra unidade (devagar, só para onde há chão). */
 function separate(plan: RunPlan, bodies: Body[], dt: number) {
@@ -172,7 +187,9 @@ export function aggroGroups(team: Character[]): Character[][] {
  */
 function assignSlots(plan: RunPlan, foes: MonsterRuntime[], team: Character[], run: RunState) {
   const groups = aggroGroups(team), pos = (h: Character) => posOf(run, h);
-  const usable = foes.filter(m => !MONSTERS[m.defId].boss); for (const m of foes) if (MONSTERS[m.defId].boss) delete m.slot;
+  const roleOf = (m: MonsterRuntime) => foeRole(m.defId);
+  const usable = foes.filter(m => !MONSTERS[m.defId].boss && !isRanged(roleOf(m)));
+  for (const m of foes) if (MONSTERS[m.defId].boss || isRanged(roleOf(m))) delete m.slot;
   const claimed = new Set<string>(), key = (id: string, k: number) => `${id}#${k}`;
   const open = (h: Character, k: number) => {
     if (claimed.has(key(h.id, k))) return false;
@@ -181,23 +198,26 @@ function assignSlots(plan: RunPlan, foes: MonsterRuntime[], team: Character[], r
     return !team.some(o => o !== h && dist(p, pos(o)) < RADIUS.unit * 1.6);
   };
   const left = new Set(usable);
-  for (const group of groups) {
-    for (const m of [...left]) { // quem já tem vaga neste grupo a mantém
-      const s = m.slot, h = s && group.find(x => x.id === s.hero);
-      if (s && h && s.k !== undefined && open(h, s.k)) { claimed.add(key(h.id, s.k)); const p = ringPoint(pos(h), s.k); m.slot = { x: p.x, y: p.y, hero: h.id, k: s.k }; left.delete(m); }
-    }
-    const near = (m: MonsterRuntime) => Math.min(...group.map(h => dist(pos(h), { x: m.x!, y: m.y! })));
-    for (const m of [...left].sort((a, b) => near(a) - near(b))) {
-      let best: { h: Character; k: number; d: number } | undefined;
-      for (const h of group) for (let k = 0; k < RING; k++) {
-        if (!open(h, k)) continue;
-        const p = ringPoint(pos(h), k), d = dist(p, { x: m.x!, y: m.y! });
-        if (!best || d < best.d - 1e-6) best = { h, k, d };
+  const take = (m: MonsterRuntime, h: Character, k: number) => { claimed.add(key(h.id, k)); const p = ringPoint(pos(h), k); m.slot = { x: p.x, y: p.y, hero: h.id, k }; left.delete(m); };
+  /** Um passo: os `who` ocupam, grupo a grupo na ordem dada, as vagas livres (quem já tem vaga no grupo a mantém; depois, a vaga mais perto). */
+  const pass = (who: (m: MonsterRuntime) => boolean, order: Character[][]) => {
+    for (const group of order) {
+      for (const m of [...left].filter(who)) { const s = m.slot, h = s && group.find(x => x.id === s.hero); if (s && h && s.k !== undefined && open(h, s.k)) take(m, h, s.k); }
+      const near = (m: MonsterRuntime) => Math.min(...group.map(h => dist(pos(h), { x: m.x!, y: m.y! })));
+      for (const m of [...left].filter(who).sort((a, b) => near(a) - near(b))) {
+        let best: { h: Character; k: number; d: number } | undefined;
+        for (const h of group) for (let k = 0; k < RING; k++) {
+          if (!open(h, k)) continue;
+          const p = ringPoint(pos(h), k), d = dist(p, { x: m.x!, y: m.y! });
+          if (!best || d < best.d - 1e-6) best = { h, k, d };
+        }
+        if (!best) break; // anel cheio: o resto desce para o próximo grupo
+        take(m, best.h, best.k);
       }
-      if (!best) break; // anel cheio: o resto desce para o próximo grupo
-      claimed.add(key(best.h.id, best.k)); const p = ringPoint(pos(best.h), best.k); m.slot = { x: p.x, y: p.y, hero: best.h.id, k: best.k }; left.delete(m);
     }
-  }
+  };
+  pass(m => roleOf(m) === 'runner', [...groups].reverse()); // corredores vão direto na backline
+  pass(() => true, groups);
   for (const m of left) delete m.slot;
 }
 /**
@@ -211,6 +231,13 @@ function orbitTarget(m: MonsterRuntime, slot: NonNullable<MonsterRuntime['slot']
   if (Math.abs(diff) <= .4 || dist(c, { x: m.x!, y: m.y! }) > R.ringRadius + 3) return slot;
   const a = here + Math.sign(diff) * .8, r = R.ringRadius + 1;
   return { x: c.x + Math.cos(a) * r, y: c.y + Math.sin(a) * r };
+}
+/** Atirador/mago: fica a ~85% do alcance do alvo (de preferência da backline), do lado de onde veio; se o alvo chegar perto demais, recua. */
+export function shootPoint(m: MonsterRuntime, team: Character[], run: RunState): Pt {
+  const cfg = FOE_ATTACK[foeRole(m.defId) as 'archer' | 'caster'], back = team.filter(h => h.row === 'back'), pool = back.length ? back : team;
+  const prey = pool.reduce((b, h) => dist(posOf(run, h), { x: m.x!, y: m.y! }) < dist(posOf(run, b), { x: m.x!, y: m.y! }) ? h : b, pool[0]), p = posOf(run, prey);
+  const dx = m.x! - p.x, dy = m.y! - p.y, d = Math.hypot(dx, dy) || 1, want = cfg.range * .85;
+  return Math.abs(d - want) < .6 ? { x: m.x!, y: m.y! } : { x: p.x + dx / d * want, y: p.y + dy / d * want };
 }
 /** Onde espera quem ficou sem vaga: numa fila de raio crescente em volta do primeiro grupo de aggro, do lado de onde o monstro vem. */
 export function holdPoint(m: MonsterRuntime, team: Character[], run: RunState, rank: number): Pt {
@@ -251,7 +278,7 @@ export function stepRun(state: GameState, plan: RunPlan, dt: number, hooks: Worl
   const foeBody = new Map(living.map(m => [m.uid, { pt: { x: m.x!, y: m.y! }, r: radiusOf(m) } as Body]));
   const bodies = [...heroBody.values(), ...foeBody.values()];
   assignSlots(plan, living, team, run);
-  const waiting = living.filter(m => !m.slot && !MONSTERS[m.defId].boss).sort((a, b) => dist({ x: a.x!, y: a.y! }, tankAt) - dist({ x: b.x!, y: b.y! }, tankAt));
+  const waiting = living.filter(m => !m.slot && !MONSTERS[m.defId].boss && !isRanged(foeRole(m.defId))).sort((a, b) => dist({ x: a.x!, y: a.y! }, tankAt) - dist({ x: b.x!, y: b.y! }, tankAt));
   for (const f of living) {
     const body = foeBody.get(f.uid)!;
     if ((f.statuses?.frozen ?? 0) > 0 || (f.statuses?.stunned ?? 0) > 0) continue;
@@ -259,6 +286,7 @@ export function stepRun(state: GameState, plan: RunPlan, dt: number, hooks: Worl
     let target: Pt, stop = 0;
     if (f.slot) target = orbitTarget(f, f.slot, team, run);
     else if (boss) { target = tankAt; stop = 1.9; }
+    else if (isRanged(foeRole(f.defId))) { target = shootPoint(f, team, run); stop = .1; }
     else { target = holdPoint(f, team, run, waiting.indexOf(f)); stop = .1; }
     if (dist(body.pt, target) > .12 + stop) moveToward(plan, body, target.x, target.y, speed, bodies);
     f.x = body.pt.x; f.y = body.pt.y;
@@ -282,6 +310,13 @@ export function stepRun(state: GameState, plan: RunPlan, dt: number, hooks: Worl
       else if (d > want || role === 'tank') { const k = Math.max(0, d - want * .8) / (d || 1); tx = me.x + (tp.x - me.x) * k; ty = me.y + (tp.y - me.y) * k; }
       else { tx = me.x; ty = me.y; }
       if (role !== 'tank' && along({ x: tx, y: ty }) > ai.leash) { const over = along({ x: tx, y: ty }) - ai.leash; tx -= fwd.x * over; ty -= fwd.y * over; }
+    }
+    // todos menos o tanque (que segura a posição) ficam fora dos círculos avisados: se está dentro, vai pela saída livre mais curta; se o ponto de descanso está dentro, ele é empurrado para fora
+    if (role !== 'tank') {
+      for (const w of run.windups ?? []) {
+        if (dist(me, w) < w.r + SAFE) { const out = escapePoint(plan, body, w, bodies); if (out) { tx = out.x; ty = out.y; } }
+        else if (dist({ x: tx, y: ty }, w) < w.r + SAFE) { const d = dist({ x: tx, y: ty }, w) || .01; tx = w.x + (tx - w.x) / d * (w.r + SAFE + .1); ty = w.y + (ty - w.y) / d * (w.r + SAFE + .1); }
+      }
     }
     // ninguém sai da zona da própria formação: perseguir, desviar e recuar acontecem dentro de `roam` células do ponto de descanso
     const roam = roamOf(role, ai), off = Math.hypot(tx - home.x, ty - home.y);
