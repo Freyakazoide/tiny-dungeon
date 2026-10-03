@@ -7,9 +7,9 @@ import { defaultLookFor, isValidLook, normalizeLook, type Look } from '../art/lo
 import { goalOfflineTargets, isGoalId, trainRingId, gateSkillOf, GOAL_NODES } from '../rpg/goals';
 import { DEFAULT_HUNT, HUNT_BY_ID, HUNTS, huntScale, huntWaves } from '../data/hunts';
 import { encounterKind, newTelemetry, type Telemetry } from './telemetry';
-import { KIND_HP, paceOf, RUN_CONFIG, RUN_FLOW, WAVE_CONFIG } from '../data/balance';
+import { KIND_HP, paceOf, floorScale, floorTier, FLOOR_RAMP, RUN_CONFIG, RUN_FLOW, WAVE_CONFIG } from '../data/balance';
 import { reinforcementIds } from '../systems/waves';
-import { RunPlan, bossPowerFor, BOSS_HP_MUL, depthScale, CHUNK_LEN } from '../run/plan';
+import { RunPlan, bossPowerFor, BOSS_HP_MUL, depthScale, CHUNK_LEN, STAIRS_AT, FLOOR_CHUNKS } from '../run/plan';
 import { BOSS_ENRAGE, BOSS_PHASES, FOE_ATTACK, bestAim, foeRole, hasWindup, signatureCircles, signatureKind, type FoeRole, type WindupRole } from '../run/foes';
 import { allCovered, attackOrder, createRun, dist, foesInReach, freeNear, heroesInReach, placeHero, placeParty, radiusOf, reachOf, stepRun } from '../run/world';
 import { monsterKind, lateWaveBonus, batchToSpawn, composeExtras, drawFromBag, extrasTableFor, limitExtra, newBag, rollExtra, splitBatches, tierOfExtra, TIER_NAMES, waveRewards } from '../systems/waves';
@@ -122,13 +122,13 @@ export class GameEngine {
   telemetry:Telemetry=newTelemetry();
   private planCache?:{key:string;plan:RunPlan};
   /** Plano do corredor (puro, regenerado da semente e da hunt; nada dele vai para o save). */
-  private plan():RunPlan{const run=this.state.run!,key=`${run.seed}:${this.state.huntId}`;if(this.planCache?.key!==key)this.planCache={key,plan:new RunPlan({seed:run.seed,huntId:this.state.huntId})};return this.planCache.plan;}
+  private plan():RunPlan{const run=this.state.run!,key=`${run.seed}:${this.state.huntId}`;if(this.planCache?.key!==key)this.planCache={key,plan:new RunPlan({seed:run.seed,huntId:this.state.huntId,capped:true})};return this.planCache.plan;}
   private makeMonster(defId:string,index:number,chunk?:number,at?:{x:number;y:number}):MonsterRuntime{
-    const kind=monsterKind(defId),scale=chunk!==undefined?depthScale(chunk,kind):{hp:1,atk:1},def=MONSTERS[defId],power=chunk!==undefined&&def.boss?BOSS_HP_MUL[bossPowerFor(this.state.run!.seed,chunk)]:1;
+    const kind=monsterKind(defId),fl=floorScale(this.state.run?.floor),ds=chunk!==undefined?depthScale(chunk,kind):{hp:1,atk:1},scale=chunk!==undefined?{hp:ds.hp*fl.hp,atk:ds.atk*fl.atk}:ds,def=MONSTERS[defId],power=chunk!==undefined&&def.boss?BOSS_HP_MUL[bossPowerFor(this.state.run!.seed,chunk)]:1;
     // no corredor o HP também segue a categoria (comum mais frágil, chefe mais longo e mecânico)
     const hp=Math.round(def.hp*runtime.monsterHp*huntScale(this.state.huntId).hp*scale.hp*power*(chunk!==undefined?KIND_HP[kind]*paceOf(this.state.huntId)[kind]:1));
     const m:MonsterRuntime={uid:`${this.state.cycle}-${this.state.wave}-${index}-${this.nextUid()}`,defId,hp,maxHp:hp,cooldown:1/Math.max(.1,def.speed),alive:true};
-    if(at){const depth=(1+(chunk??0)*.025)*(HUNT_BY_ID[this.state.huntId]?.rewardScale??1);m.x=at.x;m.y=at.y;m.atkMul=scale.atk;m.xpMul=depth*RUN_CONFIG.xpReward*paceOf(this.state.huntId).xp;m.goldMul=depth*RUN_CONFIG.goldReward*paceOf(this.state.huntId).gold;}return m;
+    if(at){const depth=(1+(chunk??0)*.025)*(HUNT_BY_ID[this.state.huntId]?.rewardScale??1);m.x=at.x;m.y=at.y;m.atkMul=scale.atk;m.xpMul=depth*fl.xp*RUN_CONFIG.xpReward*paceOf(this.state.huntId).xp;m.goldMul=depth*fl.gold*RUN_CONFIG.goldReward*paceOf(this.state.huntId).gold;}return m;
   }
   /** Encontro do corredor: registra a wave (tier, mensagem, mecânicas de início de wave) como as waves antigas faziam. */
   private startEncounter(_chunk:number,enc:{extra:number;tier:string;boss:boolean;monsters:string[];ambush?:number}){
@@ -148,7 +148,15 @@ export class GameEngine {
     this.tickWindups(dt);this.tickShots(dt);this.tickTraps();this.tickBossPhases();
     const run=this.state.run!;tel.totalS+=dt;if(livingMonsters(this.state).length)tel.combatS+=dt;if(run.anchor>anchor0)tel.walkS+=dt;
     if(run.open&&!livingMonsters(this.state).length&&!run.queue.length)this.completeEncounter();
+    if(!run.open&&run.lastTrigger>=FLOOR_CHUNKS-1&&run.anchor>=STAIRS_AT-.05&&!livingMonsters(this.state).length)this.nextFloor();
     if(this.state.monsters.length>24)this.state.monsters=this.state.monsters.filter(m=>m.alive);
+  }
+  /** Escada: o chefe do andar caiu e o grupo chegou ao fim. Novo mapa (semente nova), um andar mais fundo e a run fica mais forte (até o teto). */
+  private nextFloor(){
+    const run=this.state.run!,floor=(run.floor??0)+1,seed=Math.floor(Math.random()*2**31);
+    run.floor=floor;run.seed=seed;run.anchor=4;run.deepest=4;run.lastTrigger=0;run.open=false;run.queue=[];run.windups=[];run.shots=[];run.ai={};run.focus=undefined;this.trapped.clear();this.state.monsters=[];
+    placeParty(this.state,this.plan());
+    const t=floorTier(floor);this.state.message=`Andar ${floor+1}${t>=FLOOR_RAMP.maxTier?' — dificuldade máxima da run':''}: os monstros ficaram mais fortes.`;this.emit({type:'stairs',text:this.state.message});
   }
   /** Encontro do corredor varrido: bônus de wave grande, cura leve; o chefe fecha um "ciclo" (e aplica a hunt agendada). */
   private completeEncounter(){

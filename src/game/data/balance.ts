@@ -55,10 +55,14 @@ export const WAVE_CONFIG = {
 };
 
 /** Modo "corredor" (overhaul): o grupo anda por um mapa procedural infinito e luta por alcance. Os testes de engine antigos rodam com `enabled: false` (ver test-setup.ts). */
+/** Descer a escada (só depois do chefe) troca o mapa e fortalece a run: por andar, até `maxTier` descidas, depois fica no teto. */
+export const FLOOR_RAMP = { maxTier: 6, hp: .18, atk: .12, xp: .3, gold: .15 };
+export const floorTier = (floor = 0) => Math.max(0, Math.min(FLOOR_RAMP.maxTier, Math.floor(floor)));
+export const floorScale = (floor = 0) => { const t = floorTier(floor); return { hp: 1 + FLOOR_RAMP.hp * t, atk: 1 + FLOOR_RAMP.atk * t, xp: 1 + FLOOR_RAMP.xp * t, gold: 1 + FLOOR_RAMP.gold * t }; };
 export const RUN_CONFIG = {
   enabled: true,
   /** células por segundo: caminhada do grupo, monstros e heróis em combate */
-  walk: 10, foeSpeed: 2.8, heroSpeed: 5.2, travel: 14,
+  walk: 7, foeSpeed: 2.3, heroSpeed: 4.3, travel: 9,
   /** raio (células) do anel de 8 vagas em volta de cada herói, onde os monstros corpo a corpo ficam batendo */
   ringRadius: 1,
   /** quem caiu levanta ao fim do encontro com esta fração da vida, enfraquecido (-dano) até o fim do encontro seguinte */
@@ -86,13 +90,13 @@ export const KIND_HP = { common: .72, elite: .8, boss: .9 } as const;
 /** `loot`: chance de drop dos não-chefes (matar mais rápido não pode inflar a economia de itens) */
 export interface HuntPace { common: number; elite: number; boss: number; xp: number; gold: number; loot: number }
 export const HUNT_PACE: Record<string, HuntPace> = {
-  catacumbas: { common: 0.237, elite: 0.387, boss: 0.357, xp: 0.293, gold: 0.216, loot: 0.293 },
-  floresta_sombria: { common: 0.142, elite: 0.12, boss: 0.12, xp: 0.148, gold: 0.161, loot: 0.148 },
-  pantano_toxico: { common: 0.123, elite: 0.139, boss: 0.141, xp: 0.141, gold: 0.14, loot: 0.141 },
-  minas_esquecidas: { common: 0.135, elite: 0.165, boss: 0.133, xp: 0.132, gold: 0.13, loot: 0.132 },
-  fortaleza_de_gelo: { common: 0.128, elite: 0.129, boss: 0.124, xp: 0.131, gold: 0.127, loot: 0.131 },
-  vulcao_ardente: { common: 0.12, elite: 0.12, boss: 0.133, xp: 0.134, gold: 0.125, loot: 0.134 },
-  templo_profano: { common: 0.12, elite: 0.12, boss: 0.142, xp: 0.132, gold: 0.123, loot: 0.132 },
+  catacumbas: { common: 0.777, elite: 0.828, boss: 0.07, xp: 1.5, gold: 1.203, loot: 1 },
+  floresta_sombria: { common: 0.443, elite: 0.216, boss: 0.05, xp: 0.956, gold: 1.047, loot: 0.956 },
+  pantano_toxico: { common: 0.357, elite: 0.302, boss: 0.04, xp: 0.841, gold: 0.851, loot: 0.841 },
+  minas_esquecidas: { common: 0.397, elite: 0.219, boss: 0.082, xp: 0.753, gold: 0.748, loot: 0.753 },
+  fortaleza_de_gelo: { common: 0.408, elite: 0.221, boss: 0.045, xp: 0.472, gold: 0.445, loot: 0.472 },
+  vulcao_ardente: { common: 0.312, elite: 0.208, boss: 0.041, xp: 0.488, gold: 0.459, loot: 0.488 },
+  templo_profano: { common: 0.303, elite: 0.181, boss: 0.04, xp: 0.461, gold: 0.434, loot: 0.461 },
 };
 export const paceOf = (huntId: string): HuntPace => HUNT_PACE[huntId] ?? { common: 1, elite: 1, boss: 1, xp: 1, gold: 1, loot: 1 };
 /** O HP dos comuns cresce com a profundidade até este acréscimo máximo (+120%): o comum nunca vira esponja; elite e chefe seguem a escala normal. */

@@ -13,7 +13,7 @@ import { obstacleArt } from '../data/obstacles';
 import { lookKey, type Look } from '../art/look';
 import { TOMBSTONE_TEXTURE, TRAP_TEXTURE, cellTexture, characterTexture, characterWalkAnim, ensureLookTextures, monsterTexture, obstacleTexture, type CellKind } from '../art/textures';
 import type { FxKind } from '../systems/spellFx';
-import { CHUNK_LEN, RunPlan } from '../run/plan';
+import { CHUNK_LEN, FLOOR_CHUNKS, RunPlan } from '../run/plan';
 import { newCamera, stepCamera, relevantFoes, safeArea } from '../run/camera';
 import { aggroGroups, freeNear, homePoint, radiusOf, RADIUS, ringPoint } from '../run/world';
 import { perp } from '../run/geom';
@@ -53,6 +53,7 @@ export class Game extends Scene {
   private telegraph?: Phaser.GameObjects.Graphics;
   private shotsG?: Phaser.GameObjects.Graphics;
   private focusG?: Phaser.GameObjects.Graphics;
+  private stairsG?: Phaser.GameObjects.Graphics;
   /** a cena foi desligada/destruída: nada mais deve tocar nos objetos dela */
   private dead = false;
 
@@ -68,6 +69,7 @@ export class Game extends Scene {
     this.input.keyboard?.on('keydown-F3', (e: KeyboardEvent) => { e.preventDefault(); if (this.debug) { this.debug.destroy(); this.debug = undefined; this.debugLabels.forEach(t => t.destroy()); this.debugLabels = []; } else this.debug = this.add.graphics().setDepth(60); });
     this.telegraph = this.add.graphics().setDepth(3);
     this.shotsG = this.add.graphics().setDepth(40);
+    this.stairsG = this.add.graphics().setDepth(1);   // escada do fim do andar, no chão
     this.focusG = this.add.graphics().setDepth(4);   // abaixo dos bonecos: anéis no chão
     this.layoutHud();
     this.scale.on('resize', () => this.layoutHud());
@@ -102,7 +104,7 @@ export class Game extends Scene {
   /** Plano (puro) da run atual; sem run (parado), uma pré-visualização fixa da hunt. */
   private planFor(state: GameState) {
     const seed = state.run?.seed ?? 1, key = `${seed}:${state.huntId}`;
-    if (key !== this.planKey || !this.plan) { this.plan = new RunPlan({ seed, huntId: state.huntId }); this.planKey = key; this.clearWorld(); }
+    if (key !== this.planKey || !this.plan) { const first = !!this.plan; this.plan = new RunPlan({ seed, huntId: state.huntId, capped: true }); this.planKey = key; this.clearWorld(); if (first && state.run) this.cameras.main.fadeIn(900, 0, 0, 0); }
     return this.plan;
   }
   private clearWorld() { for (const t of this.tiles.values()) t.destroy(); for (const p of this.props.values()) p.destroy(); this.tiles.clear(); this.props.clear(); this.cam.init = false; }
@@ -149,6 +151,17 @@ export class Game extends Scene {
     }
     for (const [key, img] of this.tiles) if (!keep.has(key)) { img.destroy(); this.tiles.delete(key); }
     for (const [key, img] of this.props) if (!propKeep.has(key)) { img.destroy(); this.props.delete(key); }
+    this.drawStairs(state, plan);
+  }
+
+  /** Escada do fim do andar: degraus descendo para o escuro; apagada até o chefe cair, depois acende. */
+  private drawStairs(state: GameState, plan: RunPlan) {
+    const g = this.stairsG; if (!g) return; g.clear(); if (!state.run) return;
+    const st = plan.stairs(), lit = state.run.lastTrigger >= FLOOR_CHUNKS - 1 && !state.run.open && !state.monsters.some(m => m.alive), pulse = lit ? .75 + .25 * Math.sin(this.time.now / 300) : .5;
+    const f = st.fwd, sd = { x: -f.y, y: f.x }, quad = (c: number, w: number, d: number, col: number, a: number) => { const o = (u: number, v: number) => ({ x: px(st.x + f.x * u + sd.x * v), y: px(st.y + f.y * u + sd.y * v) }); const a1 = o(c, -w), b1 = o(c + d, -w), c1 = o(c + d, w), d1 = o(c, w); g.fillStyle(col, a).fillTriangle(a1.x, a1.y, b1.x, b1.y, c1.x, c1.y).fillTriangle(a1.x, a1.y, c1.x, c1.y, d1.x, d1.y); };
+    quad(-.4, 2.3, 4.2, 0x0b0d12, 1);
+    for (let k = 0; k < 5; k++) quad(-.2 + k * .7, 2 - k * .12, .62, lit ? 0xd8c27a : 0x6b6a62, (lit ? .95 : .8) - k * .13);
+    if (lit) { g.lineStyle(3, 0xffe9a0, pulse).strokeCircle(px(st.x + f.x * 1.2), px(st.y + f.y * 1.2), px(2.6)); }
   }
 
   /** Golpes avisados: círculo vermelho no chão que enche até o dano cair (quem sair de dentro a tempo não apanha). */

@@ -13,7 +13,7 @@ describe('armadilhas no plano', () => {
     const plan = planOf(7); let withTraps = 0, total = 0;
     for (let i = 0; i < 240; i++) {
       const ch = plan.chunk(i); if (i < TRAP_FROM) expect(ch.traps, `chunk ${i}`).toEqual([]);
-      else { total++; if (ch.traps.length) withTraps++; const blocked = new Set(ch.obstacles.map(o => o.c * 8 + o.r)); for (const t of ch.traps) expect(blocked.has(t.c * 8 + t.r), `chunk ${i}`).toBe(false); expect(ch.traps.length).toBeLessThanOrEqual(8); }
+      else { total++; if (ch.traps.length) withTraps++; const blocked = new Set(ch.obstacles.map(o => o.c * 16 + o.r)); for (const t of ch.traps) expect(blocked.has(t.c * 16 + t.r), `chunk ${i}`).toBe(false); expect(ch.traps.length).toBeLessThanOrEqual(8); }
     }
     expect(withTraps / total).toBeGreaterThan(.2); expect(withTraps / total).toBeLessThan(.5);
     const all = (p: RunPlan) => JSON.stringify(Array.from({ length: 40 }, (_, i) => p.chunk(i).traps));

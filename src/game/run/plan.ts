@@ -12,8 +12,13 @@ import { randInt, rngFor } from './rng';
  * e descidas). Cada chunk é função pura de (semente, índice); a grade do mundo só guarda a janela perto do grupo.
  */
 export const CHUNK_LEN = 24;
-export const BAND = 6;                 // largura do corredor (células)
-export const BOSS_EVERY = 10;          // um chunk de chefe a cada N chunks
+export const BAND = 10;                // largura do corredor (células): salão largo, com nichos e pilares nas bordas
+export const BOSS_EVERY = 8;           // um andar tem N chunks; o último é o do chefe e termina na escada
+export const FLOOR_CHUNKS = BOSS_EVERY;
+/** Chave de célula (c, r) de um chunk; r < 16. */
+export const cellOf = (c: number, r: number) => c * 16 + r;
+/** Progresso (células) da escada: perto do fim do chunk do chefe. */
+export const STAIRS_AT = FLOOR_CHUNKS * CHUNK_LEN - 4;
 export type Heading = 'W' | 'N' | 'S';
 export type ObstacleKind = 'a' | 'b';
 export interface Obstacle { c: number; r: number; kind: ObstacleKind }
@@ -32,7 +37,7 @@ export interface Frame { ox: number; oy: number; ax: number; ay: number; bx: num
 export interface Trap { c: number; r: number }
 export interface Chunk { index: number; start: number; heading: Heading; frame: Frame; turn?: 'R' | 'L'; obstacles: Obstacle[]; /** armadilhas de espinhos: chão andável que fere quem pisa (nunca sobre obstáculo) */ traps: Trap[]; encounter?: Encounter }
 
-export interface RunParams { seed: number; huntId: string }
+export interface RunParams { seed: number; huntId: string; /** corta o mapa no fim do andar (chunks além de FLOOR_CHUNKS não existem): usado na run de verdade */ capped?: boolean }
 export const bossIdOf = (huntId: string) => { const waves = (HUNT_BY_ID[huntId] ?? HUNT_BY_ID.catacumbas).waves; return waves[waves.length - 1].monsters.find(id => MONSTERS[id]?.boss) ?? waves[waves.length - 1].monsters[0]; };
 
 const AXES: Record<Heading, { a: [number, number]; b: [number, number] }> = { W: { a: [-1, 0], b: [0, 1] }, N: { a: [0, -1], b: [-1, 0] }, S: { a: [0, 1], b: [1, 0] } };
@@ -84,14 +89,20 @@ function rollObstacles(seed: number, index: number, turn: boolean): Obstacle[] {
   for (let c = 0; c < L; c++) { const r = rng(); row = Math.min(B - 2, Math.max(0, row + (r < .25 ? -1 : r > .75 ? 1 : 0))); lane.push(row); }
   const onLane = (c: number, r: number) => r === lane[c] || r === lane[c] + 1;
   // blocos: grupos de 2 a 6 células coladas (barricadas) que estreitam o corredor e forçam o grupo a se ajeitar
-  const clusters = 1 + Math.floor(rng() * 3) + (index > 6 ? 1 : 0);
+  const clusters = 2 + Math.floor(rng() * 3) + (index > 6 ? 1 : 0);
   for (let k = 0; k < clusters; k++) {
     const size = randInt(2, 6, rng), kind: ObstacleKind = rng() < .5 ? 'a' : 'b';
     let c = randInt(guard, L - 4, rng), r = randInt(0, B - 1, rng);
     for (let n = 0; n < size; n++) {
-      if (c >= guard && c <= L - 4 && r >= 0 && r < B && !onLane(c, r)) out.set(c * 8 + r, { c, r, kind });
+      if (c >= guard && c <= L - 4 && r >= 0 && r < B && !onLane(c, r)) out.set(cellOf(c, r), { c, r, kind });
       const d = rng(); if (d < .25) c++; else if (d < .5) c--; else if (d < .75) r++; else r--;
     }
+  }
+  // nichos e pilares nas bordas: a parede deixa de ser uma reta (blocos colados nas linhas de fora, nunca na trilha)
+  const niches = 3 + Math.floor(rng() * 3);
+  for (let k = 0; k < niches; k++) {
+    const top = rng() < .5, kind: ObstacleKind = rng() < .5 ? 'a' : 'b', len = randInt(1, 4, rng), depth = rng() < .45 ? 2 : 1, c0 = randInt(guard, L - 4 - len, rng);
+    for (let c = c0; c < c0 + len; c++) for (let d = 0; d < depth; d++) { const r = top ? d : B - 1 - d; if (c <= L - 4 && !onLane(c, r)) out.set(cellOf(c, r), { c, r, kind }); }
   }
   return [...out.values()];
 }
@@ -101,11 +112,11 @@ export const TRAP_FROM = 3;
 function rollTraps(seed: number, index: number, turn: boolean, obstacles: Obstacle[]): Trap[] {
   if (index < TRAP_FROM) return [];
   const rng = rngFor(seed, 29, index); if (rng() >= .34) return [];
-  const taken = new Set(obstacles.map(o => o.c * 8 + o.r)), out = new Map<number, Trap>(), L = CHUNK_LEN, B = BAND, guard = turn ? B + 2 : 4, groups = 1 + (rng() < .4 ? 1 : 0);
+  const taken = new Set(obstacles.map(o => cellOf(o.c, o.r))), out = new Map<number, Trap>(), L = CHUNK_LEN, B = BAND, guard = turn ? B + 2 : 4, groups = 1 + (rng() < .4 ? 1 : 0);
   for (let g = 0; g < groups; g++) {
     let c = randInt(guard, L - 5, rng), r = randInt(0, B - 1, rng); const size = randInt(2, 4, rng);
     for (let n = 0; n < size; n++) {
-      if (c >= guard && c <= L - 4 && r >= 0 && r < B && !taken.has(c * 8 + r)) out.set(c * 8 + r, { c, r });
+      if (c >= guard && c <= L - 4 && r >= 0 && r < B && !taken.has(cellOf(c, r))) out.set(cellOf(c, r), { c, r });
       if (rng() < .5) c++; else r += rng() < .5 ? 1 : -1;
     }
   }
@@ -128,7 +139,7 @@ export function generateChunk(params: RunParams, index: number, frame: Frame, he
   for (let i = 0; i < extra; i++) monsters.push(rng() < .15 ? elite : common);
   // emboscada: a partir do 3º trecho, 1 encontro comum em 4 manda 2 ou 3 monstros pelas costas do grupo
   const ambush = !isBossChunk && index >= AMBUSH_FROM && monsters.length >= 4 && rng() < AMBUSH_CHANCE ? Math.min(3, 2 + (rng() < .4 ? 1 : 0)) : 0;
-  chunk.encounter = { at: randInt(turn ? BAND + 3 : 6, CHUNK_LEN - 8, rng), tier: tierOfExtra(extra), extra, boss: isBossChunk, bossPower, monsters, ...(ambush ? { ambush } : {}) };
+  chunk.encounter = { at: isBossChunk ? randInt(6, 10, rng) : randInt(turn ? BAND + 3 : 6, CHUNK_LEN - 8, rng), tier: tierOfExtra(extra), extra, boss: isBossChunk, bossPower, monsters, ...(ambush ? { ambush } : {}) };
   return chunk;
 }
 
@@ -165,14 +176,16 @@ export class RunPlan {
   }
   private load(index: number) {
     if (this.loaded.has(index)) return; this.loaded.add(index);
-    const chunk = this.chunk(index), blocked = new Set(chunk.obstacles.map(o => o.c * 8 + o.r)), traps = new Set(chunk.traps.map(t => t.c * 8 + t.r));
+    if (this.params.capped && index >= FLOOR_CHUNKS) return;
+    const chunk = this.chunk(index), blocked = new Set(chunk.obstacles.map(o => cellOf(o.c, o.r))), traps = new Set(chunk.traps.map(t => cellOf(t.c, t.r)));
     for (let c = 0; c < CHUNK_LEN; c++) for (let r = 0; r < BAND; r++) {
       const p = toWorld(chunk.frame, c + .5, r + .5);
-      this.grid.set(cellKey(Math.floor(p.x), Math.floor(p.y)), blocked.has(c * 8 + r) ? 2 : traps.has(c * 8 + r) ? 3 : 1);
+      this.grid.set(cellKey(Math.floor(p.x), Math.floor(p.y)), blocked.has(cellOf(c, r)) ? 2 : traps.has(cellOf(c, r)) ? 3 : 1);
     }
   }
   private unload(index: number) {
     if (!this.loaded.delete(index)) return;
+    if (this.params.capped && index >= FLOOR_CHUNKS) return;
     const chunk = this.chunk(index);
     for (let c = 0; c < CHUNK_LEN; c++) for (let r = 0; r < BAND; r++) { const p = toWorld(chunk.frame, c + .5, r + .5); this.grid.delete(cellKey(Math.floor(p.x), Math.floor(p.y))); }
   }
@@ -183,6 +196,8 @@ export class RunPlan {
     for (let i = lo; i <= hi; i++) this.load(i);
     for (const key of this.cache.keys()) if (key < lo - 3 || key > hi) this.cache.delete(key);
   }
+  /** Ponto da escada (fim do chunk do chefe) e o canto de onde ela desce. */
+  stairs() { const p = this.pathPoint(STAIRS_AT); return { ...p, fwd: this.forwardAt(STAIRS_AT) }; }
   /** Pré-carrega `count` chunks a partir do 0. */
   precompute(count: number) { for (let i = 0; i < count; i++) this.load(i); }
   get loadedCount() { return this.loaded.size; }
@@ -212,6 +227,7 @@ export class RunPlan {
   }
   /** Ponto de nascimento à frente do progresso `p`: uma célula livre sorteada na largura do corredor (ou, no canto, na sala). */
   spawnPoint(p: number, rng: () => number): Pt {
+    if (this.params.capped) p = Math.min(p, STAIRS_AT - 2);
     const i = this.indexAt(p), chunk = this.chunk(i), c = Math.max(0, Math.min(CHUNK_LEN - 1, Math.floor(p - chunk.start)));
     for (let t = 0; t < 12; t++) {
       const w = toWorld(chunk.frame, c + .5, Math.floor(rng() * BAND) + .5);

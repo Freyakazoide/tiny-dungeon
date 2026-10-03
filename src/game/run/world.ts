@@ -6,7 +6,7 @@ import { spellById } from '../data/spells';
 import { livingMonsters, livingTeam } from '../systems/combat';
 import { characterStats } from '../systems/progression';
 import type { Character, GameState, MonsterRuntime, RunState } from '../core/types';
-import { BAND, RunPlan, type Encounter, type Pt } from './plan';
+import { BAND, FLOOR_CHUNKS, STAIRS_AT, RunPlan, type Encounter, type Pt } from './plan';
 import { BOSS_ENRAGE, FOE_ATTACK, foeRole, isRanged, isRunnerNow } from './foes';
 import { dist, distToSegment, fits, hash01, lineClear, perp, RADIUS, type Body } from './geom';
 import { AI_CONFIG } from '../data/balance';
@@ -375,6 +375,8 @@ export function stepRun(state: GameState, plan: RunPlan, dt: number, hooks: Worl
   const mopUp = foes.length > 0 && onlyMopUp(foes.map(f => ({ hp: f.hp, maxHp: f.maxHp, boss: !!MONSTERS[f.defId].boss, ambush: f.ambush })), run.windups?.length ?? 0);
   const together = foes.length ? R.rear + 4 : R.rear + 7;   // sem inimigos: já anda enquanto os últimos voltam à formação
   if (team.every(c => dist(posOf(run, c), here) <= together) && (pulled || mopUp || !foes.some(f => f.ambush || dist({ x: f.x!, y: f.y! }, tankAt) < R.engage))) { run.anchor += R.walk * (pulled && !mopUp ? .3 : 1) * dt; run.deepest = Math.max(run.deepest, run.anchor); }
+  // o andar acaba na escada: antes de o chefe aparecer o grupo não passa do ponto de ativação dele
+  if (plan.params.capped) { const last = FLOOR_CHUNKS - 1, bossAt = plan.chunk(last).start + (plan.chunk(last).encounter?.at ?? 0); run.anchor = Math.min(run.anchor, run.lastTrigger < last || run.open ? bossAt : STAIRS_AT); }
   // 2) encontros do chunk em que o grupo está
   const idx = plan.indexAt(run.anchor), chunk = plan.chunk(idx), enc = chunk.encounter;
   // não começa encontro novo enquanto sobrar perigo do anterior (qualquer um que não seja só limpeza)

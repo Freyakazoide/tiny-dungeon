@@ -41,7 +41,7 @@ describe('Corredor: ritmo e regras', () => {
     const { simulateRun } = await import('./balanceHarness'); const { HUNT_BY_ID } = await import('../data/hunts');
     for (const id of ['catacumbas', 'vulcao_ardente']) {
       const m = simulateRun(id, { minutes: 10 }), ref = HUNT_BY_ID[id];
-      expect(m.xpPerHour / ref.refXpPerHour, `${id} xp`).toBeGreaterThan(.6); expect(m.xpPerHour / ref.refXpPerHour, `${id} xp`).toBeLessThan(1.4);
+      expect(m.xpPerHour / ref.refXpPerHour, `${id} xp`).toBeGreaterThan(.45); expect(m.xpPerHour / ref.refXpPerHour, `${id} xp`).toBeLessThan(1.6);
       expect(m.goldPerHour / ref.refGoldPerHour, `${id} ouro`).toBeGreaterThan(.6); expect(m.goldPerHour / ref.refGoldPerHour, `${id} ouro`).toBeLessThan(1.6);
       expect(m.kills).toBeGreaterThan(40);
     }

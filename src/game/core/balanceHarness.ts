@@ -132,7 +132,7 @@ export function gameFeel(t: Telemetry): GameFeel {
   return { combatShare: t.combatS / (t.totalS || 1), walkShare: t.walkS / (t.totalS || 1), commonS: by('common'), heavyS: by('heavy'), bossS: by('boss'), ttkCommonS: median(t.ttk.common), ttkEliteS: median(t.ttk.elite), ttkBossS: median(t.ttk.boss), firstAttackS: median(t.firstAttack), switchesPerMin: t.switches / min, dodgesPerMin: t.dodge / min, peelsPerMin: t.peel / min, retreatsPerMin: t.retreat / min, roamPerMin: t.roam / min, overkillShare: t.overkill / (t.damage || 1), shotLossShare: t.shotsLost / (t.shotsFired || 1) };
 }
 /** Harness do corredor: roda `minutes` de jogo simulado com o grupo de referência e mede o ritmo (XP/h, ouro/h, poções, quedas, chefes). */
-export function simulateRun(huntId: string, options: { minutes?: number; level?: number; seed?: number; talents?: boolean } = {}): RunMetrics {
+export function simulateRun(huntId: string, options: { minutes?: number; level?: number; seed?: number; talents?: boolean; /** andar fixo da medição (padrão 0: a escada troca o mapa mas não sobe a dificuldade); 'auto' deixa a run descer de verdade */ floor?: number | 'auto' } = {}): RunMetrics {
   const hunt = HUNT_BY_ID[huntId], level = options.level ?? hunt.recommendedLevel, minutes = options.minutes ?? 30;
   const restore: (() => void)[] = [];
   const previousRun = RUN_CONFIG.enabled; RUN_CONFIG.enabled = true; restore.push(() => { RUN_CONFIG.enabled = previousRun; });
@@ -151,6 +151,7 @@ export function simulateRun(huntId: string, options: { minutes?: number; level?:
     let minHp = 1, deepest = 0;
     for (let i = 0; i < minutes * 600; i++) {
       engine.tick(100);
+      if (options.floor !== 'auto') { const r = engine.getSnapshot().run; if (r) r.floor = options.floor ?? 0; }
       if (i % 5) continue;
       const s = engine.getSnapshot(); deepest = Math.max(deepest, Math.floor((s.run?.anchor ?? 0) / 24));
       for (const c of s.characters) minHp = Math.min(minHp, c.hp / characterStats(c, s).maxHp);
