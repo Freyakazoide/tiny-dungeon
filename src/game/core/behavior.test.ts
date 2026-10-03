@@ -81,12 +81,12 @@ describe('movimento sem tremer', () => {
   });
   it('em runs de 5 minutos com formação mista, ninguém balança no lugar (poucas viradas bruscas por janela de 10 s)', () => {
     for (const [hunt, lv, seed] of [['catacumbas', 5, 2], ['vulcao_ardente', 25, 2], ['floresta_sombria', 10, 1]] as const) {
-      const orig = Math.random; Math.random = mulberry32(seed);
+      const orig = Math.random, now = Date.now; Math.random = mulberry32(seed); Date.now = () => 1791039000000;   // os ids dos heróis vêm da hora: fixa para o teste não variar
       try {
         const e = new GameEngine(partyState()); e.selectHunt(hunt); const ch = e.getSnapshot().characters;
         for (const c of ch) e.devSetLevel(c.id, lv); e.setRow(ch[1].id, 'front'); e.setRow(ch[2].id, 'back'); e.start();
         expect(worstReversals(e, 300), `${hunt}/${seed}`).toBeLessThanOrEqual(8);
-      } finally { Math.random = orig; }
+      } finally { Math.random = orig; Date.now = now; }
     }
   }, 120000);
 });

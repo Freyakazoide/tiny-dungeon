@@ -58,6 +58,17 @@ describe('funções dos inimigos', () => {
   });
 });
 
+describe('vagas em volta do herói', () => {
+  it('com dois da frente e vários inimigos, o bando fecha em volta do tanque (arco bem maior que meia volta) em vez de se amontoar num lado', () => {
+    const e = setup('skeleton', 6); const s0 = e.getSnapshot(); e.setRow(s0.characters[1].id, 'front'); sim(e, 15);
+    const s = e.getSnapshot(), tank = s.characters.find(c => c.isTank)!, tp = s.run!.pos[tank.id];
+    const ang = s.monsters.filter(m => m.slot?.hero === tank.id).map(m => Math.atan2(m.slot!.y - tp.y, m.slot!.x - tp.x)).sort((a, b) => a - b);
+    expect(ang.length).toBeGreaterThanOrEqual(4);
+    const gaps = ang.map((a, i) => (i === ang.length - 1 ? ang[0] + 2 * Math.PI : ang[i + 1]) - a), span = 2 * Math.PI - Math.max(...gaps);
+    expect(span).toBeGreaterThan(Math.PI * 1.1);
+  });
+});
+
 describe('golpes avisados (windup)', () => {
   const firstWindup = (e: GameEngine, secs = 20) => { for (let i = 0; i < secs * 10; i++) { e.tick(100); const w = e.getSnapshot().run!.windups?.[0]; if (w) return structuredClone(w); } return undefined; };
   it('o atirador cria um círculo no chão sobre o alvo, com raio e tempo de aviso', () => {

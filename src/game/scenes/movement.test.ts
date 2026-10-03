@@ -20,3 +20,18 @@ describe('samplePolyline', () => {
     expect(samplePolyline([{ x: 5, y: 5 }], .5).point).toEqual({ x: 5, y: 5 });
   });
 });
+
+describe('stableDirection (quem está parado não vira de lado a cada frame)', () => {
+  const o = { x: 0, y: 0 };
+  it('mantém o eixo atual com alvo quase na diagonal e só troca quando o outro eixo domina (1,4×)', async () => {
+    const { stableDirection } = await import('./movement');
+    expect(stableDirection(o, { x: 5, y: 5.5 }, 'right')).toBe('right');
+    expect(stableDirection(o, { x: 5, y: 5.5 }, 'down')).toBe('down');
+    expect(stableDirection(o, { x: 5, y: 9 }, 'right')).toBe('down');
+    expect(stableDirection(o, { x: 9, y: 5 }, 'down')).toBe('right');
+  });
+  it('alvo colado (menos de meia célula) não muda nada', async () => {
+    const { stableDirection } = await import('./movement');
+    expect(stableDirection(o, { x: .2, y: -.3 }, 'left')).toBe('left');
+  });
+});

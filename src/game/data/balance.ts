@@ -129,6 +129,8 @@ export const AI_CONFIG = {
   retreatExit: .12, retreatHold: 1.2,
   /** estados mínimos (segundos) para evitar piscar entre eles */
   /** travado sem sair de 0,25 célula por `stuckAfter` s: larga o destino e o ignora por `stuckIgnore` s */
+  /** custo (células) de uma vaga do anel ao lado de outra já ocupada: espalha os monstros em volta do herói */
+  ringSpread: 2.5,
   stuckAfter: .7, stuckIgnore: 2,
   evadeHold: .55, repositionHold: .35,
   /** tanque: sai de um golpe avisado se a perda esperada for esta fração da vida atual (ou menos se estiver baixo / vários golpes se somarem) */

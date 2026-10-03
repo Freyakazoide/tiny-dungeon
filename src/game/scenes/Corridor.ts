@@ -18,7 +18,7 @@ import { newCamera, stepCamera, relevantFoes, safeArea } from '../run/camera';
 import { aggroGroups, freeNear, homePoint, radiusOf, RADIUS, ringPoint } from '../run/world';
 import { perp } from '../run/geom';
 import { playAttackFx } from './effects';
-import { dominantDirection, type ArenaPoint } from './movement';
+import { dominantDirection, stableDirection, type ArenaPoint } from './movement';
 
 /**
  * Cena do corredor procedural. O mundo é uma grade de células de 64 px (x, y em células, y para baixo) e o mapa tem curvas de verdade: a
@@ -221,9 +221,11 @@ export class Game extends Scene {
       else if (c.hp > 0 && v.dead) { v.dead = false; v.walking = true; this.setDirection(v, 'down', false); v.last = undefined; }
       const moved = v.last ? Math.hypot(pos.x - v.last.x, pos.y - v.last.y) > .004 : false;
       v.container.setPosition(px(pos.x), px(pos.y)).setDepth(6 + pos.y / 1000);
-      const foe = state.monsters.filter(m => m.alive && m.x !== undefined).sort((a, b) => Math.hypot(a.x! - pos.x, a.y! - pos.y) - Math.hypot(b.x! - pos.x, b.y! - pos.y))[0];
+      // parado, olha para o alvo da IA (travado por ~1 s) e só vira de lado depois de 0,6 s olhando para o outro lado (nada de virar esquerda/direita toda hora)
+      const aiTarget = state.run?.ai?.[c.id]?.targetId, locked = aiTarget ? state.monsters.find(m => m.alive && m.uid === aiTarget && m.x !== undefined) : undefined;
+      const foe = locked ?? state.monsters.filter(m => m.alive && m.x !== undefined).sort((a, b) => Math.hypot(a.x! - pos.x, a.y! - pos.y) - Math.hypot(b.x! - pos.x, b.y! - pos.y))[0];
       const fwd = this.plan?.forwardAt(state.run?.anchor ?? 4) ?? { x: -1, y: 0 };
-      const dir: CharacterDirection = moved && v.last ? dominantDirection({ x: px(v.last.x), y: px(v.last.y) }, { x: px(pos.x), y: px(pos.y) }, v.direction) : foe ? dominantDirection({ x: px(pos.x), y: px(pos.y) }, { x: px(foe.x!), y: px(foe.y!) }, v.direction) : dominantDirection({ x: 0, y: 0 }, fwd, 'left');
+      const dir: CharacterDirection = moved && v.last ? dominantDirection({ x: px(v.last.x), y: px(v.last.y) }, { x: px(pos.x), y: px(pos.y) }, v.direction) : foe ? this.holdFacing(v, stableDirection({ x: px(pos.x), y: px(pos.y) }, { x: px(foe.x!), y: px(foe.y!) }, v.direction)) : dominantDirection({ x: 0, y: 0 }, fwd, 'left');
       if (!v.dead) this.setDirection(v, dir, moved && c.hp > 0);
       v.last = { x: pos.x, y: pos.y };
     });
@@ -256,6 +258,13 @@ export class Game extends Scene {
     const body = this.add.sprite(0, CELL_PX * .36, characterTexture(look, 'left', 1)).setOrigin(.5, 1).setScale(ART_SCALE);
     const name = this.add.text(0, CELL_PX * .36 + 13, '', { fontSize: '11px', color: '#fff', stroke: '#090b0e', strokeThickness: 4, align: 'center' }).setOrigin(.5);
     return { container: this.add.container(0, 0, [body, name]), look, key: lookKey(look), body, name, direction: 'left', walking: false };
+  }
+  /** Quem está parado só troca a direção para onde olha depois de 0,6 s pedindo a mesma troca. */
+  private holdFacing(view: HeroView, want: CharacterDirection): CharacterDirection {
+    const now = this.time.now, v = view as HeroView & { faceWant?: CharacterDirection; faceSince?: number };
+    if (want === view.direction) { v.faceWant = undefined; return want; }
+    if (v.faceWant !== want) { v.faceWant = want; v.faceSince = now; }
+    return now - (v.faceSince ?? now) >= 600 ? want : view.direction;
   }
   private setDirection(view: HeroView, direction: CharacterDirection, walking: boolean) {
     if (view.direction === direction && view.walking === walking) return;

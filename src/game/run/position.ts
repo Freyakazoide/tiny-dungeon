@@ -56,7 +56,7 @@ export function rangedPosition(ctx: PosCtx, hero: HeroView, target?: FoeInfo): D
     const dir = unit(target.foe.pt, hero.pt), base = Math.min(hold, hero.reach - .8);
     for (let k = 0; k <= 4; k++) {
       const pt = add(target.foe.pt, dir, Math.min(hero.reach - .5, base + k * .4)), n = nearestFoe(ctx, pt);
-      if (!n || hero.ai.dodge <= 0 || n.d >= hero.ai.dodge + .5) return { pt, state: 'engage' };
+      if ((!n || hero.ai.dodge <= 0 || n.d >= hero.ai.dodge + .5) && (!ctx.lineClear || ctx.lineClear(pt, target.foe.pt))) return { pt, state: 'engage' };   // e com linha de tiro livre (senão desfaz o passo para o lado e volta)
     }
     return { pt: hero.pt, state: 'attack' };
   }

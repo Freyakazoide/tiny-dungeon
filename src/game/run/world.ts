@@ -89,13 +89,13 @@ export function avoidTrap(plan: RunPlan, p: Pt): Pt {
  * Saída dos círculos avisados: de 16 pontos logo fora de cada um dos círculos que ameaçam o herói, o mais perto cujo caminho não esbarra em ninguém, que cabe
  * no chão e que está fora de TODOS os círculos (sair de um para cair em outro era o que fazia o herói tremer entre duas saídas).
  */
-function escapePoint(plan: RunPlan, self: Body, zs: { x: number; y: number; r: number }[], bodies: Body[]): Pt | null {
+function escapePoint(plan: RunPlan, self: Body, zs: { x: number; y: number; r: number }[], bodies: Body[], avoid?: Pt): Pt | null {
   let best: Pt | null = null, bestD = Infinity;
   for (const w of zs) {
     const out = w.r + SAFE + .1;
     for (let k = 0; k < 16; k++) {
       const a = k * Math.PI / 8, p = { x: w.x + Math.cos(a) * out, y: w.y + Math.sin(a) * out };
-      if (!fits(plan, p.x, p.y, self.r) || zs.some(z => dist(p, z) < z.r + CLEAR)) continue;
+      if (!fits(plan, p.x, p.y, self.r) || zs.some(z => dist(p, z) < z.r + CLEAR) || (avoid && dist(p, avoid) < 1.2)) continue;
       let free = true;
       for (let t = .25; t <= 1 && free; t += .25) { const q = { x: self.pt.x + (p.x - self.pt.x) * t, y: self.pt.y + (p.y - self.pt.y) * t }; free = bodies.every(o => o === self || dist(q, o.pt) >= o.r + self.r - .05) && fits(plan, q.x, q.y, self.r); }
       const d = dist(self.pt, p); if (free && d < bestD) { bestD = d; best = p; }
@@ -112,6 +112,14 @@ function pushOut(plan: RunPlan, p: Pt, w: { x: number; y: number; r: number }, f
     const q = { x: w.x + Math.cos(base + da) * rad, y: w.y + Math.sin(base + da) * rad }; if (fits(plan, q.x, q.y, RADIUS.unit)) return q;
   }
   return p;
+}
+/**
+ * Destino que não cabe no chão (a borda da zona de roam cai na parede): puxa em direção a `from` (onde o herói está, que cabe) até caber, em vez de pular para
+ * o centro da célula livre mais perto — que ficava do outro lado e fazia o destino alternar entre dois pontos.
+ */
+function pullToFit(plan: RunPlan, p: Pt, from: Pt): Pt {
+  for (let k = 1; k <= 10; k++) { const q = { x: p.x + (from.x - p.x) * k / 10, y: p.y + (from.y - p.y) * k / 10 }; if (fits(plan, q.x, q.y, RADIUS.unit)) return q; }
+  return freeNear(plan, p);
 }
 /** Empurra para fora quem nasceu ou ficou sobreposto a outra unidade (devagar, só para onde há chão). */
 function separate(plan: RunPlan, bodies: Body[], dt: number) {
@@ -257,7 +265,8 @@ function assignSlots(plan: RunPlan, foes: MonsterRuntime[], team: Character[], r
         let best: { h: Character; k: number; d: number } | undefined;
         for (const h of group) for (let k = 0; k < RING; k++) {
           if (!open(h, k)) continue;
-          const p = ringPoint(pos(h), k), d = dist(p, { x: m.x!, y: m.y! });
+          // espalha em volta: cada vaga vizinha já ocupada custa `ringSpread` células, então o bando fecha o herói em vez de se amontoar num lado só
+          const p = ringPoint(pos(h), k), neighbours = (claimed.has(key(h.id, (k + 1) % RING)) ? 1 : 0) + (claimed.has(key(h.id, (k + RING - 1) % RING)) ? 1 : 0), d = dist(p, { x: m.x!, y: m.y! }) + neighbours * AI_CONFIG.ringSpread;
           if (!best || d < best.d - 1e-6) best = { h, k, d };
         }
         if (!best) break; // anel cheio: o resto desce para o próximo grupo
@@ -485,7 +494,7 @@ function stepHeroes(state: GameState, plan: RunPlan, dt: number, hooks: WorldHoo
       if (view.role !== 'tank' && zones.length) ({ x: tx, y: ty } = stopBeforeZones(me, { x: tx, y: ty }, zones));
       ({ x: tx, y: ty } = avoidTrap(plan, { x: tx, y: ty }));
       if (ai.blockedAt && (ai.blockedUntil ?? 0) > clock && dist({ x: tx, y: ty }, ai.blockedAt) < 1.5 && !zones.length) { tx = me.x; ty = me.y; }   // o destino que travou o herói é ignorado por um tempo
-      if (!fits(plan, tx, ty, RADIUS.unit)) ({ x: tx, y: ty } = freeNear(plan, { x: tx, y: ty }));   // nunca um destino dentro de parede
+      if (!fits(plan, tx, ty, RADIUS.unit)) ({ x: tx, y: ty } = pullToFit(plan, { x: tx, y: ty }, me));   // nunca um destino dentro de parede
       const hold = state2 === 'retreat' ? AI_CONFIG.retreatHold : state2 === 'reposition' ? AI_CONFIG.repositionHold : 0;
       if (state2 === 'attack' && target && ai.targetId === ctx.focus.peelId && view.role !== 'healer') state2 = 'peel';
       const was = ai.state;
@@ -496,10 +505,13 @@ function stepHeroes(state: GameState, plan: RunPlan, dt: number, hooks: WorldHoo
     let dest = ai.dest!;
     if (evade) {
       const near = zones.filter(z => dist(me, z) <= z.r + 3), w = zones.find(z => dist(me, z) <= z.r + pad)!, key = `${near.length}`;
-      const keep = ai.state === 'evade' && !!ai.dest && near.every(z => dist(ai.dest!, z) >= z.r + CLEAR - .05) && dist(me, ai.dest) > .1;   // já escolheu a saída (fora de todos os círculos): continua até sair
-      const out = keep ? ai.dest! : escapePoint(plan, body, near, bodies) ?? pushOut(plan, me, w, me);
+      // saída bloqueada (o herói parou antes de chegar, por colega ou parede): marca essa saída como ruim e escolhe outra
+      if (ai.state === 'evade' && ai.dest && ai.evadeAt && dist(me, ai.evadeAt) < .03 && dist(me, ai.dest) > .2) ai.badEscape = { ...ai.dest };
+      ai.evadeAt = { x: me.x, y: me.y };
+      const keep = ai.state === 'evade' && !!ai.dest && !(ai.badEscape && dist(ai.dest, ai.badEscape) < .05) && near.every(z => dist(ai.dest!, z) >= z.r + CLEAR - .05) && dist(me, ai.dest) > .1;   // já escolheu a saída (fora de todos os círculos): continua até sair
+      const out = keep ? ai.dest! : escapePoint(plan, body, near, bodies, ai.badEscape) ?? escapePoint(plan, body, near, bodies) ?? pushOut(plan, me, w, me);
       if (out) { ai.evadeId = key; dest = commitDest(ai, keep ? out : avoidTrap(plan, out), clock, true); if (setState(ai, 'evade', clock, AI_CONFIG.evadeHold)) hooks.note?.('dodge', c.id); }
-    } else if (ai.state === 'evade' && clock >= ai.stateUntil) { ai.state = 'recoverPosition'; ai.thinkAt = -1; }
+    } else if (ai.state === 'evade' && clock >= ai.stateUntil) { ai.state = 'recoverPosition'; ai.thinkAt = -1; ai.badEscape = undefined; ai.evadeAt = undefined; }
     const speed = (ai.state === 'evade' ? R.heroSpeed * AI_CONFIG.evadeSpeed : engaged ? R.heroSpeed : R.travel) * dt;
     if (dist(me, dest) > .08) moveToward(plan, body, dest.x, dest.y, speed, bodies);
     trackStuck(ai, body.pt, dest, clock, dt);
