@@ -7,7 +7,7 @@ import { defaultLookFor, isValidLook, normalizeLook, type Look } from '../art/lo
 import { goalOfflineTargets, isGoalId, trainRingId, gateSkillOf, GOAL_NODES } from '../rpg/goals';
 import { DEFAULT_HUNT, HUNT_BY_ID, HUNTS, huntScale, huntWaves } from '../data/hunts';
 import { encounterKind, newTelemetry, type Telemetry } from './telemetry';
-import { KIND_HP, RUN_CONFIG, WAVE_CONFIG } from '../data/balance';
+import { KIND_HP, RUN_CONFIG, RUN_FLOW, WAVE_CONFIG } from '../data/balance';
 import { reinforcementIds } from '../systems/waves';
 import { RunPlan, bossPowerFor, BOSS_HP_MUL, depthScale, CHUNK_LEN } from '../run/plan';
 import { BOSS_ENRAGE, BOSS_PHASES, FOE_ATTACK, bestAim, foeRole, hasWindup, type FoeRole, type WindupRole } from '../run/foes';
@@ -208,6 +208,8 @@ export class GameEngine {
       if(role==='slam'){if(!cluster||cluster.hits<2)return 'basic';used='slam';aim=cluster.pt;}
       else{m.combo=n+1;if(n%2===0){used='boss';aim=bestAim(cand(reach),FOE_ATTACK.boss.r,me)!.pt;}else if(cluster&&cluster.hits>=2){used='slam';aim=cluster.pt;}else return 'basic';}
     }else{
+      // atiradores e magos não enchem a tela de círculos: no máximo `maxRangedWindups` ao mesmo tempo e um espaçamento mínimo entre inícios (o grupo tem tempo de sair de cada um)
+      const live=(run.windups??[]).filter(w=>w.role==='archer'||w.role==='caster');if(live.length>=RUN_FLOW.maxRangedWindups||live.some(w=>w.total-w.t<RUN_FLOW.windupSpacing))return false;
       const cfg=FOE_ATTACK[role],near=all.filter(h=>run.pos[h.id]&&dist(run.pos[h.id],me)<=cfg.range);if(!near.length)return false;
       if(role==='archer'){const back=near.filter(h=>h.row==='back'),pool=back.length?back:near;aim=run.pos[pool.reduce((b,h)=>dist(run.pos[h.id],me)<dist(run.pos[b.id],me)?h:b).id];}
       else aim=bestAim(cand(near),cfg.r,me)!.pt;

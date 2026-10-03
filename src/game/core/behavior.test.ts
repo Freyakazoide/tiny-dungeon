@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { RUN_CONFIG } from '../data/balance';
 import { dist, trackStuck } from '../run/world';
 import { newHeroAi } from '../run/ai';
-import { AI_CONFIG } from '../data/balance';
+import { AI_CONFIG, RUN_FLOW } from '../data/balance';
 import { mulberry32 } from '../run/rng';
 import { simulateRun } from './balanceHarness';
 import { GameEngine } from './GameEngine';
@@ -89,4 +89,23 @@ describe('movimento sem tremer', () => {
       } finally { Math.random = orig; }
     }
   }, 120000);
+});
+
+describe('menos círculos ao mesmo tempo', () => {
+  it('um bando de atiradores e magos nunca tem mais que o limite de golpes avisados no ar, e eles começam espaçados', () => {
+    const orig = Math.random; Math.random = mulberry32(9);
+    try {
+      const e = new GameEngine(partyState()); e.start(); const s = e.getSnapshot(), run = s.run!;
+      for (const c of s.characters) { c.hp = 99999; c.profile.level = 30; }
+      const back = s.characters.find(c => c.row === 'back')!, p = run.pos[back.id];
+      s.monsters = ['bandit', 'bandit', 'toxic_toad', 'toxic_toad', 'bandit', 'toxic_toad'].map((defId, i) => ({ uid: `r${i}`, defId, hp: 1e9, maxHp: 1e9, cooldown: .05, alive: true, x: p.x + 5 + (i % 3) * .8, y: p.y + (i - 2.5) * .9, atkMul: .01 }));
+      run.open = true; const seen = new Set<string>(), starts: number[] = []; let peak = 0;
+      for (let i = 0; i < 300; i++) {
+        e.tick(100); const w = run.windups ?? []; peak = Math.max(peak, w.filter(x => x.role === 'archer' || x.role === 'caster').length);
+        for (const x of w) if (!seen.has(x.id)) { seen.add(x.id); starts.push(i); }
+      }
+      expect(seen.size).toBeGreaterThanOrEqual(3); expect(peak).toBeLessThanOrEqual(RUN_FLOW.maxRangedWindups);
+      for (let i = 1; i < starts.length; i++) if (starts[i] - starts[i - 1] > 0) expect((starts[i] - starts[i - 1]) / 10).toBeGreaterThanOrEqual(RUN_FLOW.windupSpacing - .11);
+    } finally { Math.random = orig; }
+  });
 });

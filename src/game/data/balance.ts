@@ -81,7 +81,7 @@ export const KIND_HP = { common: .72, elite: .8, boss: .9 } as const;
 /** O HP dos comuns cresce com a profundidade até este acréscimo máximo (+120%): o comum nunca vira esponja; elite e chefe seguem a escala normal. */
 export const COMMON_DEPTH_HP_CAP = 1.2;
 /** Fluxo das levas por HP restante (corredor): `hpEqBelow`/`hpEqLow` são somas de hp/maxHp dos vivos; ver `run/pressure.ts`. */
-export const RUN_FLOW = { hpEqBelow: 4, hpEqLow: 1.6, earlyAfter: .6, mopUpHp: .15 };
+export const RUN_FLOW = { hpEqBelow: 4, hpEqLow: 1.6, earlyAfter: .6, mopUpHp: .15, /** golpes avisados de atirador/mago ao mesmo tempo e intervalo mínimo entre inícios (s) */ maxRangedWindups: 2, windupSpacing: .5 };
 
 /** Câmera da run (em células e por segundo): ver `run/camera.ts`. */
 export const CAMERA = {
