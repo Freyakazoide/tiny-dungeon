@@ -406,9 +406,11 @@ const foeRaw = (state: GameState, m: MonsterRuntime) => MONSTERS[m.defId].attack
 const roleOfFoe = (m: MonsterRuntime): FoeView['role'] => isRunnerNow(m) ? 'runner' : MONSTERS[m.defId].boss && (m.phase ?? 0) >= 2 ? 'boss' : foeRole(m.defId);
 
 /** Monta as visões (heróis e inimigos) e o contexto do grupo: alvo principal e peel já atualizados com suas travas. */
+/** Ponto de descanso do herói: na linha da formação (a backline fica `R.rear` atrás da âncora), um lugar por herói ao longo do corredor. Também usado pelo overlay F3. */
+export const homePoint = (plan: RunPlan, anchor: number, team: Character[], c: Character, side: Pt): Pt => { const back = c.row === 'back' ? R.rear : 0, at = plan.pathPoint(anchor - back), lane = (team.indexOf(c) - (team.length - 1) / 2) * 1.25; return { x: at.x + side.x * lane, y: at.y + side.y * lane }; };
 export function buildPartyCtx(state: GameState, plan: RunPlan, env: Pick<StepEnv, 'team' | 'living' | 'fwd' | 'side'>, extra?: { stats?: Map<string, ReturnType<typeof characterStats>> }): { ctx: PartyCtx; views: Map<string, HeroView>; foeById: Map<string, MonsterRuntime>; homeOf: (c: Character) => Pt } {
   const run = state.run!, { team, living, fwd, side } = env;
-  const homeOf = (c: Character): Pt => { const back = c.row === 'back' ? R.rear : 0, at = plan.pathPoint(run.anchor - back), lane = (team.indexOf(c) - (team.length - 1) / 2) * 1.25; return { x: at.x + side.x * lane, y: at.y + side.y * lane }; };
+  const homeOf = (c: Character): Pt => homePoint(plan, run.anchor, team, c, side);
   const views = new Map<string, HeroView>();
   for (const c of team) {
     const role = heroRole(c), ai = aiOf(c, role), st = extra?.stats?.get(c.id) ?? characterStats(c, state), maxHp = st.maxHp;

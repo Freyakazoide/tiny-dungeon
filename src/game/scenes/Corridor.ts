@@ -15,7 +15,8 @@ import { TOMBSTONE_TEXTURE, TRAP_TEXTURE, cellTexture, characterTexture, charact
 import type { FxKind } from '../systems/spellFx';
 import { CHUNK_LEN, RunPlan } from '../run/plan';
 import { newCamera, stepCamera, relevantFoes, safeArea } from '../run/camera';
-import { aggroGroups, freeNear, radiusOf, RADIUS, ringPoint } from '../run/world';
+import { aggroGroups, freeNear, homePoint, radiusOf, RADIUS, ringPoint } from '../run/world';
+import { perp } from '../run/geom';
 import { playAttackFx } from './effects';
 import { dominantDirection, type ArenaPoint } from './movement';
 
@@ -48,6 +49,7 @@ export class Game extends Scene {
   private bannerUntil = 0;
   private visualPaused = false;
   private debug?: Phaser.GameObjects.Graphics;
+  private debugLabels: GameObjects.Text[] = [];
   private telegraph?: Phaser.GameObjects.Graphics;
   private shotsG?: Phaser.GameObjects.Graphics;
   /** a cena foi desligada/destruída: nada mais deve tocar nos objetos dela */
@@ -62,7 +64,7 @@ export class Game extends Scene {
     const bg = this.add.rectangle(0, 0, 470, 58, 0x0a0d12, .86).setStrokeStyle(2, 0xd1ad58, .8);
     this.bannerText = this.add.text(0, 0, '', { fontFamily: 'Georgia', fontSize: '19px', color: '#f1d796', align: 'center', stroke: '#050608', strokeThickness: 4 }).setOrigin(.5);
     this.banner = this.add.container(0, 0, [bg, this.bannerText]).setScrollFactor(0).setDepth(101).setVisible(false);
-    this.input.keyboard?.on('keydown-F3', (e: KeyboardEvent) => { e.preventDefault(); if (this.debug) { this.debug.destroy(); this.debug = undefined; } else this.debug = this.add.graphics().setDepth(60); });
+    this.input.keyboard?.on('keydown-F3', (e: KeyboardEvent) => { e.preventDefault(); if (this.debug) { this.debug.destroy(); this.debug = undefined; this.debugLabels.forEach(t => t.destroy()); this.debugLabels = []; } else this.debug = this.add.graphics().setDepth(60); });
     this.telegraph = this.add.graphics().setDepth(3);
     this.shotsG = this.add.graphics().setDepth(40);
     this.layoutHud();
@@ -73,7 +75,7 @@ export class Game extends Scene {
     if (import.meta.env.DEV) { (window as unknown as { __scene?: unknown }).__scene = this; (window as unknown as { __fx?: unknown }).__fx = (kind: FxKind, a: ArenaPoint, b: ArenaPoint) => playAttackFx(this, kind, a, b); }
     // Fechar o jogo (ex.: "apagar tudo" volta à criação e desmonta a arena) destrói a cena sem passar por 'shutdown': solta as
     // inscrições nos dois eventos, senão o estado novo mandaria escrever em textos já destruídos.
-    const cleanup = () => { this.dead = true; this.unsubscribe?.(); this.unsubscribeFx?.(); this.heroes.clear(); this.enemies.clear(); this.tiles.clear(); this.props.clear(); this.floatLanes.clear(); this.debug = undefined; };
+    const cleanup = () => { this.dead = true; this.unsubscribe?.(); this.unsubscribeFx?.(); this.heroes.clear(); this.enemies.clear(); this.tiles.clear(); this.props.clear(); this.floatLanes.clear(); this.debug = undefined; this.debugLabels = []; };
     this.events.once('shutdown', cleanup); this.events.once('destroy', cleanup);
     this.renderState();
     EventBus.emit('current-scene-ready', this);
@@ -175,11 +177,30 @@ export class Game extends Scene {
       g.lineStyle(2, col, .95).strokeCircle(px(p.x), px(p.y), px(RADIUS.unit));
       for (let k = 0; k < 8; k++) { const q = ringPoint(p, k); g.lineStyle(1, col, tier === 0 ? .8 : .35).strokeCircle(px(q.x), px(q.y), px(RADIUS.unit)); }
     });
+    this.drawDebugAi(state, team, colorOf);
     for (const m of state.monsters) {
       if (!m.alive || m.x === undefined || m.y === undefined) continue;
       g.lineStyle(2, 0xff5a4a, .95).strokeCircle(px(m.x), px(m.y), px(radiusOf(m)));
       if (m.slot) { const col = colorOf(m.slot.hero), hp = run.pos[m.slot.hero]; g.lineStyle(2, col, .9).lineBetween(px(m.x), px(m.y), px(m.slot.x), px(m.slot.y)); if (hp) g.lineStyle(1, col, .5).lineBetween(px(m.slot.x), px(m.slot.y), px(hp.x), px(hp.y)); g.fillStyle(col, 1).fillCircle(px(m.slot.x), px(m.slot.y), 4); }
     }
+  }
+
+  /** F3 (IA): por herói o estado, o alvo (linha), o destino guardado, o ponto de descanso e a zona de roam; no grupo, o alvo principal (anel vermelho) e o de peel (anel ciano). */
+  private drawDebugAi(state: GameState, team: Character[], colorOf: (id: string) => number) {
+    const g = this.debug!, run = state.run!, plan = this.plan; if (!plan) return;
+    const side = perp(plan.forwardAt(run.anchor)), foeOf = (uid?: string) => uid ? state.monsters.find(m => m.alive && m.uid === uid && m.x !== undefined) : undefined;
+    const ring = (uid: string | undefined, color: number, extra: number) => { const m = foeOf(uid); if (m) g.lineStyle(3, color, .95).strokeCircle(px(m.x!), px(m.y!), px(radiusOf(m) + extra)); };
+    ring(run.focus?.primaryId, 0xff3b30, .35); ring(run.focus?.peelId, 0x30d5ff, .6);
+    team.forEach((c, i) => {
+      const p = run.pos[c.id], ai = run.ai?.[c.id]; if (!p) return; const col = colorOf(c.id), home = homePoint(plan, run.anchor, team, c, side);
+      g.lineStyle(1, col, .5).strokeCircle(px(home.x), px(home.y), px(.35)); g.lineStyle(1, col, .25).strokeCircle(px(home.x), px(home.y), px(c.isTank ? 5 : c.row === 'back' ? 5.5 : 6));
+      if (ai?.dest) { g.lineStyle(1, col, .7).lineBetween(px(p.x), px(p.y), px(ai.dest.x), px(ai.dest.y)); g.fillStyle(col, .9).fillRect(px(ai.dest.x) - 3, px(ai.dest.y) - 3, 6, 6); }
+      const t = foeOf(ai?.targetId); if (t) g.lineStyle(1, 0xff5a4a, .55).lineBetween(px(p.x), px(p.y), px(t.x!), px(t.y!));
+      let label = this.debugLabels[i]; if (!label) { label = this.add.text(0, 0, '', { fontSize: '10px', color: '#ffffff', backgroundColor: '#000000aa' }).setDepth(61); this.debugLabels[i] = label; }
+      const lock = ai && ai.targetLockUntil > (run.clock ?? 0) ? '🔒' : '';
+      label.setText(`${c.name} ${ai?.state ?? '-'}${lock}${run.focus?.primaryId && ai?.targetId === run.focus.primaryId ? ' ★' : ''}`).setPosition(px(p.x) - 24, px(p.y) - 34).setVisible(true);
+    });
+    for (let i = team.length; i < this.debugLabels.length; i++) this.debugLabels[i].setVisible(false);
   }
 
   private renderState() {
