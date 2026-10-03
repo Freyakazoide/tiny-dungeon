@@ -90,3 +90,37 @@ export const CAMERA = {
   /** taxas de suavização (1/s, multiplicadas pela velocidade da simulação até `maxSpeedFactor`) */
   filterRate: 2.6, followRate: 5, combatRate: 2.2, maxSpeedFactor: 4,
 };
+
+/** IA da party no corredor (Utility AI determinística, ver `run/ai.ts`). Tempos em segundos, distâncias em células. */
+export const AI_CONFIG = {
+  /** o alvo escolhido é mantido por este tempo (sorteio estável por herói entre os dois valores); só uma emergência troca antes */
+  lockMin: .8, lockMax: 1.2,
+  /** um alvo novo só substitui o atual se pontuar pelo menos isto a mais */
+  switchMargin: .7,
+  /** intervalo entre decisões completas de cada herói (escalonado por herói); entre elas ele só anda até o destino guardado */
+  thinkEvery: .22,
+  /** o destino guardado só muda se o novo ficar a mais de `destEps` do atual (ou ao fim de `destHold`) */
+  destEps: .7, destHold: .45,
+  /** atraso até um herói perceber um golpe avisado (cada um com o seu, entre os dois valores) */
+  reactMin: .08, reactMax: .26,
+  /** inimigo abaixo desta fração de vida é prioridade de execução */
+  executeHp: .2,
+  /** o alvo principal do grupo é mantido por este tempo */
+  primaryLock: 1.4, primarySwitch: .7,
+  /** ameaça mínima para um inimigo virar peelTarget; o peel é mantido por `peelLock` */
+  peelMin: 1.1, peelLock: 1, peelNear: 6.5,
+  /** limite lógico: ninguém escolhe destino a mais de tantas células do ponto da formação (a câmera acompanha, mas a IA não abusa) */
+  maxFromAnchor: 6.5,
+  /** conforto do curandeiro: fica a até `healRange` do aliado mais ferido e do tanque, a pelo menos `healSafe` das ameaças */
+  healRange: 5.2, healSafe: 3.4, healBack: 1.6, healComfort: 1.1,
+  /** histerese de melee: golpeia dentro do alcance; só vai atrás se passar de `meleeStay` × alcance */
+  meleeStay: 1, meleeCloseIn: .78,
+  /** histerese do ranged: sem reposicionar entre `hold − bandLo` e `hold + bandHi` */
+  bandLo: .5, bandHi: .8,
+  /** retirada: começa abaixo de `retreatAt` do papel e só termina `retreatExit` acima */
+  retreatExit: .12, retreatHold: 1.2,
+  /** estados mínimos (segundos) para evitar piscar entre eles */
+  evadeHold: .55, repositionHold: .35,
+  /** tanque: sai de um golpe avisado se a perda esperada for esta fração da vida atual (ou menos se estiver baixo / vários golpes se somarem) */
+  tankLeaveLethal: .5, tankLeaveLow: .2, tankLowHp: .35, tankLeaveStacked: .38, tankLeaveBoss: .3,
+};
