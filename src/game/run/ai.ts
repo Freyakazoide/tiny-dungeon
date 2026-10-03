@@ -22,6 +22,8 @@ export interface HeroAi {
   roamHit?: boolean;
   /** golpe avisado do qual está saindo e o ponto de saída escolhido (mantido até sair, sem trocar de lado a cada tick) */
   evadeId?: string;
+  /** travado (o destino não anda): onde estava e há quanto tempo, e o destino impossível a ser ignorado por um tempo */
+  stuckRef?: Pt; stuckT?: number; blockedAt?: Pt; blockedUntil?: number;
 }
 /** Foco do grupo: alvo principal (todos os DPS tendem a ele) e alvo de peel (invasor da backline). */
 export interface PartyFocus { primaryId?: string; primaryUntil: number; peelId?: string; peelUntil: number }

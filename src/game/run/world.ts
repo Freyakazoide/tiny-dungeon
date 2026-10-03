@@ -14,7 +14,7 @@ import { runtime } from '../rpg/runtime';
 import { huntScale } from '../data/hunts';
 import { monsterKind } from '../systems/waves';
 import { physicalDamage } from '../systems/combat';
-import { buildFoeInfos, chooseHeroTarget, choosePeelTarget, choosePrimaryTarget, commitDest, incomingByFoe, lockFor, newHeroAi, noticedZones, setState, shouldEvade, stopBeforeZones, type AiConfig, type FoeView, type HeroView, type PartyCtx, type Role, type StrikeZone } from './ai';
+import { buildFoeInfos, chooseHeroTarget, choosePeelTarget, choosePrimaryTarget, commitDest, incomingByFoe, lockFor, newHeroAi, noticedZones, setState, shouldEvade, stopBeforeZones, type AiConfig, type HeroAi, type FoeView, type HeroView, type PartyCtx, type Role, type StrikeZone } from './ai';
 import { desiredHeroPosition } from './position';
 import { encounterPressure, onlyMopUp, shouldSpawnBatch } from './pressure';
 
@@ -85,18 +85,26 @@ export function avoidTrap(plan: RunPlan, p: Pt): Pt {
   }
   return best;
 }
-/** Saída de um círculo avisado: de 16 pontos logo fora dele, o mais perto de quem está dentro cujo caminho não esbarra em ninguém e cabe no chão. */
-function escapePoint(plan: RunPlan, self: Body, w: { x: number; y: number; r: number }, bodies: Body[]): Pt | null {
-  const out = w.r + SAFE + .1; let best: Pt | null = null, bestD = Infinity;
-  for (let k = 0; k < 16; k++) {
-    const a = k * Math.PI / 8, p = { x: w.x + Math.cos(a) * out, y: w.y + Math.sin(a) * out };
-    if (!fits(plan, p.x, p.y, self.r)) continue;
-    let free = true;
-    for (let t = .25; t <= 1 && free; t += .25) { const q = { x: self.pt.x + (p.x - self.pt.x) * t, y: self.pt.y + (p.y - self.pt.y) * t }; free = bodies.every(o => o === self || dist(q, o.pt) >= o.r + self.r - .05) && fits(plan, q.x, q.y, self.r); }
-    const d = dist(self.pt, p); if (free && d < bestD) { bestD = d; best = p; }
+/**
+ * Saída dos círculos avisados: de 16 pontos logo fora de cada um dos círculos que ameaçam o herói, o mais perto cujo caminho não esbarra em ninguém, que cabe
+ * no chão e que está fora de TODOS os círculos (sair de um para cair em outro era o que fazia o herói tremer entre duas saídas).
+ */
+function escapePoint(plan: RunPlan, self: Body, zs: { x: number; y: number; r: number }[], bodies: Body[]): Pt | null {
+  let best: Pt | null = null, bestD = Infinity;
+  for (const w of zs) {
+    const out = w.r + SAFE + .1;
+    for (let k = 0; k < 16; k++) {
+      const a = k * Math.PI / 8, p = { x: w.x + Math.cos(a) * out, y: w.y + Math.sin(a) * out };
+      if (!fits(plan, p.x, p.y, self.r) || zs.some(z => dist(p, z) < z.r + CLEAR)) continue;
+      let free = true;
+      for (let t = .25; t <= 1 && free; t += .25) { const q = { x: self.pt.x + (p.x - self.pt.x) * t, y: self.pt.y + (p.y - self.pt.y) * t }; free = bodies.every(o => o === self || dist(q, o.pt) >= o.r + self.r - .05) && fits(plan, q.x, q.y, self.r); }
+      const d = dist(self.pt, p); if (free && d < bestD) { bestD = d; best = p; }
+    }
   }
   return best;
 }
+/** Folga mínima de um ponto de saída em relação a qualquer círculo avisado. */
+const CLEAR = .5;
 /** Leva o ponto `p` para fora do círculo `w` (r + folga), no sentido de `from` (ou, se coincidem, de lado); tenta ângulos vizinhos até achar chão. */
 function pushOut(plan: RunPlan, p: Pt, w: { x: number; y: number; r: number }, from: Pt): Pt {
   const base = dist(from, w) > .05 ? Math.atan2(from.y - w.y, from.x - w.x) : Math.atan2(p.y - w.y, p.x - w.x) + .7;
@@ -257,7 +265,9 @@ function assignSlots(plan: RunPlan, foes: MonsterRuntime[], team: Character[], r
       }
     }
   };
-  pass(m => roleOf(m) === 'runner', [...groups].reverse()); // corredores vão direto na backline
+  // só o corredor de emboscada (nasceu atrás do grupo) vai direto na backline; o corredor comum disputa as vagas como os outros (a frente primeiro) e só
+  // chega na backline quando os anéis da frente estão cheios. Isso respeita o espaço em volta de quem segura a linha.
+  pass(m => !!m.ambush && roleOf(m) === 'runner', [...groups].reverse());
   pass(() => true, groups);
   for (const m of left) delete m.slot;
 }
@@ -474,6 +484,7 @@ function stepHeroes(state: GameState, plan: RunPlan, dt: number, hooks: WorldHoo
       if (view.role !== 'tank') for (const w of zones) if (dist({ x: tx, y: ty }, w) < w.r + SAFE) { const q = pushOut(plan, { x: tx, y: ty }, w, me); tx = q.x; ty = q.y; }
       if (view.role !== 'tank' && zones.length) ({ x: tx, y: ty } = stopBeforeZones(me, { x: tx, y: ty }, zones));
       ({ x: tx, y: ty } = avoidTrap(plan, { x: tx, y: ty }));
+      if (ai.blockedAt && (ai.blockedUntil ?? 0) > clock && dist({ x: tx, y: ty }, ai.blockedAt) < 1.5 && !zones.length) { tx = me.x; ty = me.y; }   // o destino que travou o herói é ignorado por um tempo
       if (!fits(plan, tx, ty, RADIUS.unit)) ({ x: tx, y: ty } = freeNear(plan, { x: tx, y: ty }));   // nunca um destino dentro de parede
       const hold = state2 === 'retreat' ? AI_CONFIG.retreatHold : state2 === 'reposition' ? AI_CONFIG.repositionHold : 0;
       if (state2 === 'attack' && target && ai.targetId === ctx.focus.peelId && view.role !== 'healer') state2 = 'peel';
@@ -484,12 +495,23 @@ function stepHeroes(state: GameState, plan: RunPlan, dt: number, hooks: WorldHoo
     // esquiva: quem percebeu um golpe em cima de si sai pela saída livre mais curta (a cada tick, não espera a próxima decisão)
     let dest = ai.dest!;
     if (evade) {
-      const w = zones.find(z => dist(me, z) <= z.r + pad)! as StrikeZone & { id?: string }, key = `${Math.round(w.x * 100)},${Math.round(w.y * 100)}`;
-      const keep = ai.evadeId === key && ai.dest && dist(ai.dest, w) >= w.r + .45 && dist(me, ai.dest) > .1;   // já escolheu o lado: continua até sair
-      const out = keep ? ai.dest! : escapePoint(plan, body, w, bodies) ?? pushOut(plan, me, w, me);
+      const near = zones.filter(z => dist(me, z) <= z.r + 3), w = zones.find(z => dist(me, z) <= z.r + pad)!, key = `${near.length}`;
+      const keep = ai.state === 'evade' && !!ai.dest && near.every(z => dist(ai.dest!, z) >= z.r + CLEAR - .05) && dist(me, ai.dest) > .1;   // já escolheu a saída (fora de todos os círculos): continua até sair
+      const out = keep ? ai.dest! : escapePoint(plan, body, near, bodies) ?? pushOut(plan, me, w, me);
       if (out) { ai.evadeId = key; dest = commitDest(ai, keep ? out : avoidTrap(plan, out), clock, true); if (setState(ai, 'evade', clock, AI_CONFIG.evadeHold)) hooks.note?.('dodge', c.id); }
     } else if (ai.state === 'evade' && clock >= ai.stateUntil) { ai.state = 'recoverPosition'; ai.thinkAt = -1; }
     const speed = (ai.state === 'evade' ? R.heroSpeed * AI_CONFIG.evadeSpeed : engaged ? R.heroSpeed : R.travel) * dt;
     if (dist(me, dest) > .08) moveToward(plan, body, dest.x, dest.y, speed, bodies);
+    trackStuck(ai, body.pt, dest, clock, dt);
   }
+}
+/**
+ * Travado: tenta chegar a um destino a mais de meia célula e, por ~0,7 s, não sai de um raio de 0,25 (corpo, parede ou colega no caminho; antes ele ficava
+ * tremendo no lugar). Larga o destino, fica onde está e ignora destinos parecidos por um tempo.
+ */
+export function trackStuck(ai: HeroAi, at: Pt, dest: Pt, clock: number, dt: number) {
+  if (dist(at, dest) <= .5 || !ai.stuckRef || dist(at, ai.stuckRef) > .25) { ai.stuckRef = { x: at.x, y: at.y }; ai.stuckT = 0; return; }
+  ai.stuckT = (ai.stuckT ?? 0) + dt;
+  if (ai.stuckT < AI_CONFIG.stuckAfter) return;
+  ai.blockedAt = { x: dest.x, y: dest.y }; ai.blockedUntil = clock + AI_CONFIG.stuckIgnore; ai.dest = { x: at.x, y: at.y }; ai.destUntil = clock + AI_CONFIG.stuckIgnore * .5; ai.stuckT = 0;
 }

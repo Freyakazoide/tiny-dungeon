@@ -128,6 +128,8 @@ export const AI_CONFIG = {
   /** retirada: começa abaixo de `retreatAt` do papel e só termina `retreatExit` acima */
   retreatExit: .12, retreatHold: 1.2,
   /** estados mínimos (segundos) para evitar piscar entre eles */
+  /** travado sem sair de 0,25 célula por `stuckAfter` s: larga o destino e o ignora por `stuckIgnore` s */
+  stuckAfter: .7, stuckIgnore: 2,
   evadeHold: .55, repositionHold: .35,
   /** tanque: sai de um golpe avisado se a perda esperada for esta fração da vida atual (ou menos se estiver baixo / vários golpes se somarem) */
   tankLeaveLethal: .5, tankLeaveLow: .2, tankLowHp: .35, tankLeaveStacked: .38, tankLeaveBoss: .3,

@@ -34,10 +34,19 @@ describe('funções dos inimigos', () => {
     }
     expect(foeRole('skeleton')).toBe('melee'); expect(foeRole('wolf')).toBe('runner'); expect(isRanged(foeRole('bandit'))).toBe(true); expect(hasWindup(foeRole('ghoul'))).toBe(true); expect(hasWindup(foeRole('wolf'))).toBe(false);
   });
-  it('corredor ignora o tanque e vai direto na backline', () => {
+  it('corredor comum disputa as vagas da frente primeiro: com espaço em volta de quem segura a linha, ninguém vai na backline', () => {
     const e = setup('wolf', 3); sim(e, 12);
+    const s = e.getSnapshot(), front = s.characters.filter(c => c.row === 'front').map(c => c.id);
+    expect(s.monsters.length).toBe(3); for (const m of s.monsters) expect(front, m.uid).toContain(m.slot?.hero);
+  });
+  it('mesmo com dois da frente, o corredor lota os anéis da frente antes de ir na backline (só a emboscada atrás do grupo vai direto)', () => {
+    const e = setup('wolf', 4); const s0 = e.getSnapshot(); e.setRow(s0.characters[1].id, 'front');
+    sim(e, 12);
     const s = e.getSnapshot(), back = s.characters.filter(c => c.row === 'back').map(c => c.id);
-    expect(s.monsters.length).toBe(3); for (const m of s.monsters) expect(back, m.uid).toContain(m.slot?.hero);
+    for (const m of s.monsters) expect(back, m.uid).not.toContain(m.slot?.hero);
+    const amb = setup('wolf', 2); for (const m of amb.getSnapshot().monsters) m.ambush = true; sim(amb, 12);
+    const sb = amb.getSnapshot(), backIds = sb.characters.filter(c => c.row === 'back').map(c => c.id);
+    for (const m of sb.monsters.filter(x => x.alive)) expect(backIds, m.uid).toContain(m.slot?.hero);
   });
   it('atirador não tem vaga, fica longe do tanque e mira a backline à distância', () => {
     const e = setup('bandit', 2); sim(e, 15);

@@ -51,7 +51,15 @@ export function rangedPosition(ctx: PosCtx, hero: HeroView, target?: FoeInfo): D
   if (near && hero.ai.dodge > 0 && near.d < hero.ai.dodge) return { pt: add(hero.pt, unit(near.info.foe.pt, hero.pt), hero.ai.dodge + 1.4 - near.d), state: 'reposition' };
   if (!target) return homeDesire(ctx, hero);
   const d = dist(hero.pt, target.foe.pt);
-  if (d > Math.min(hold + C.bandHi, hero.reach - .3)) return { pt: add(target.foe.pt, unit(target.foe.pt, hero.pt), Math.min(hold, hero.reach - .8)), state: 'engage' };
+  if (d > Math.min(hold + C.bandHi, hero.reach - .3)) {
+    // o ponto de aproximação não pode cair na zona de recuo (`dodge`) de outro inimigo: senão ele chega, recua, chega de novo… (tremendo). Se nenhum serve, espera.
+    const dir = unit(target.foe.pt, hero.pt), base = Math.min(hold, hero.reach - .8);
+    for (let k = 0; k <= 4; k++) {
+      const pt = add(target.foe.pt, dir, Math.min(hero.reach - .5, base + k * .4)), n = nearestFoe(ctx, pt);
+      if (!n || hero.ai.dodge <= 0 || n.d >= hero.ai.dodge + .5) return { pt, state: 'engage' };
+    }
+    return { pt: hero.pt, state: 'attack' };
+  }
   if (d <= hero.reach && ctx.lineClear && !ctx.lineClear(hero.pt, target.foe.pt)) {
     const side = perp(unit(hero.pt, target.foe.pt));
     for (const k of [1.6, -1.6, 3.2, -3.2]) { const p = add(hero.pt, side, k); if (ctx.lineClear(p, target.foe.pt)) return { pt: p, state: 'reposition' }; }
