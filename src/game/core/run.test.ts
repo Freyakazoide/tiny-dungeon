@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { RUN_CONFIG } from '../data/balance';
+import { HUNT_PACE, RUN_CONFIG } from '../data/balance';
 import { partyState } from './testing';
 import { GameEngine } from './GameEngine';
 import { mulberry32 } from '../run/rng';
@@ -13,8 +13,8 @@ describe('Corredor procedural no motor', () => {
   it('start cria a run, posiciona a equipe e o grupo anda sem monstros ao alcance', () => {
     const e = new GameEngine(partyState()); e.start();
     const s0 = e.getSnapshot(); expect(s0.run).toBeDefined(); expect(s0.status).toBe('running'); expect(s0.monsters).toHaveLength(0);
-    const a0 = s0.run!.anchor; sim(e, 5);
-    const s = e.getSnapshot(); expect(s.run!.anchor).toBeGreaterThan(a0 + 5);
+    const a0 = s0.run!.anchor; sim(e, .6);   // ainda antes do primeiro encontro (os monstros morrem rápido no ritmo novo)
+    const s = e.getSnapshot(); expect(s.run!.anchor).toBeGreaterThan(a0 + 4);
     expect(Object.keys(s.run!.pos)).toHaveLength(3);
     expect(s.analyzer.kills).toEqual({});
   });
@@ -80,6 +80,8 @@ describe('IA configurável (Helper)', () => {
     expect(e.setHelper(bow.id, { ai: { hold: NaN } })).toBe(false);
   });
   it('quem mantém distância fica mais longe do inimigo do que quem cola (hold alto × 0)', () => {
+    // mede o posicionamento com monstros de HP cheio (no ritmo calibrado eles morrem antes de o arqueiro precisar se posicionar)
+    const savedPace = { ...HUNT_PACE }; for (const k of Object.keys(HUNT_PACE)) delete HUNT_PACE[k];
     const gap = (hold: number) => [1, 2, 3].reduce((sum, seed) => sum + seeded(seed, () => gap1(hold)), 0) / 3;
     const gap1 = (hold: number) => {
       const e = new GameEngine(partyState()); const bow = e.getSnapshot().characters[1]; e.setHelper(bow.id, { ai: { hold, dodge: 0, retreatAt: 0 } });
@@ -91,7 +93,7 @@ describe('IA configurável (Helper)', () => {
       }
       return sum / Math.max(1, n);
     };
-    expect(gap(6)).toBeGreaterThan(gap(0) + .5);
+    try { expect(gap(6)).toBeGreaterThan(gap(0) + .5); } finally { Object.assign(HUNT_PACE, savedPace); }
   });
 });
 

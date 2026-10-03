@@ -138,3 +138,32 @@ describe('chefes: golpes de assinatura', () => {
     } finally { Math.random = orig; }
   });
 });
+
+describe('coesão do grupo', () => {
+  it('quem esquiva sem parar não vai se afastando do grupo (antes chegava a 40 células da formação em hunts com magos)', () => {
+    for (const [hunt, lv, seed] of [['vulcao_ardente', 25, 2], ['vulcao_ardente', 25, 3], ['templo_profano', 28, 1]] as const) {
+      const orig = Math.random, now = Date.now; Math.random = mulberry32(seed); Date.now = () => 1791039000000;
+      try {
+        const e = new GameEngine(partyState()); e.selectHunt(hunt); e.start(); for (const c of e.getSnapshot().characters) e.devSetLevel(c.id, lv);
+        const plan = (e as unknown as { plan(): RunPlan }).plan(); let worst = 0;
+        for (let i = 0; i < 3000; i++) {
+          e.tick(100); const s = e.getSnapshot(), run = s.run!, here = plan.pathPoint(run.anchor);
+          for (const c of s.characters.filter(x => x.hp > 0)) worst = Math.max(worst, dist(run.pos[c.id], here));
+        }
+        expect(worst, `${hunt}/${seed}`).toBeLessThan(14);
+      } finally { Math.random = orig; Date.now = now; }
+    }
+  }, 120000);
+});
+
+describe('ritmo calibrado por hunt', () => {
+  it('encontro comum de 5 a 8 s e XP/h na referência (grupo de referência, 3 hunts)', async () => {
+    const { HUNT_BY_ID } = await import('../data/hunts');
+    for (const id of ['catacumbas', 'floresta_sombria', 'vulcao_ardente']) {
+      const r = simulateRun(id, { minutes: 15, seed: 1 }), ref = HUNT_BY_ID[id];
+      expect(r.feel.commonS, `${id} comum`).toBeGreaterThan(4.5); expect(r.feel.commonS, `${id} comum`).toBeLessThan(9);
+      expect(r.xpPerHour / ref.refXpPerHour, `${id} xp`).toBeGreaterThan(.8); expect(r.xpPerHour / ref.refXpPerHour, `${id} xp`).toBeLessThan(1.3);
+      expect(r.goldPerHour / ref.refGoldPerHour, `${id} ouro`).toBeLessThan(1.6); expect(r.defeats, id).toBeLessThanOrEqual(1);
+    }
+  }, 300000);
+});

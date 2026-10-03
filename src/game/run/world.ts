@@ -89,7 +89,7 @@ export function avoidTrap(plan: RunPlan, p: Pt): Pt {
  * Saída dos círculos avisados: de 16 pontos logo fora de cada um dos círculos que ameaçam o herói, o mais perto cujo caminho não esbarra em ninguém, que cabe
  * no chão e que está fora de TODOS os círculos (sair de um para cair em outro era o que fazia o herói tremer entre duas saídas).
  */
-function escapePoint(plan: RunPlan, self: Body, zs: { x: number; y: number; r: number }[], bodies: Body[], avoid?: Pt): Pt | null {
+function escapePoint(plan: RunPlan, self: Body, zs: { x: number; y: number; r: number }[], bodies: Body[], avoid?: Pt, home?: { pt: Pt; roam: number }): Pt | null {
   let best: Pt | null = null, bestD = Infinity;
   for (const w of zs) {
     const out = w.r + SAFE + .1;
@@ -98,7 +98,8 @@ function escapePoint(plan: RunPlan, self: Body, zs: { x: number; y: number; r: n
       if (!fits(plan, p.x, p.y, self.r) || zs.some(z => dist(p, z) < z.r + CLEAR) || (avoid && dist(p, avoid) < 1.2)) continue;
       let free = true;
       for (let t = .25; t <= 1 && free; t += .25) { const q = { x: self.pt.x + (p.x - self.pt.x) * t, y: self.pt.y + (p.y - self.pt.y) * t }; free = bodies.every(o => o === self || dist(q, o.pt) >= o.r + self.r - .05) && fits(plan, q.x, q.y, self.r); }
-      const d = dist(self.pt, p); if (free && d < bestD) { bestD = d; best = p; }
+      // a saída que fica fora da zona de roam custa mais: o herói que não para de esquivar não vai se afastando do grupo
+      const d = dist(self.pt, p) + (home ? 1.5 * Math.max(0, dist(p, home.pt) - home.roam) : 0); if (free && d < bestD) { bestD = d; best = p; }
     }
   }
   return best;
@@ -513,7 +514,7 @@ function stepHeroes(state: GameState, plan: RunPlan, dt: number, hooks: WorldHoo
       if (ai.state === 'evade' && ai.dest && ai.evadeAt && dist(me, ai.evadeAt) < .03 && dist(me, ai.dest) > .2) ai.badEscape = { ...ai.dest };
       ai.evadeAt = { x: me.x, y: me.y };
       const keep = ai.state === 'evade' && !!ai.dest && !(ai.badEscape && dist(ai.dest, ai.badEscape) < .05) && near.every(z => dist(ai.dest!, z) >= z.r + CLEAR - .05) && dist(me, ai.dest) > .1;   // já escolheu a saída (fora de todos os círculos): continua até sair
-      const out = keep ? ai.dest! : escapePoint(plan, body, near, bodies, ai.badEscape) ?? escapePoint(plan, body, near, bodies) ?? pushOut(plan, me, w, me);
+      const out = keep ? ai.dest! : escapePoint(plan, body, near, bodies, ai.badEscape, { pt: view.home, roam: view.roam }) ?? escapePoint(plan, body, near, bodies, undefined, { pt: view.home, roam: view.roam }) ?? pushOut(plan, me, w, me);
       if (out) { ai.evadeId = key; dest = commitDest(ai, keep ? out : avoidTrap(plan, out), clock, true); if (setState(ai, 'evade', clock, AI_CONFIG.evadeHold)) hooks.note?.('dodge', c.id); }
     } else if (ai.state === 'evade' && clock >= ai.stateUntil) { ai.state = 'recoverPosition'; ai.thinkAt = -1; ai.badEscape = undefined; ai.evadeAt = undefined; }
     const speed = (ai.state === 'evade' ? R.heroSpeed * AI_CONFIG.evadeSpeed : engaged ? R.heroSpeed : R.travel) * dt;

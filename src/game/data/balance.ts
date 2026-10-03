@@ -85,7 +85,15 @@ export const KIND_HP = { common: .72, elite: .8, boss: .9 } as const;
  */
 /** `loot`: chance de drop dos não-chefes (matar mais rápido não pode inflar a economia de itens) */
 export interface HuntPace { common: number; elite: number; boss: number; xp: number; gold: number; loot: number }
-export const HUNT_PACE: Record<string, HuntPace> = {};
+export const HUNT_PACE: Record<string, HuntPace> = {
+  catacumbas: { common: 0.237, elite: 0.387, boss: 0.357, xp: 0.293, gold: 0.216, loot: 0.293 },
+  floresta_sombria: { common: 0.142, elite: 0.12, boss: 0.12, xp: 0.148, gold: 0.161, loot: 0.148 },
+  pantano_toxico: { common: 0.123, elite: 0.139, boss: 0.141, xp: 0.141, gold: 0.14, loot: 0.141 },
+  minas_esquecidas: { common: 0.135, elite: 0.165, boss: 0.133, xp: 0.132, gold: 0.13, loot: 0.132 },
+  fortaleza_de_gelo: { common: 0.128, elite: 0.129, boss: 0.124, xp: 0.131, gold: 0.127, loot: 0.131 },
+  vulcao_ardente: { common: 0.12, elite: 0.12, boss: 0.133, xp: 0.134, gold: 0.125, loot: 0.134 },
+  templo_profano: { common: 0.12, elite: 0.12, boss: 0.142, xp: 0.132, gold: 0.123, loot: 0.132 },
+};
 export const paceOf = (huntId: string): HuntPace => HUNT_PACE[huntId] ?? { common: 1, elite: 1, boss: 1, xp: 1, gold: 1, loot: 1 };
 /** O HP dos comuns cresce com a profundidade até este acréscimo máximo (+120%): o comum nunca vira esponja; elite e chefe seguem a escala normal. */
 export const COMMON_DEPTH_HP_CAP = 1.2;
