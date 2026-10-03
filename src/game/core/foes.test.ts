@@ -41,7 +41,7 @@ describe('funções dos inimigos', () => {
   });
   it('atirador não tem vaga, fica longe do tanque e mira a backline à distância', () => {
     const e = setup('bandit', 2); sim(e, 15);
-    const s = e.getSnapshot(), tank = s.characters.find(c => c.isTank)!, back = s.characters.filter(c => c.row === 'back');
+    const s = e.getSnapshot(), back = s.characters.filter(c => c.row === 'back');
     for (const m of s.monsters.filter(x => x.uid.startsWith('t'))) {   // só os atiradores do teste (a run pode ter começado um encontro novo)
       expect(m.slot).toBeUndefined();   // o tanque pode alcançar o atirador (ele intercepta); o atirador é que tenta recuar (ver 'archer recua')
       const d = Math.min(...back.map(b => dist({ x: m.x!, y: m.y! }, s.run!.pos[b.id]))); expect(d).toBeGreaterThan(FOE_ATTACK.archer.range * .25); expect(d).toBeLessThan(FOE_ATTACK.archer.range + 1.5);

@@ -1,4 +1,4 @@
-import { RUN_CONFIG as R, WAVE_CONFIG } from '../data/balance';
+import { RUN_CONFIG as R, RUN_FLOW, WAVE_CONFIG } from '../data/balance';
 import { CLASSES } from '../data/classes';
 import { itemById } from '../data/items';
 import { MONSTERS } from '../data/monsters';
@@ -16,6 +16,7 @@ import { monsterKind } from '../systems/waves';
 import { physicalDamage } from '../systems/combat';
 import { buildFoeInfos, chooseHeroTarget, choosePeelTarget, choosePrimaryTarget, commitDest, incomingByFoe, lockFor, newHeroAi, noticedZones, setState, shouldEvade, stopBeforeZones, type AiConfig, type FoeView, type HeroView, type PartyCtx, type Role, type StrikeZone } from './ai';
 import { desiredHeroPosition } from './position';
+import { encounterPressure, onlyMopUp, shouldSpawnBatch } from './pressure';
 
 /**
  * Mundo do corredor: posições em células do mundo (x, y), movimento, colisão e IA de quem anda no mapa. Só lê CONFIGURAÇÃO (nunca ordens ao
@@ -348,18 +349,22 @@ export function stepRun(state: GameState, plan: RunPlan, dt: number, hooks: Worl
   // 1) o grupo só anda quando todos estão perto da âncora e não há inimigo por perto; se o tanque já está no limite da zona e o alvo
   //    segue fora de alcance (atirador que não se aproxima), a formação avança devagar para arrastar o tanque atrás dele
   const tankAi = run.ai?.[tank.id], pulled = !!tankAi && tankAi.state === 'engage' && !!tankAi.roamHit && !foes.some(f => f.ambush);
-  if (team.every(c => dist(posOf(run, c), here) <= R.rear + 4) && (pulled || !foes.some(f => f.ambush || dist({ x: f.x!, y: f.y! }, tankAt) < R.engage))) { run.anchor += R.walk * (pulled ? .3 : 1) * dt; run.deepest = Math.max(run.deepest, run.anchor); }
+  const mopUp = foes.length > 0 && onlyMopUp(foes.map(f => ({ hp: f.hp, maxHp: f.maxHp, boss: !!MONSTERS[f.defId].boss, ambush: f.ambush })), run.windups?.length ?? 0);
+  const together = foes.length ? R.rear + 4 : R.rear + 7;   // sem inimigos: já anda enquanto os últimos voltam à formação
+  if (team.every(c => dist(posOf(run, c), here) <= together) && (pulled || mopUp || !foes.some(f => f.ambush || dist({ x: f.x!, y: f.y! }, tankAt) < R.engage))) { run.anchor += R.walk * (pulled && !mopUp ? .3 : 1) * dt; run.deepest = Math.max(run.deepest, run.anchor); }
   // 2) encontros do chunk em que o grupo está
   const idx = plan.indexAt(run.anchor), chunk = plan.chunk(idx), enc = chunk.encounter;
-  if (enc && run.lastTrigger < idx && run.anchor >= chunk.start + enc.at) { run.lastTrigger = idx; run.open = true; const behind = enc.ambush ? enc.monsters.slice(-enc.ambush) : undefined;
+  // não começa encontro novo enquanto sobrar perigo do anterior (qualquer um que não seja só limpeza)
+  const danger = foes.some(f => !!MONSTERS[f.defId].boss || f.hp / f.maxHp > RUN_FLOW.mopUpHp) || !!run.windups?.length;
+  if (enc && run.lastTrigger < idx && run.anchor >= chunk.start + enc.at && !danger) { run.lastTrigger = idx; run.open = true; const behind = enc.ambush ? enc.monsters.slice(-enc.ambush) : undefined;
     run.queue.push({ chunk: idx, ids: enc.ambush ? enc.monsters.slice(0, -enc.ambush) : [...enc.monsters], waited: 0 }); hooks.trigger(idx, enc);
     if (behind) hooks.spawn(idx, behind, behind.map(() => plan.spawnPoint(Math.max(1, run.anchor - R.rear - 4 - Math.random() * 3), Math.random)), true);
   }
   // 3) levas: mesmos números das waves (WAVE_CONFIG)
   for (const q of run.queue) {
     q.waited += dt;
-    const alive = livingMonsters(state).length, room = WAVE_CONFIG.maxAlive - alive, first = q.waited <= dt;
-    if (room > 0 && (first || alive < WAVE_CONFIG.below || q.waited >= WAVE_CONFIG.intervalS * 2)) {
+    const alive = livingMonsters(state), { hpEq } = encounterPressure(alive), room = WAVE_CONFIG.maxAlive - alive.length, first = q.waited <= dt;
+    if (shouldSpawnBatch({ alive: alive.length, hpEq, waited: q.waited, first, room })) {
       const ids = q.ids.splice(0, Math.min(first ? WAVE_CONFIG.maxAlive : WAVE_CONFIG.batch, room));
       const at = ids.map(() => plan.spawnPoint(run.anchor + R.spawnAhead + Math.random() * 5, Math.random));
       hooks.spawn(q.chunk, ids, at); q.waited = .001;

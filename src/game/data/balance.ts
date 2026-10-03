@@ -51,14 +51,14 @@ export const WAVE_CONFIG = {
   /** Horda (6 a 11) e Invasão (12+) rendem rolagens extras de drop de equipamento (na chance de chefe) e ouro extra. */
   bigRewards: true, hordeRolls: 1, invasionRolls: 2, invasionGold: 0.25,
   /** Levas: com `minTotal`+ monstros nascem só `maxAlive` de uma vez; o resto entra em grupos de `batch` quando houver menos de `below` vivos, a cada `intervalS`. */
-  batches: true, minTotal: 9, maxAlive: 8, batch: 4, below: 6, intervalS: 3,
+  batches: true, minTotal: 9, maxAlive: 8, batch: 4, below: 6, intervalS: 2,
 };
 
 /** Modo "corredor" (overhaul): o grupo anda por um mapa procedural infinito e luta por alcance. Os testes de engine antigos rodam com `enabled: false` (ver test-setup.ts). */
 export const RUN_CONFIG = {
   enabled: true,
   /** células por segundo: caminhada do grupo, monstros e heróis em combate */
-  walk: 8, foeSpeed: 2.3, heroSpeed: 4.5, travel: 11,
+  walk: 10, foeSpeed: 2.8, heroSpeed: 5.2, travel: 14,
   /** raio (células) do anel de 8 vagas em volta de cada herói, onde os monstros corpo a corpo ficam batendo */
   ringRadius: 1,
   /** quem caiu levanta ao fim do encontro com esta fração da vida, enfraquecido (-dano) até o fim do encontro seguinte */
@@ -73,9 +73,15 @@ export const RUN_CONFIG = {
   spawnAhead: 9, rear: 3,
   /** o grupo para de andar quando há inimigo a menos de tantas células à frente */
   engage: 4,
-  /** XP e ouro por kill no corredor (depois da escala por profundidade); calibrado para ficar perto do ritmo de referência das hunts */
-  reward: 1.05,
+  /** XP e ouro por kill no corredor (depois da escala por profundidade), separados para calibrar a velocidade de level e a economia à parte; os monstros morrem mais rápido (ver `KIND_HP`), então o XP por kill é menor */
+  xpReward: .79, goldReward: .9,
 };
+/** Multiplicadores estruturais de HP por categoria de monstro (só no corredor): comum morre rápido, elite faz o grupo parar, chefe é mais longo e mecânico. */
+export const KIND_HP = { common: .72, elite: .8, boss: .9 } as const;
+/** O HP dos comuns cresce com a profundidade até este acréscimo máximo (+120%): o comum nunca vira esponja; elite e chefe seguem a escala normal. */
+export const COMMON_DEPTH_HP_CAP = 1.2;
+/** Fluxo das levas por HP restante (corredor): `hpEqBelow`/`hpEqLow` são somas de hp/maxHp dos vivos; ver `run/pressure.ts`. */
+export const RUN_FLOW = { hpEqBelow: 4, hpEqLow: 1.6, earlyAfter: .6, mopUpHp: .15 };
 
 /** Câmera da run (em células e por segundo): ver `run/camera.ts`. */
 export const CAMERA = {
