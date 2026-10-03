@@ -226,7 +226,7 @@ export function choosePeelTarget(ctx: PartyCtx): { id?: string; until: number } 
   return { id: top.foe.uid, until: ctx.clock + C.peelLock };
 }
 
-export interface StrikeZone { x: number; y: number; r: number; dmg: number; boss: boolean; /** segundos desde que o golpe foi avisado */ age: number }
+export interface StrikeZone { x: number; y: number; r: number; dmg: number; boss: boolean; /** segundos desde que o golpe foi avisado */ age: number; /** segundos até o golpe cair */ left: number }
 /**
  * Perigo de ficar onde está: fração da vida ATUAL do herói que os golpes avisados em cima dele tirariam (soma dos que o cobrem).
  * `count` = quantos golpes o cobrem; `boss` = algum é pancada de chefe.
@@ -242,10 +242,11 @@ export function tankShouldLeave(hero: { pt: Pt; hp: number; maxHp: number }, zon
   const low = hero.hp / hero.maxHp < C.tankLowHp;
   return d.ratio >= C.tankLeaveLethal || (low && d.ratio >= C.tankLeaveLow) || (d.count >= 2 && d.ratio >= C.tankLeaveStacked) || (d.boss && d.ratio >= C.tankLeaveBoss);
 }
-/** Deve esquivar de golpes avisados? Todo mundo menos o tanque, que decide pelo risco (`tankShouldLeave`). */
-export function shouldEvade(hero: { role: Role; pt: Pt; hp: number; maxHp: number }, zones: StrikeZone[], pad = .2): boolean {
+/** Deve esquivar de golpes avisados? Quem fica atrás sempre; o tanque decide pelo risco (`tankShouldLeave`) e o corpo a corpo da frente pelo mesmo risco com o dano em dobro. */
+export function shouldEvade(hero: { role: Role; row?: string; pt: Pt; hp: number; maxHp: number }, zones: StrikeZone[], pad = .2): boolean {
   if (!zones.some(z => dist(hero.pt, z) <= z.r + pad)) return false;
-  return hero.role === 'tank' ? tankShouldLeave(hero, zones) : true;
+  if (hero.role === 'tank') return tankShouldLeave(hero, zones);
+  return hero.role === 'melee' && hero.row !== 'back' ? tankShouldLeave(hero, zones.map(z => ({ ...z, dmg: z.dmg * C.meleeRiskMul }))) : true;
 }
 /** Para antes de atravessar um círculo avisado: devolve o ponto até onde dá para ir de `from` em direção a `to` sem tocar a margem de nenhum círculo. */
 export function stopBeforeZones(from: Pt, to: Pt, zones: { x: number; y: number; r: number }[], margin = .5): Pt {

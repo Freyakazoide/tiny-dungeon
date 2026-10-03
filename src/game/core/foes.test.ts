@@ -4,6 +4,7 @@ import { MONSTERS } from '../data/monsters';
 import { HUNTS } from '../data/hunts';
 import { FOE_ATTACK, FOE_ROLE, foeRole, hasWindup, isRanged } from '../run/foes';
 import { dist } from '../run/world';
+import { mulberry32 } from '../run/rng';
 import { GameEngine } from './GameEngine';
 import { partyState } from './testing';
 import type { RunPlan } from '../run/plan';
@@ -34,16 +35,16 @@ describe('funções dos inimigos', () => {
     }
     expect(foeRole('skeleton')).toBe('melee'); expect(foeRole('wolf')).toBe('runner'); expect(isRanged(foeRole('bandit'))).toBe(true); expect(hasWindup(foeRole('ghoul'))).toBe(true); expect(hasWindup(foeRole('wolf'))).toBe(false);
   });
-  it('corredor comum disputa as vagas da frente primeiro: com espaço em volta de quem segura a linha, ninguém vai na backline', () => {
+  it('corredor comum disputa as vagas da frente primeiro: com espaço em volta de quem segura a linha, só um flanqueador por vez vai na backline', () => {
     const e = setup('wolf', 3); sim(e, 12);
-    const s = e.getSnapshot(), front = s.characters.filter(c => c.row === 'front').map(c => c.id);
-    expect(s.monsters.length).toBe(3); for (const m of s.monsters) expect(front, m.uid).toContain(m.slot?.hero);
+    const s = e.getSnapshot(), back = s.characters.filter(c => c.row === 'back').map(c => c.id);
+    expect(s.monsters.length).toBe(3); expect(s.monsters.filter(m => back.includes(m.slot?.hero ?? '')).length).toBeLessThanOrEqual(1);   // no máximo um flanqueador na backline
   });
   it('mesmo com dois da frente, o corredor lota os anéis da frente antes de ir na backline (só a emboscada atrás do grupo vai direto)', () => {
     const e = setup('wolf', 4); const s0 = e.getSnapshot(); e.setRow(s0.characters[1].id, 'front');
     sim(e, 12);
     const s = e.getSnapshot(), back = s.characters.filter(c => c.row === 'back').map(c => c.id);
-    for (const m of s.monsters) expect(back, m.uid).not.toContain(m.slot?.hero);
+    expect(s.monsters.filter(m => back.includes(m.slot?.hero ?? '')).length).toBeLessThanOrEqual(1);
     const amb = setup('wolf', 2); for (const m of amb.getSnapshot().monsters) m.ambush = true; sim(amb, 12);
     const sb = amb.getSnapshot(), backIds = sb.characters.filter(c => c.row === 'back').map(c => c.id);
     for (const m of sb.monsters.filter(x => x.alive)) expect(backIds, m.uid).toContain(m.slot?.hero);
@@ -77,12 +78,16 @@ describe('golpes avisados (windup)', () => {
     const s = e.getSnapshot(), target = s.characters.find(c => dist(s.run!.pos[c.id], w) < .3); expect(target?.row).toBe('back'); // com a backline ao alcance, é ela que o atirador mira
   });
   it('quem desvia (à distância/curandeiro) sai do círculo avisado e não apanha, golpe após golpe', () => {
+    const orig = Math.random, now = Date.now; Math.random = mulberry32(3); Date.now = () => 1791039000000;   // determinístico: os ids dos heróis (atraso de reação) vêm da hora
+    try { dodgeRun(); } finally { Math.random = orig; Date.now = now; }
+  });
+  const dodgeRun = () => {
     const e = setup('bandit', 1, 1, .05); aimAtBack(e); let backHits = 0, seen = new Set<string>();
     const orig = (e as unknown as { monsterStrike(m: unknown, c: { row: string }, k: number): void }).monsterStrike.bind(e);
     (e as unknown as { monsterStrike(m: unknown, c: unknown, k: number): void }).monsterStrike = (m, c, k) => { if ((c as { row: string }).row === 'back' && (m as { uid: string }).uid === 't0') backHits++; orig(m, c as { row: string }, k); };   // só os golpes do atirador (a run segue andando e encontros novos podem bater de verdade)
     for (let i = 0; i < 400; i++) { e.tick(100); for (const w of e.getSnapshot().run!.windups ?? []) seen.add(w.id); }
     expect(seen.size).toBeGreaterThanOrEqual(3); expect(backHits).toBe(0);
-  });
+  };
   it('heróis com dodge saem de dentro de um círculo avisado', () => {
     const e = setup('bandit', 1); const s = e.getSnapshot(), run = s.run!, back = s.characters.find(c => c.row === 'back')!;
     run.windups = [{ id: 'w', src: 't0', x: run.pos[back.id].x, y: run.pos[back.id].y, r: 1.2, t: 99, total: 99, mult: 1, role: 'caster' }];

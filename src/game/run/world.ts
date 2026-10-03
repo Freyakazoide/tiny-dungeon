@@ -277,6 +277,9 @@ function assignSlots(plan: RunPlan, foes: MonsterRuntime[], team: Character[], r
   // só o corredor de emboscada (nasceu atrás do grupo) vai direto na backline; o corredor comum disputa as vagas como os outros (a frente primeiro) e só
   // chega na backline quando os anéis da frente estão cheios. Isso respeita o espaço em volta de quem segura a linha.
   pass(m => !!m.ambush && roleOf(m) === 'runner', [...groups].reverse());
+  // um corredor por vez (o de menor id entre os "flanqueadores", ~metade deles) contorna a frente e vai na backline; os outros disputam a frente
+  const flanker = [...left].filter(m => roleOf(m) === 'runner' && !m.ambush && hash01(m.uid) < RUN_FLOW.flankShare).sort((a, b) => a.uid < b.uid ? -1 : 1)[0];
+  if (flanker && groups.length > 1) pass(m => m === flanker, [...groups].reverse());
   pass(() => true, groups);
   for (const m of left) delete m.slot;
 }
@@ -451,7 +454,7 @@ export function buildPartyCtx(state: GameState, plan: RunPlan, env: Pick<StepEnv
 /** Golpes avisados em cima do herói, com o dano que cada um tiraria dele (armadura incluída) e há quanto tempo foram avisados. */
 function strikeZones(state: GameState, hero: HeroView, foeById: Map<string, MonsterRuntime>, dt: number): StrikeZone[] {
   // `age + dt`: o motor desconta o tempo do golpe depois deste passo, então o herói já enxerga o tick que está começando
-  return (state.run!.windups ?? []).map(w => { const m = foeById.get(w.src); return { x: w.x, y: w.y, r: w.r, dmg: physicalDamage(m ? foeRaw(state, m) : 0, hero.defense) * w.mult, boss: w.role === 'boss' || w.role === 'slam', age: w.total - w.t + dt }; });
+  return (state.run!.windups ?? []).map(w => { const m = foeById.get(w.src); return { x: w.x, y: w.y, r: w.r, dmg: physicalDamage(m ? foeRaw(state, m) : 0, hero.defense) * w.mult, boss: w.role === 'boss' || w.role === 'slam', age: w.total - w.t + dt, left: Math.max(0, w.t - dt) }; });
 }
 
 /**
@@ -469,7 +472,8 @@ function stepHeroes(state: GameState, plan: RunPlan, dt: number, hooks: WorldHoo
   for (const id of Object.keys(ais)) if (!views.has(id)) delete ais[id];
   for (const c of team) {
     const view = views.get(c.id)!, body = heroBody.get(c.id)!, me = body.pt, ai = ais[c.id] ??= newHeroAi();
-    const zones = noticedZones(c.id, strikeZones(state, view, foeById, dt)), pad = ai.state === 'evade' ? .65 : .2, evade = shouldEvade(view, zones, pad);
+    const zones = noticedZones(c.id, strikeZones(state, view, foeById, dt)), pad = ai.state === 'evade' ? .65 : .2;
+    const evade = shouldEvade(view, zones, pad);
     const targetGone = !!ai.targetId && !foeById.has(ai.targetId);
     const jitter = AI_CONFIG.thinkEvery * (.8 + .4 * (team.indexOf(c) % 3) / 2);
     const evading = ai.state === 'evade' && (evade || clock < ai.stateUntil);   // saindo de um golpe: não repensa até sair

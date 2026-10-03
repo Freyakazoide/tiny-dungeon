@@ -78,10 +78,19 @@ export const RUN_CONFIG = {
 };
 /** Multiplicadores estruturais de HP por categoria de monstro (só no corredor): comum morre rápido, elite faz o grupo parar, chefe é mais longo e mecânico. */
 export const KIND_HP = { common: .72, elite: .8, boss: .9 } as const;
+/**
+ * Ritmo por hunt (só no corredor), calibrado pelo balance harness: multiplicadores de HP por categoria que levam o encontro comum a ~5–8 s, o pesado a ~8–12 s e o
+ * chefe a ~15–25 s com o grupo de referência, e de XP/ouro por kill que mantêm o XP/h e o ouro/h perto da referência da hunt (matar mais rápido rende mais kills).
+ * Hunt sem entrada usa 1. Não substitui `KIND_HP` (estrutural): multiplica.
+ */
+/** `loot`: chance de drop dos não-chefes (matar mais rápido não pode inflar a economia de itens) */
+export interface HuntPace { common: number; elite: number; boss: number; xp: number; gold: number; loot: number }
+export const HUNT_PACE: Record<string, HuntPace> = {};
+export const paceOf = (huntId: string): HuntPace => HUNT_PACE[huntId] ?? { common: 1, elite: 1, boss: 1, xp: 1, gold: 1, loot: 1 };
 /** O HP dos comuns cresce com a profundidade até este acréscimo máximo (+120%): o comum nunca vira esponja; elite e chefe seguem a escala normal. */
 export const COMMON_DEPTH_HP_CAP = 1.2;
 /** Fluxo das levas por HP restante (corredor): `hpEqBelow`/`hpEqLow` são somas de hp/maxHp dos vivos; ver `run/pressure.ts`. */
-export const RUN_FLOW = { hpEqBelow: 4, hpEqLow: 1.6, earlyAfter: .6, mopUpHp: .15, /** golpes avisados de atirador/mago ao mesmo tempo e intervalo mínimo entre inícios (s) */ maxRangedWindups: 2, windupSpacing: .5 };
+export const RUN_FLOW = { /** fração dos corredores que podem flanquear (um por vez) */ flankShare: .5, hpEqBelow: 4, hpEqLow: 1.6, earlyAfter: .6, mopUpHp: .15, /** golpes avisados de atirador/mago ao mesmo tempo e intervalo mínimo entre inícios (s) */ maxRangedWindups: 2, windupSpacing: .5 };
 
 /** Câmera da run (em células e por segundo): ver `run/camera.ts`. */
 export const CAMERA = {
@@ -134,5 +143,7 @@ export const AI_CONFIG = {
   stuckAfter: .7, stuckIgnore: 2,
   evadeHold: .55, repositionHold: .35,
   /** tanque: sai de um golpe avisado se a perda esperada for esta fração da vida atual (ou menos se estiver baixo / vários golpes se somarem) */
+  /** o corpo a corpo da frente pesa o dano de um golpe avisado `meleeRiskMul`× antes de decidir sair (ignora os leves, como o tanque) */
+  meleeRiskMul: 2.2,
   tankLeaveLethal: .5, tankLeaveLow: .2, tankLowHp: .35, tankLeaveStacked: .38, tankLeaveBoss: .3,
 };

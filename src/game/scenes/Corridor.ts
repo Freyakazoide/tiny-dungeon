@@ -52,6 +52,7 @@ export class Game extends Scene {
   private debugLabels: GameObjects.Text[] = [];
   private telegraph?: Phaser.GameObjects.Graphics;
   private shotsG?: Phaser.GameObjects.Graphics;
+  private focusG?: Phaser.GameObjects.Graphics;
   /** a cena foi desligada/destruída: nada mais deve tocar nos objetos dela */
   private dead = false;
 
@@ -67,6 +68,7 @@ export class Game extends Scene {
     this.input.keyboard?.on('keydown-F3', (e: KeyboardEvent) => { e.preventDefault(); if (this.debug) { this.debug.destroy(); this.debug = undefined; this.debugLabels.forEach(t => t.destroy()); this.debugLabels = []; } else this.debug = this.add.graphics().setDepth(60); });
     this.telegraph = this.add.graphics().setDepth(3);
     this.shotsG = this.add.graphics().setDepth(40);
+    this.focusG = this.add.graphics().setDepth(4);   // abaixo dos bonecos: anéis no chão
     this.layoutHud();
     this.scale.on('resize', () => this.layoutHud());
     this.dead = false;
@@ -92,6 +94,7 @@ export class Game extends Scene {
     this.drawWorld(gameStore.getSnapshot(), delta);
     this.drawTelegraphs(gameStore.getSnapshot());
     this.drawShots(gameStore.getSnapshot());
+    this.drawFocus(gameStore.getSnapshot());
     if (this.debug) this.drawDebug(gameStore.getSnapshot());
     if (this.bannerUntil && this.time.now > this.bannerUntil && gameStore.getSnapshot().status !== 'recovering') { this.bannerUntil = 0; this.banner.setVisible(false); }
   }
@@ -159,6 +162,19 @@ export class Game extends Scene {
     }
   }
 
+  /** Leitura do combate (fora do F3): anel avermelhado no chão sob o alvo principal do grupo e anel duplo azul sob o invasor da backline (alvo de peel). Discreto, pulsa devagar. */
+  private drawFocus(state: GameState) {
+    const g = this.focusG; if (!g) return; g.clear();
+    const run = state.run, f = run?.focus; if (!run || !f || state.status !== 'running') return;
+    const pulse = .55 + .25 * Math.sin(this.time.now / 260);
+    const ring = (uid: string | undefined, color: number, rings: number) => {
+      const m = uid ? state.monsters.find(x => x.alive && x.uid === uid && x.x !== undefined) : undefined; if (!m) return;
+      const r = px(radiusOf(m)) + 3, cx = px(m.x!), cy = px(m.y!) + CELL_PX * .3;
+      for (let i = 0; i < rings; i++) g.lineStyle(i ? 1.5 : 2.5, color, pulse * (i ? .7 : 1)).strokeEllipse(cx, cy, (r + i * 5) * 2, (r + i * 5) * 1.1);
+    };
+    if (f.primaryId !== f.peelId) ring(f.primaryId, 0xff6a4a, 1);
+    ring(f.peelId, 0x4ac8ff, 2);
+  }
   /** Projéteis em voo (flechas, tiros): um traço claro com a ponta na posição atual. */
   private drawShots(state: GameState) {
     const g = this.shotsG; if (!g) return; g.clear();

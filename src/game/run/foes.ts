@@ -50,3 +50,33 @@ export function bestAim(cands: { pt: { x: number; y: number }; back?: boolean }[
 }
 /** Corredor "de verdade": nasceu atrás do grupo (emboscada) ou é do tipo runner, e ainda não desistiu de chegar na backline. */
 export const isRunnerNow = (m: { ambush?: boolean; defId: string; gaveUp?: boolean }) => !m.gaveUp && (!!m.ambush || foeRole(m.defId) === 'runner');
+
+/**
+ * Golpes de assinatura dos chefes (só no corredor): cada chefe alterna 2–3 padrões de círculos avisados, além da pancada e do golpe em área comuns.
+ *  - nova: um círculo enorme em volta do chefe (quem está colado precisa sair, o corpo a corpo inclusive);
+ *  - barrage: até 3 círculos pequenos em heróis diferentes (backline primeiro), um logo depois do outro;
+ *  - sweep: uma fileira de 3 círculos saindo do chefe em direção ao grupo, caindo em sequência.
+ */
+export type Signature = 'nova' | 'barrage' | 'sweep';
+export const BOSS_SIGNATURES: Record<string, Signature[]> = {
+  bone_king: ['nova', 'sweep'], spider_queen: ['barrage', 'sweep'], bog_hydra: ['barrage', 'nova'], crystal_golem: ['sweep', 'nova'],
+  winter_queen: ['barrage', 'nova'], flame_lord: ['sweep', 'barrage'], profane_high_priest: ['barrage', 'nova', 'sweep'],
+};
+export interface SigCircle { x: number; y: number; r: number; windup: number; mult: number; role: 'boss' | 'slam' }
+export const SIGNATURE = { nova: { r: 3.2, windup: 1.1, mult: 1.3 }, barrage: { r: .9, windup: .9, step: .25, mult: 1.1, max: 3 }, sweep: { r: 1.1, windup: .8, step: .22, mult: 1.25, count: 3, gap: 2 } } as const;
+/** Ataque de assinatura da vez (alterna a lista do chefe). A cada 3º ataque do chefe, ou a cada 2º na fase enfurecida. */
+export const signatureDue = (attackNo: number, phase: number) => phase >= 2 ? attackNo % 2 === 1 : attackNo % 3 === 2;
+export const signatureKind = (bossId: string, attackNo: number, phase: number): Signature | undefined => {
+  const list = BOSS_SIGNATURES[bossId]; if (!list || !signatureDue(attackNo, phase)) return undefined;
+  return list[Math.floor((phase >= 2 ? (attackNo - 1) / 2 : (attackNo - 2) / 3)) % list.length];
+};
+export function signatureCircles(kind: Signature, boss: { x: number; y: number }, heroes: { pt: { x: number; y: number }; back: boolean }[]): SigCircle[] {
+  if (!heroes.length) return [];
+  if (kind === 'nova') return [{ x: boss.x, y: boss.y, r: SIGNATURE.nova.r, windup: SIGNATURE.nova.windup, mult: SIGNATURE.nova.mult, role: 'boss' }];
+  if (kind === 'barrage') {
+    const order = [...heroes].sort((a, b) => Number(b.back) - Number(a.back) || Math.hypot(a.pt.x - boss.x, a.pt.y - boss.y) - Math.hypot(b.pt.x - boss.x, b.pt.y - boss.y));
+    return order.slice(0, SIGNATURE.barrage.max).map((h, i) => ({ x: h.pt.x, y: h.pt.y, r: SIGNATURE.barrage.r, windup: SIGNATURE.barrage.windup + i * SIGNATURE.barrage.step, mult: SIGNATURE.barrage.mult, role: 'slam' as const }));
+  }
+  const cx = heroes.reduce((s, h) => s + h.pt.x, 0) / heroes.length, cy = heroes.reduce((s, h) => s + h.pt.y, 0) / heroes.length, d = Math.hypot(cx - boss.x, cy - boss.y) || 1, ux = (cx - boss.x) / d, uy = (cy - boss.y) / d;
+  return Array.from({ length: SIGNATURE.sweep.count }, (_, i) => ({ x: boss.x + ux * SIGNATURE.sweep.gap * (i + 1), y: boss.y + uy * SIGNATURE.sweep.gap * (i + 1), r: SIGNATURE.sweep.r, windup: SIGNATURE.sweep.windup + i * SIGNATURE.sweep.step, mult: SIGNATURE.sweep.mult, role: 'slam' as const }));
+}

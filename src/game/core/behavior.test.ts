@@ -109,3 +109,32 @@ describe('menos círculos ao mesmo tempo', () => {
     } finally { Math.random = orig; }
   });
 });
+
+describe('chefes: golpes de assinatura', () => {
+  it('cada chefe tem padrões próprios, que entram a cada 3º ataque (2º na fase enfurecida) e alternam', async () => {
+    const { BOSS_SIGNATURES, signatureKind, signatureCircles, SIGNATURE } = await import('../run/foes');
+    const { MONSTERS } = await import('../data/monsters');
+    for (const m of Object.values(MONSTERS).filter(x => x.boss)) expect(BOSS_SIGNATURES[m.id], m.id).toBeTruthy();
+    expect([0, 1, 2, 3, 4, 5, 8].map(n => signatureKind('bone_king', n, 0))).toEqual([undefined, undefined, 'nova', undefined, undefined, 'sweep', 'nova']);
+    expect([0, 1, 2, 3].map(n => signatureKind('bone_king', n, 2))).toEqual([undefined, 'nova', undefined, 'sweep']);
+    const heroes = [{ pt: { x: 3, y: 0 }, back: false }, { pt: { x: 6, y: 1 }, back: true }, { pt: { x: 6, y: -1 }, back: true }, { pt: { x: 5, y: 3 }, back: true }];
+    const nova = signatureCircles('nova', { x: 0, y: 0 }, heroes); expect(nova).toHaveLength(1); expect(nova[0]).toMatchObject({ x: 0, y: 0, r: SIGNATURE.nova.r });
+    const barrage = signatureCircles('barrage', { x: 0, y: 0 }, heroes); expect(barrage).toHaveLength(SIGNATURE.barrage.max);
+    expect(barrage.every((c, i) => i === 0 || c.windup > barrage[i - 1].windup)).toBe(true); expect(new Set(barrage.map(c => `${c.x},${c.y}`)).size).toBe(3);   // alvos diferentes, backline primeiro
+    expect(barrage.every(c => heroes.find(h => h.pt.x === c.x && h.pt.y === c.y)!.back)).toBe(true);
+    const sweep = signatureCircles('sweep', { x: 0, y: 0 }, heroes); expect(sweep).toHaveLength(SIGNATURE.sweep.count); expect(sweep[2].x).toBeGreaterThan(sweep[0].x);
+    expect(signatureCircles('nova', { x: 0, y: 0 }, [])).toEqual([]);
+  });
+  it('no motor, o chefe lança círculos de assinatura (vários ao mesmo tempo ou um enorme) entre os golpes normais', () => {
+    const orig = Math.random; Math.random = mulberry32(4);
+    try {
+      const e = new GameEngine(partyState()); e.start(); const s = e.getSnapshot(), run = s.run!;
+      for (const c of s.characters) { c.hp = 999999; c.profile.level = 30; }
+      const tank = s.characters.find(c => c.isTank)!, tp = run.pos[tank.id];
+      s.monsters = [{ uid: 'b0', defId: 'bone_king', hp: 1e9, maxHp: 1e9, cooldown: .05, alive: true, x: tp.x + 1.6, y: tp.y, atkMul: .01 }]; run.open = true;
+      let nova = false, multi = 0;
+      for (let i = 0; i < 900; i++) { e.tick(100); const w = run.windups ?? []; if (w.some(x => x.r >= 3)) nova = true; multi = Math.max(multi, w.length); }
+      expect(nova || multi >= 2).toBe(true);
+    } finally { Math.random = orig; }
+  });
+});

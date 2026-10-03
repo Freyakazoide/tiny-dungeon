@@ -7,10 +7,10 @@ import { defaultLookFor, isValidLook, normalizeLook, type Look } from '../art/lo
 import { goalOfflineTargets, isGoalId, trainRingId, gateSkillOf, GOAL_NODES } from '../rpg/goals';
 import { DEFAULT_HUNT, HUNT_BY_ID, HUNTS, huntScale, huntWaves } from '../data/hunts';
 import { encounterKind, newTelemetry, type Telemetry } from './telemetry';
-import { KIND_HP, RUN_CONFIG, RUN_FLOW, WAVE_CONFIG } from '../data/balance';
+import { KIND_HP, paceOf, RUN_CONFIG, RUN_FLOW, WAVE_CONFIG } from '../data/balance';
 import { reinforcementIds } from '../systems/waves';
 import { RunPlan, bossPowerFor, BOSS_HP_MUL, depthScale, CHUNK_LEN } from '../run/plan';
-import { BOSS_ENRAGE, BOSS_PHASES, FOE_ATTACK, bestAim, foeRole, hasWindup, type FoeRole, type WindupRole } from '../run/foes';
+import { BOSS_ENRAGE, BOSS_PHASES, FOE_ATTACK, bestAim, foeRole, hasWindup, signatureCircles, signatureKind, type FoeRole, type WindupRole } from '../run/foes';
 import { allCovered, attackOrder, createRun, dist, foesInReach, freeNear, heroesInReach, placeHero, placeParty, radiusOf, reachOf, stepRun } from '../run/world';
 import { monsterKind, lateWaveBonus, batchToSpawn, composeExtras, drawFromBag, extrasTableFor, limitExtra, newBag, rollExtra, splitBatches, tierOfExtra, TIER_NAMES, waveRewards } from '../systems/waves';
 import { SPELLS, spellById } from '../data/spells';
@@ -126,9 +126,9 @@ export class GameEngine {
   private makeMonster(defId:string,index:number,chunk?:number,at?:{x:number;y:number}):MonsterRuntime{
     const kind=monsterKind(defId),scale=chunk!==undefined?depthScale(chunk,kind):{hp:1,atk:1},def=MONSTERS[defId],power=chunk!==undefined&&def.boss?BOSS_HP_MUL[bossPowerFor(this.state.run!.seed,chunk)]:1;
     // no corredor o HP também segue a categoria (comum mais frágil, chefe mais longo e mecânico)
-    const hp=Math.round(def.hp*runtime.monsterHp*huntScale(this.state.huntId).hp*scale.hp*power*(chunk!==undefined?KIND_HP[kind]:1));
+    const hp=Math.round(def.hp*runtime.monsterHp*huntScale(this.state.huntId).hp*scale.hp*power*(chunk!==undefined?KIND_HP[kind]*paceOf(this.state.huntId)[kind]:1));
     const m:MonsterRuntime={uid:`${this.state.cycle}-${this.state.wave}-${index}-${this.nextUid()}`,defId,hp,maxHp:hp,cooldown:1/Math.max(.1,def.speed),alive:true};
-    if(at){const depth=(1+(chunk??0)*.025)*(HUNT_BY_ID[this.state.huntId]?.rewardScale??1);m.x=at.x;m.y=at.y;m.atkMul=scale.atk;m.xpMul=depth*RUN_CONFIG.xpReward;m.goldMul=depth*RUN_CONFIG.goldReward;}return m;
+    if(at){const depth=(1+(chunk??0)*.025)*(HUNT_BY_ID[this.state.huntId]?.rewardScale??1);m.x=at.x;m.y=at.y;m.atkMul=scale.atk;m.xpMul=depth*RUN_CONFIG.xpReward*paceOf(this.state.huntId).xp;m.goldMul=depth*RUN_CONFIG.goldReward*paceOf(this.state.huntId).gold;}return m;
   }
   /** Encontro do corredor: registra a wave (tier, mensagem, mecânicas de início de wave) como as waves antigas faziam. */
   private startEncounter(_chunk:number,enc:{extra:number;tier:string;boss:boolean;monsters:string[];ambush?:number}){
@@ -169,14 +169,20 @@ export class GameEngine {
       if(m.cooldown>0)continue;
       const all=livingTeam(this.state);if(!all.length){this.defeat();return;}
       const role:FoeRole=MONSTERS[m.defId].boss&&(m.phase??0)>=2?'boss':MONSTERS[m.defId].boss&&(m.phase??0)===1?'slam':foeRole(m.defId);
-      if(this.runOn()&&hasWindup(role)){const began=this.beginWindup(m,role,all);if(began==='windup'){m.cooldown+=1/this.attackRate(m);continue;}if(began===false){m.cooldown=Math.max(0,m.cooldown);continue;}}
+      const isBoss=!!MONSTERS[m.defId].boss;
+      if(this.runOn()&&isBoss&&m.x!==undefined&&!(this.state.run!.windups??[]).some(w=>w.src===m.uid)){
+        const kind=signatureKind(m.defId,m.sig??0,m.phase??0),run=this.state.run!;
+        if(kind){const circles=signatureCircles(kind,{x:m.x,y:m.y!},all.filter(h=>run.pos[h.id]).map(h=>({pt:run.pos[h.id],back:h.row==='back'})));
+          if(circles.length){for(const c of circles)(run.windups??=[]).push({id:`w${this.nextUid()}`,src:m.uid,x:c.x,y:c.y,r:c.r,t:c.windup,total:c.windup,mult:c.mult,role:c.role});m.sig=(m.sig??0)+1;m.cooldown+=1/this.attackRate(m)+.6;continue;}}
+      }
+      if(this.runOn()&&hasWindup(role)){const began=this.beginWindup(m,role,all);if(began==='windup'){if(isBoss)m.sig=(m.sig??0)+1;m.cooldown+=1/this.attackRate(m);continue;}if(began===false){m.cooldown=Math.max(0,m.cooldown);continue;}}
       const pool=this.runOn()?heroesInReach(this.state,m,all):all;
       if(!pool.length){m.cooldown=Math.max(0,m.cooldown);continue;}
       if(this.runOn()&&m.slot&&all.some(x=>x.id===m.slot!.hero)&&!pool.some(x=>x.id===m.slot!.hero)){m.cooldown=Math.max(0,m.cooldown);continue;}
       const hidden=pool.filter(x=>!this.mech.untargetable(x));const targets=hidden.length?hidden:pool;
       if(m.statuses?.confused){const others=livingMonsters(this.state).filter(x=>x!==m),src=this.state.characters.find(x=>x.id===m.statuses!.confused!.source);if(others.length&&src){this.hit(src,others[Math.floor(Math.random()*others.length)],Math.max(1,Math.round(MONSTERS[m.defId].attack*3*runtime.monsterAtk)),false,true);m.cooldown+=1/MONSTERS[m.defId].speed;if(!livingMonsters(this.state).length)return;continue;}}
       const target=(m.slot&&targets.find(x=>x.id===m.slot!.hero))||pickMonsterTarget(targets)!;
-      this.monsterStrike(m,target,1);
+      this.monsterStrike(m,target,1);if(isBoss)m.sig=(m.sig??0)+1;
       m.cooldown+=1/this.attackRate(m);
       if(!livingTeam(this.state).length){this.defeat();return;}
     }
@@ -452,7 +458,7 @@ export class GameEngine {
   private spellProficiency(c:Character,s:NonNullable<ReturnType<typeof spellById>>):ProficiencyId{const weapon=itemById(c.equipment.weapon??'')?.trains??CLASSES[c.classId].weaponSkill;if(s.kind==='heal'||s.kind==='regen'||weapon==='magic')return 'magic';return s.kind==='shield'?'defense':weapon;}
   private creditHealing(sourceId:string|undefined,amount:number){const healer=this.state.characters.find(x=>x.id===sourceId);if(healer)addCounter(healer.profile,'healingDone',amount);}
   private hit(c:Character,target:GameState['monsters'][number],damage:number,crit=false,skipMech=false){if(!target.alive)return;const ctxBasic=this.mctx==='basic',ctxSpell=this.mctx==='spell';if(!skipMech){const o=this.mech.outgoing(c,target,{crit,basic:ctxBasic,spell:ctxSpell,element:ctxSpell?this.mel:undefined});damage=Math.round(damage*o.mult);crit=o.crit;}if(crit){addCounter(c.profile,'crits');if(MONSTERS[target.defId].boss)addCounter(c.profile,'bossCrits');}const fury=this.state.equippedCharms.includes('fury')?1.08:1;damage=Math.round(damage*fury);{const tel=this.telemetry,clk=this.state.run?.clock;if(clk!==undefined){tel.damage+=damage;tel.overkill+=Math.max(0,damage-target.hp);if(!tel.firstHit.has(target.uid))tel.firstHit.set(target.uid,clk);const o=tel.open;if(o&&!o.hit&&o.spawnedAt!==undefined){o.hit=true;tel.firstAttack.push(clk-o.spawnedAt);}}}target.hp=Math.max(0,target.hp-damage);this.state.analyzer.damage+=damage;this.state.analyzer.byCharacter[c.id]=(this.state.analyzer.byCharacter[c.id]??0)+damage;this.state.analyzer.byMonster[target.defId]=(this.state.analyzer.byMonster[target.defId]??0)+damage;this.emit({type:'damage',source:c.id,target:target.uid,value:damage});const steal=talentValue(c,'lifesteal');if(steal>0&&c.hp>0){const stats=characterStats(c,this.state),healed=Math.min(stats.maxHp-c.hp,damage*steal);if(healed>0){c.hp+=healed;this.state.analyzer.healing+=healed;}}if(!skipMech)this.mech.afterHit(c,target,damage,crit,{basic:ctxBasic,spell:ctxSpell,element:ctxSpell?this.mel:undefined});if(target.hp<=0&&target.alive)this.kill(target,c,crit);}
-  private kill(target:GameState['monsters'][number],killer?:Character,crit=false){target.alive=false;{const t0=this.telemetry.firstHit.get(target.uid);if(t0!==undefined&&this.state.run)this.telemetry.ttk[monsterKind(target.defId)].push((this.state.run.clock??0)-t0);this.telemetry.firstHit.delete(target.uid);}this.mech.onKill(killer,target,crit);const def=MONSTERS[target.defId];this.state.analyzer.kills[def.id]=(this.state.analyzer.kills[def.id]??0)+1;if(def.boss)this.state.analyzer.bosses++;const xpMult=this.state.equippedCharms.includes('wisdom')?1.12:1;const rwXp=target.xpMul??target.rewardMul??1,rwGold=target.goldMul??target.rewardMul??1,xp=Math.round(def.xp*xpMult*runtime.xpScale*rwXp);this.state.analyzer.xp+=xp;const gold=Math.round(randomInt(def.gold[0],def.gold[1])*(1+this.teamBest('gold'))*rwGold);{const stat=this.huntStat();stat.xp+=xp;stat.gold+=gold;if(def.boss)stat.bossKills++;}for(const c of this.state.team.map(id=>this.state.characters.find(x=>x.id===id)).filter(Boolean) as Character[]){gainExperience(c,Math.round(xp*(1+talentValue(c,'xp'))));addCounter(c.profile,'goldEarned',gold);if(def.boss)addCounter(c.profile,'bossKills');}this.state.gold+=gold;this.state.analyzer.gold+=gold;const drops=rollLoot(this.state,def,Math.random,1+this.teamBest('drop'));this.dropGear(def);const entry=this.state.codex[def.id]??={kills:0,discoveredLoot:[],claimed:[]};entry.kills++;for(const d of drops)if(!entry.discoveredLoot.includes(d.itemId))entry.discoveredLoot.push(d.itemId);this.state.codex[def.id]=entry;this.checkMilestones(entry);this.emit({type:'death',target:target.uid,text:`+${xp} XP · ${gold} ouro`});if(drops.length)this.emit({type:'drop',text:drops.map(d=>`${d.quantity}× ${itemById(d.itemId)?.name}`).join(', ')});if(!this.runOn()&&!livingMonsters(this.state).length){if(this.state.wavePending?.length)this.spawnBatch(Math.min(WAVE_CONFIG.batch,this.state.wavePending.length));else this.completeWave();}}
+  private kill(target:GameState['monsters'][number],killer?:Character,crit=false){target.alive=false;{const t0=this.telemetry.firstHit.get(target.uid);if(t0!==undefined&&this.state.run)this.telemetry.ttk[monsterKind(target.defId)].push((this.state.run.clock??0)-t0);this.telemetry.firstHit.delete(target.uid);}this.mech.onKill(killer,target,crit);const def=MONSTERS[target.defId];this.state.analyzer.kills[def.id]=(this.state.analyzer.kills[def.id]??0)+1;if(def.boss)this.state.analyzer.bosses++;const xpMult=this.state.equippedCharms.includes('wisdom')?1.12:1;const rwXp=target.xpMul??target.rewardMul??1,rwGold=target.goldMul??target.rewardMul??1,xp=Math.round(def.xp*xpMult*runtime.xpScale*rwXp);this.state.analyzer.xp+=xp;const gold=Math.round(randomInt(def.gold[0],def.gold[1])*(1+this.teamBest('gold'))*rwGold);{const stat=this.huntStat();stat.xp+=xp;stat.gold+=gold;if(def.boss)stat.bossKills++;}for(const c of this.state.team.map(id=>this.state.characters.find(x=>x.id===id)).filter(Boolean) as Character[]){gainExperience(c,Math.round(xp*(1+talentValue(c,'xp'))));addCounter(c.profile,'goldEarned',gold);if(def.boss)addCounter(c.profile,'bossKills');}this.state.gold+=gold;this.state.analyzer.gold+=gold;const lootMul=this.runOn()&&!def.boss?paceOf(this.state.huntId).loot:1;const drops=rollLoot(this.state,def,Math.random,(1+this.teamBest('drop'))*lootMul);this.dropGear(def,lootMul);const entry=this.state.codex[def.id]??={kills:0,discoveredLoot:[],claimed:[]};entry.kills++;for(const d of drops)if(!entry.discoveredLoot.includes(d.itemId))entry.discoveredLoot.push(d.itemId);this.state.codex[def.id]=entry;this.checkMilestones(entry);this.emit({type:'death',target:target.uid,text:`+${xp} XP · ${gold} ouro`});if(drops.length)this.emit({type:'drop',text:drops.map(d=>`${d.quantity}× ${itemById(d.itemId)?.name}`).join(', ')});if(!this.runOn()&&!livingMonsters(this.state).length){if(this.state.wavePending?.length)this.spawnBatch(Math.min(WAVE_CONFIG.batch,this.state.wavePending.length));else this.completeWave();}}
   private checkMilestones(entry:GameState['codex'][string]){for(const [i,n] of [10,50,200].entries())if(entry.kills>=n&&!entry.claimed.includes(n)){entry.claimed.push(n);this.state.charmPoints+=i+1;for(const charm of CHARMS)if(charm.milestone<=n&&!this.state.unlockedCharms.includes(charm.id))this.state.unlockedCharms.push(charm.id);}}
   /** Wave grande (Horda/Invasão): rolagens extras de equipamento e, na Invasão, ouro extra. Vale só se a wave foi realmente varrida. */
   private waveBonus(){
@@ -734,8 +740,8 @@ export class GameEngine {
   private stashGear(instance:ItemInstance){if(gearFits(this.state.gearBag,[instance])){instance.fresh=true;this.state.gearBag.push(instance);return true;}this.state.gold+=gearValue(instance);this.state.message=`Mochila de equipamento cheia: ${classItem(instance.baseId)?.name} vendido por ${gearValue(instance)} ouro.`;return false;}
   /** Classes sorteáveis nos drops: as jogáveis do Tier 1 e as do caminho da equipe. */
   private gearDropClasses(){const set=new Set<string>(Object.values(CLASS_BY_ID).filter(n=>n.tier===1&&isPlayable(n.id)).map(n=>n.id));for(const id of this.state.team){const c=this.state.characters.find(x=>x.id===id);for(const node of c?.profile.classPath??[])if(CLASS_BY_ID[node]?.tier===1)set.add(node);}return [...set];}
-  private dropGear(def:MonsterDef){
-    if(Math.random()>=(def.boss?GEAR_DROP_CHANCE.boss:GEAR_DROP_CHANCE.normal))return;
+  private dropGear(def:MonsterDef,lootMul=1){
+    if(Math.random()>=(def.boss?GEAR_DROP_CHANCE.boss:GEAR_DROP_CHANCE.normal*lootMul))return;
     const instance=rollGearDrop(HUNTS.findIndex(h=>h.id===this.state.huntId),!!def.boss,this.gearDropClasses());
     if(!instance)return;
     const name=classItem(instance.baseId)?.name??instance.baseId;

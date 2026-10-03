@@ -178,7 +178,7 @@ describe('posição por papel e histerese', () => {
 });
 
 describe('golpes avisados: tanque pesa o risco; reação com atraso', () => {
-  const zone = (dmg: number, o: Partial<StrikeZone> = {}): StrikeZone => ({ x: 5, y: 5, r: 1.4, dmg, boss: false, age: 1, ...o });
+  const zone = (dmg: number, o: Partial<StrikeZone> = {}): StrikeZone => ({ x: 5, y: 5, r: 1.4, dmg, boss: false, age: 1, left: .3, ...o });
   const tank = { pt: { x: 5, y: 5 }, hp: 1000, maxHp: 1000 };
   it('segura a posição com golpe leve e vida confortável; sai se for letal, vida baixa, vários ou AoE forte de chefe', () => {
     expect(tankShouldLeave(tank, [zone(150)])).toBe(false);
@@ -193,6 +193,10 @@ describe('golpes avisados: tanque pesa o risco; reação com atraso', () => {
     const z = [zone(100)], ranged = { role: 'ranged' as Role, ...tank }, t = { role: 'tank' as Role, ...tank };
     expect(shouldEvade(ranged, z)).toBe(true); expect(shouldEvade(t, z)).toBe(false); expect(shouldEvade(t, [zone(700)])).toBe(true);
     expect(shouldEvade(ranged, [zone(100, { x: 30 })])).toBe(false);
+  });
+  it('corpo a corpo da frente ignora golpe leve (risco com o dano em dobro) e sai do pesado', () => {
+    const melee = { role: 'melee' as Role, ...tank };
+    expect(shouldEvade(melee, [zone(100)])).toBe(false); expect(shouldEvade(melee, [zone(300)])).toBe(true);
   });
   it('cada herói percebe o golpe com um atraso próprio (estável, dentro da faixa) e não prevê o que ainda não foi avisado', () => {
     const ids = ['aldric', 'kael', 'lyra', 'x1', 'x2', 'x3'], delays = ids.map(reactDelay);
