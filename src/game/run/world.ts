@@ -155,7 +155,7 @@ export const aiOf = (c: Character, role = heroRole(c)): AiConfig => ({ ...DEFAUL
 export const reachOf = (c: Character) => isMelee(c) ? R.meleeReach : R.rangedReach;
 
 export function createRun(state: GameState, seed = Math.floor(Math.random() * 2 ** 31)): RunState {
-  const run: RunState = { seed, anchor: 4, pos: {}, lastTrigger: 0, open: false, queue: [], deepest: 4 };
+  const run: RunState = { seed, anchor: 4, pos: {}, lastTrigger: 0, open: false, queue: [], deepest: 4, floor: 0 };
   state.run = run; return run;
 }
 /** Célula livre mais próxima de `p` (espiral de até 3 células); sem nenhuma, devolve `p`. */

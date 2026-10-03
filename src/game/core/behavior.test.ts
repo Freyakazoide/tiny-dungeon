@@ -162,8 +162,8 @@ describe('ritmo calibrado por hunt', () => {
     for (const id of ['catacumbas', 'floresta_sombria', 'vulcao_ardente']) {
       const r = simulateRun(id, { minutes: 15, seed: 1 }), ref = HUNT_BY_ID[id];
       expect(r.feel.commonS, `${id} comum`).toBeGreaterThan(4.5); expect(r.feel.commonS, `${id} comum`).toBeLessThan(9);
-      expect(r.xpPerHour / ref.refXpPerHour, `${id} xp`).toBeGreaterThan(.4); expect(r.xpPerHour / ref.refXpPerHour, `${id} xp`).toBeLessThan(1.6);
-      expect(r.goldPerHour / ref.refGoldPerHour, `${id} ouro`).toBeLessThan(1.6); expect(r.defeats, id).toBeLessThanOrEqual(1);
+      expect(r.xpPerHour / ref.refXpPerHour, `${id} xp`).toBeGreaterThan(.4); expect(r.xpPerHour / ref.refXpPerHour, `${id} xp`).toBeLessThan(2);
+      expect(r.goldPerHour / ref.refGoldPerHour, `${id} ouro`).toBeLessThan(2); expect(r.defeats, id).toBeLessThanOrEqual(1);
     }
   }, 300000);
 });

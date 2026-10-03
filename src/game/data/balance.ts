@@ -56,7 +56,7 @@ export const WAVE_CONFIG = {
 
 /** Modo "corredor" (overhaul): o grupo anda por um mapa procedural infinito e luta por alcance. Os testes de engine antigos rodam com `enabled: false` (ver test-setup.ts). */
 /** Descer a escada (só depois do chefe) troca o mapa e fortalece a run: por andar, até `maxTier` descidas, depois fica no teto. */
-export const FLOOR_RAMP = { maxTier: 6, hp: .18, atk: .12, xp: .3, gold: .15 };
+export const FLOOR_RAMP = { maxTier: 6, hp: .12, atk: .12, xp: .3, gold: .15 };
 export const floorTier = (floor = 0) => Math.max(0, Math.min(FLOOR_RAMP.maxTier, Math.floor(floor)));
 export const floorScale = (floor = 0) => { const t = floorTier(floor); return { hp: 1 + FLOOR_RAMP.hp * t, atk: 1 + FLOOR_RAMP.atk * t, xp: 1 + FLOOR_RAMP.xp * t, gold: 1 + FLOOR_RAMP.gold * t }; };
 export const RUN_CONFIG = {

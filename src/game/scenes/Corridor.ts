@@ -103,8 +103,8 @@ export class Game extends Scene {
 
   /** Plano (puro) da run atual; sem run (parado), uma pré-visualização fixa da hunt. */
   private planFor(state: GameState) {
-    const seed = state.run?.seed ?? 1, key = `${seed}:${state.huntId}`;
-    if (key !== this.planKey || !this.plan) { const first = !!this.plan; this.plan = new RunPlan({ seed, huntId: state.huntId, capped: true }); this.planKey = key; this.clearWorld(); if (first && state.run) this.cameras.main.fadeIn(900, 0, 0, 0); }
+    const seed = state.run?.seed ?? 1, floor = state.run?.floor ?? 0, key = `${seed}:${state.huntId}:${floor}`;
+    if (key !== this.planKey || !this.plan) { const first = !!this.plan; this.plan = new RunPlan({ seed, huntId: state.huntId, capped: true, floor }); this.planKey = key; this.clearWorld(); if (first && state.run) this.cameras.main.fadeIn(900, 0, 0, 0); }
     return this.plan;
   }
   private clearWorld() { for (const t of this.tiles.values()) t.destroy(); for (const p of this.props.values()) p.destroy(); this.tiles.clear(); this.props.clear(); this.cam.init = false; }

@@ -1,4 +1,4 @@
-import { BOSS_EXTRAS, COMMON_DEPTH_HP_CAP } from '../data/balance';
+import { BOSS_EXTRAS, COMMON_DEPTH_HP_CAP, floorTier } from '../data/balance';
 import { HUNT_BY_ID } from '../data/hunts';
 import { MONSTERS } from '../data/monsters';
 import { extrasTableFor, limitExtra, reinforcementIds, rollExtra, tierOfExtra, type WaveTier } from '../systems/waves';
@@ -37,7 +37,7 @@ export interface Frame { ox: number; oy: number; ax: number; ay: number; bx: num
 export interface Trap { c: number; r: number }
 export interface Chunk { index: number; start: number; heading: Heading; frame: Frame; turn?: 'R' | 'L'; obstacles: Obstacle[]; /** armadilhas de espinhos: chão andável que fere quem pisa (nunca sobre obstáculo) */ traps: Trap[]; encounter?: Encounter }
 
-export interface RunParams { seed: number; huntId: string; /** corta o mapa no fim do andar (chunks além de FLOOR_CHUNKS não existem): usado na run de verdade */ capped?: boolean }
+export interface RunParams { seed: number; huntId: string; /** corta o mapa no fim do andar (chunks além de FLOOR_CHUNKS não existem): usado na run de verdade */ capped?: boolean; /** andar da run: cada descida põe mais monstros em cada encontro (até o teto da dificuldade) */ floor?: number }
 export const bossIdOf = (huntId: string) => { const waves = (HUNT_BY_ID[huntId] ?? HUNT_BY_ID.catacumbas).waves; return waves[waves.length - 1].monsters.find(id => MONSTERS[id]?.boss) ?? waves[waves.length - 1].monsters[0]; };
 
 const AXES: Record<Heading, { a: [number, number]; b: [number, number] }> = { W: { a: [-1, 0], b: [0, 1] }, N: { a: [0, -1], b: [-1, 0] }, S: { a: [0, 1], b: [1, 0] } };
@@ -54,13 +54,13 @@ export const depthScale = (index: number, kind: 'common' | 'elite' | 'boss' = 'e
 });
 
 /** Quantos monstros-núcleo tem um encontro, por profundidade (índice do chunk). */
-const baseCount = (index: number) => 3 + Math.min(5, Math.floor(index / 6));
+const baseCount = (index: number, tier = 0) => 3 + Math.min(5, Math.floor(index / 6)) + tier;
 
 /** Sorteio bruto de reforços do chunk (puro); a regra "sem hordas em sequência" olha o sorteio do chunk anterior. */
 function rawExtra(params: RunParams, index: number, boss: boolean): number {
   if (index < 0) return 0;
   const hunt = HUNT_BY_ID[params.huntId], rng = rngFor(params.seed, 31, index);
-  const scale = (hunt?.extrasScale ?? 1) * (1 + Math.min(.6, index * .012));
+  const scale = (hunt?.extrasScale ?? 1) * (1 + Math.min(.6, index * .012)) * (1 + .15 * floorTier(params.floor));
   const lateBonus = !boss && index >= 2 && rng() < Math.min(.6, .06 * index) ? 1 : 0;
   return Math.round(rollExtra(boss ? BOSS_EXTRAS : extrasTableFor(hunt, false), rng) * scale) + lateBonus;
 }
@@ -134,7 +134,7 @@ export function generateChunk(params: RunParams, index: number, frame: Frame, he
   const monsters: string[] = [];
   const bossPower = isBossChunk ? bossPowerFor(seed, index) : undefined;
   if (isBossChunk) monsters.push(bossIdOf(huntId));
-  const core = isBossChunk ? 3 : baseCount(index);
+  const tier = floorTier(params.floor), core = isBossChunk ? 3 + Math.ceil(tier / 2) : baseCount(index, tier);
   for (let i = 0; i < core; i++) monsters.push(i === 0 && !isBossChunk && index > 8 && rng() < .5 ? elite : common);
   for (let i = 0; i < extra; i++) monsters.push(rng() < .15 ? elite : common);
   // emboscada: a partir do 3º trecho, 1 encontro comum em 4 manda 2 ou 3 monstros pelas costas do grupo

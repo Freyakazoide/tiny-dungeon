@@ -122,7 +122,7 @@ export class GameEngine {
   telemetry:Telemetry=newTelemetry();
   private planCache?:{key:string;plan:RunPlan};
   /** Plano do corredor (puro, regenerado da semente e da hunt; nada dele vai para o save). */
-  private plan():RunPlan{const run=this.state.run!,key=`${run.seed}:${this.state.huntId}`;if(this.planCache?.key!==key)this.planCache={key,plan:new RunPlan({seed:run.seed,huntId:this.state.huntId,capped:true})};return this.planCache.plan;}
+  private plan():RunPlan{const run=this.state.run!,key=`${run.seed}:${this.state.huntId}:${run.floor??0}`;if(this.planCache?.key!==key)this.planCache={key,plan:new RunPlan({seed:run.seed,huntId:this.state.huntId,capped:true,floor:run.floor??0})};return this.planCache.plan;}
   private makeMonster(defId:string,index:number,chunk?:number,at?:{x:number;y:number}):MonsterRuntime{
     const kind=monsterKind(defId),fl=floorScale(this.state.run?.floor),ds=chunk!==undefined?depthScale(chunk,kind):{hp:1,atk:1},scale=chunk!==undefined?{hp:ds.hp*fl.hp,atk:ds.atk*fl.atk}:ds,def=MONSTERS[defId],power=chunk!==undefined&&def.boss?BOSS_HP_MUL[bossPowerFor(this.state.run!.seed,chunk)]:1;
     // no corredor o HP também segue a categoria (comum mais frágil, chefe mais longo e mecânico)

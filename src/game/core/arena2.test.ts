@@ -35,7 +35,10 @@ describe('armadilhas no plano', () => {
 
 describe('armadilhas no jogo', () => {
   const onTrap = () => {
-    const e = new GameEngine(partyState()); e.start(); const s = e.getSnapshot(), plan = (e as unknown as { plan(): RunPlan }).plan();
+    const e = new GameEngine(partyState()); e.start(); const s = e.getSnapshot();
+    // o andar tem só 8 chunks: procura uma semente com armadilha nos trechos 3 a 6
+    let seed = 1; while (![3, 4, 5, 6].some(i => new RunPlan({ seed, huntId: s.huntId, capped: true }).chunk(i).traps.length)) seed++;
+    s.run!.seed = seed; const plan = (e as unknown as { plan(): RunPlan }).plan();
     let idx = TRAP_FROM; while (!plan.chunk(idx).traps.length) idx++; plan.ensure(idx);
     const ch = plan.chunk(idx), t = ch.traps[0], f = ch.frame, at = { x: f.ox + f.ax * (t.c + .5) + f.bx * (t.r + .5), y: f.oy + f.ay * (t.c + .5) + f.by * (t.r + .5) };
     return { e, s, at, trap: () => (e as unknown as { tickTraps(): void }).tickTraps() };
@@ -64,7 +67,9 @@ describe('emboscada', () => {
     expect(ambushes / eligible).toBeGreaterThan(.12); expect(ambushes / eligible).toBeLessThan(.4);
   });
   it('no jogo: os emboscadores nascem atrás do grupo, o grupo para para lutar e eles vão na backline', () => {
-    const e = new GameEngine(partyState()); e.start(); const s = e.getSnapshot(), plan = (e as unknown as { plan(): RunPlan }).plan();
+    const e = new GameEngine(partyState()); e.start(); const s = e.getSnapshot();
+    let seed = 1; while (![2, 3, 4, 5, 6].some(i => new RunPlan({ seed, huntId: s.huntId, capped: true }).chunk(i).encounter?.ambush)) seed++;
+    s.run!.seed = seed; const plan = (e as unknown as { plan(): RunPlan }).plan();
     for (const c of s.characters) { c.profile.level = 30; c.hp = 99999; }
     let idx = AMBUSH_FROM; while (!plan.chunk(idx).encounter?.ambush) idx++;
     const enc = plan.chunk(idx).encounter!, ch = plan.chunk(idx);

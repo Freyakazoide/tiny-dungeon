@@ -29,6 +29,12 @@ describe('Andares e escada', () => {
     expect(plan.isBlocked(past.x, past.y)).toBe(true);
   });
 
+  it('quanto mais fundo o andar, mais monstros por encontro (até o teto)', () => {
+    const total = (floor: number) => { let n = 0; for (let seed = 1; seed <= 12; seed++) { const plan = new RunPlan({ seed, huntId: 'catacumbas', capped: true, floor }); for (let i = 1; i < FLOOR_CHUNKS - 1; i++) n += plan.chunk(i).encounter!.monsters.length; } return n; };
+    const t0 = total(0), t3 = total(3), t6 = total(6);
+    expect(t3).toBeGreaterThan(t0 * 1.4); expect(t6).toBeGreaterThan(t3); expect(total(9)).toBe(t6);
+  });
+
   it('a escada só funciona depois do chefe: desce com semente nova e monstros mais fortes', () => {
     const e = new GameEngine(partyState()); e.selectHunt('catacumbas');
     for (const c of e.getSnapshot().characters) e.devSetLevel(c.id, 12);
