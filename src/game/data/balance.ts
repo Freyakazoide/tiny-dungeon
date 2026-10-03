@@ -76,3 +76,17 @@ export const RUN_CONFIG = {
   /** XP e ouro por kill no corredor (depois da escala por profundidade); calibrado para ficar perto do ritmo de referência das hunts */
   reward: 1.05,
 };
+
+/** Câmera da run (em células e por segundo): ver `run/camera.ts`. */
+export const CAMERA = {
+  /** margem da safe screen area: heróis ficam a pelo menos isto das bordas visíveis */
+  margin: 1.35,
+  /** células à frente da âncora que a câmera olha fora de combate / como ponto de partida em combate */
+  lead: 3, combatLead: 1.5,
+  /** inimigos a até tantas células de um herói entram no cálculo do centro da ação */
+  foeRange: 8,
+  /** quanto do caminho até o centro da ação a câmera percorre em combate (o resto fica na âncora) */
+  actionMix: .75,
+  /** taxas de suavização (1/s, multiplicadas pela velocidade da simulação até `maxSpeedFactor`) */
+  filterRate: 2.6, followRate: 5, combatRate: 2.2, maxSpeedFactor: 4,
+};

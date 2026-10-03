@@ -8,6 +8,7 @@ import { characterStats } from '../systems/progression';
 import type { Character, GameState, MonsterRuntime, RunState } from '../core/types';
 import { BAND, RunPlan, type Encounter, type Pt } from './plan';
 import { BOSS_ENRAGE, FOE_ATTACK, foeRole, isRanged } from './foes';
+import { dist, fits, perp, RADIUS, type Body } from './geom';
 
 /**
  * Mundo do corredor: posições em células do mundo (x, y), movimento, colisão e IA de quem anda no mapa. Só lê CONFIGURAÇÃO (nunca ordens ao
@@ -15,13 +16,10 @@ import { BOSS_ENRAGE, FOE_ATTACK, foeRole, isRanged } from './foes';
  * cada herói: quando as vagas do tanque acabam, o excedente vai atrás de quem está na backline (como no Tibia).
  */
 export type { Pt };
-export const dist = (a: Pt, b: Pt) => Math.hypot(a.x - b.x, a.y - b.y);
-export const RADIUS = { unit: .36, boss: .95 };
+export { dist, fits, RADIUS };
+export type { Body };
 export const radiusOf = (m: MonsterRuntime) => MONSTERS[m.defId].boss ? RADIUS.boss : RADIUS.unit;
 const NEIGHBORS: [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
-
-/** O círculo de raio `r` em (x, y) cabe no chão (4 pontos do contorno)? */
-export const fits = (plan: RunPlan, x: number, y: number, r: number) => { const k = r * .8; return !plan.isBlocked(x - k, y - k) && !plan.isBlocked(x + k, y - k) && !plan.isBlocked(x - k, y + k) && !plan.isBlocked(x + k, y + k); };
 
 /** Caminho curto (busca em largura em células, 8 direções, sem cortar quina) até a célula do alvo; devolve o centro da primeira célula do caminho. */
 export function waypoint(plan: RunPlan, u: Pt, tx: number, ty: number): Pt | null {
@@ -46,7 +44,6 @@ export function waypoint(plan: RunPlan, u: Pt, tx: number, ty: number): Pt | nul
   return { x: Math.floor(cur / h) + lox + .5, y: cur % h + loy + .5 };
 }
 
-export interface Body { pt: Pt; r: number }
 /**
  * Anda até (tx, ty) no máximo `step`: em linha reta quando o trecho está livre, senão segue o caminho da busca; depois resolve a colisão com as
  * outras unidades (só recusa quem entra mais fundo no espaço do outro; encostar e se afastar é permitido) e escorrega pelos eixos.
@@ -139,7 +136,6 @@ export function freeNear(plan: RunPlan, p: Pt): Pt {
   }
   return { ...p };
 }
-const perp = (f: Pt): Pt => ({ x: -f.y, y: f.x });
 /** Coloca (ou recoloca) a equipe na formação em volta do ponto `run.anchor`: frente na âncora, trás `rear` células atrás, espalhados na largura. */
 export function placeParty(state: GameState, plan: RunPlan) {
   const run = state.run!, team = state.team.map(id => state.characters.find(c => c.id === id)).filter(Boolean) as Character[];

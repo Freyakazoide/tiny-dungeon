@@ -14,6 +14,7 @@ import { lookKey, type Look } from '../art/look';
 import { TOMBSTONE_TEXTURE, TRAP_TEXTURE, cellTexture, characterTexture, characterWalkAnim, ensureLookTextures, monsterTexture, obstacleTexture, type CellKind } from '../art/textures';
 import type { FxKind } from '../systems/spellFx';
 import { CHUNK_LEN, RunPlan } from '../run/plan';
+import { newCamera, stepCamera, relevantFoes, safeArea } from '../run/camera';
 import { aggroGroups, freeNear, radiusOf, RADIUS, ringPoint } from '../run/world';
 import { playAttackFx } from './effects';
 import { dominantDirection, type ArenaPoint } from './movement';
@@ -38,7 +39,8 @@ export class Game extends Scene {
   private unsubscribeFx?: () => void;
   private plan?: RunPlan;
   private planKey = '';
-  private cam = { x: 0, y: 0, init: false };
+  private cam = newCamera();
+  private camView = { w: 20, h: 11 };
   private title!: Phaser.GameObjects.Text;
   private status!: Phaser.GameObjects.Text;
   private banner!: Phaser.GameObjects.Container;
@@ -85,7 +87,7 @@ export class Game extends Scene {
   update(_time: number, delta: number) {
     if (this.dead) return;
     gameStore.advance(delta, runtime.huntSpeed);
-    this.drawWorld(gameStore.getSnapshot());
+    this.drawWorld(gameStore.getSnapshot(), delta);
     this.drawTelegraphs(gameStore.getSnapshot());
     this.drawShots(gameStore.getSnapshot());
     if (this.debug) this.drawDebug(gameStore.getSnapshot());
@@ -107,14 +109,19 @@ export class Game extends Scene {
     return freeNear(plan, { x: base.x, y: base.y + off });
   }
 
+  private livingHeroPoints(state: GameState) {
+    return state.team.map(id => state.characters.find(c => c.id === id)).filter((c): c is Character => !!c && c.hp > 0).map((c, i) => state.run?.pos[c.id] ?? this.heroPos(state, c, i));
+  }
   /** Câmera e blocos do que aparece na tela: chão, parede (com tocha) e pedra de preenchimento; obstáculos por cima. */
-  private drawWorld(state: GameState) {
+  private drawWorld(state: GameState, delta = 16) {
     const plan = this.planFor(state), anchor = state.run?.anchor ?? 4, cam = this.cameras.main, { width, height } = this.scale;
     plan.ensure(plan.indexAt(anchor));
-    const here = plan.pathPoint(anchor), fwd = plan.forwardAt(anchor), tx = px(here.x + fwd.x * 2.5), ty = px(here.y + fwd.y * 2.5);
-    if (!this.cam.init) { this.cam.x = tx; this.cam.y = ty; this.cam.init = true; }
-    const k = Math.min(1, .07 * Math.max(1, Math.min(runtime.huntSpeed, 8))); this.cam.x += (tx - this.cam.x) * k; this.cam.y += (ty - this.cam.y) * k;
-    cam.setScroll(Math.round(this.cam.x - width / 2), Math.round(this.cam.y - height / 2));
+    // câmera: segue a ação (heróis vivos + inimigos relevantes) misturada com a âncora, com suavização e safe screen area (ver run/camera.ts)
+    const here = plan.pathPoint(anchor), fwd = plan.forwardAt(anchor), heroes = this.livingHeroPoints(state), foes = state.monsters.filter(m => m.alive && m.x !== undefined).map(m => ({ x: m.x!, y: m.y! }));
+    this.camView = { w: width / CELL_PX, h: height / CELL_PX };
+    const inCombat = relevantFoes(heroes, foes).length > 0 || !!state.run?.windups?.length;
+    stepCamera(this.cam, { anchor: here, fwd, heroes, foes, inCombat, view: this.camView, dt: delta / 1000, speed: runtime.huntSpeed });
+    cam.setScroll(Math.round(px(this.cam.x) - width / 2), Math.round(px(this.cam.y) - height / 2));
     const huntId = state.huntId, x0 = Math.floor(cam.scrollX / CELL_PX) - 1, x1 = Math.ceil((cam.scrollX + width) / CELL_PX) + 1, y0 = Math.floor(cam.scrollY / CELL_PX) - 1, y1 = Math.ceil((cam.scrollY + height) / CELL_PX) + 1;
     const keep = new Set<string>(), propKeep = new Set<string>();
     for (let cx = x0; cx <= x1; cx++) for (let cy = y0; cy <= y1; cy++) {
@@ -162,6 +169,7 @@ export class Game extends Scene {
     const team = state.team.map(id => state.characters.find(c => c.id === id)).filter((c): c is Character => !!c && c.hp > 0), colors = [0xf0c24b, 0x5fd0ff, 0xb48cff, 0x7be08a];
     const colorOf = (id: string) => colors[Math.max(0, team.findIndex(c => c.id === id)) % colors.length];
     const rank = aggroGroups(team);
+    const sa = safeArea({ x: this.cam.x, y: this.cam.y }, this.camView); g.lineStyle(2, 0x6ee7a8, .55).strokeRect(px(sa.x0), px(sa.y0), px(sa.x1 - sa.x0), px(sa.y1 - sa.y0));   // safe screen area
     team.forEach(c => {
       const p = run.pos[c.id]; if (!p) return; const col = colorOf(c.id), tier = rank.findIndex(gr => gr.includes(c));
       g.lineStyle(2, col, .95).strokeCircle(px(p.x), px(p.y), px(RADIUS.unit));
