@@ -6,6 +6,7 @@ import { GEAR_SETS, gearId } from '../data/gear';
 import { autoSpend } from './talentBuild';
 import { POTION_STOCK } from '../data/shop';
 import { characterStats } from '../systems/progression';
+import type { Telemetry } from './telemetry';
 import type { Character } from './types';
 
 /** Harness de balanceamento: roda uma hunt inteira no engine, sem tela, e devolve as métricas do plano. */
@@ -45,7 +46,7 @@ export const mulberry32 = (seed: number) => () => { seed |= 0; seed = seed + 0x6
 const percentile = (values: number[], q: number) => { if (!values.length) return 0; const sorted = [...values].sort((a, b) => a - b); return sorted[Math.min(sorted.length - 1, Math.ceil(q * sorted.length) - 1)]; };
 
 /** Grupo de referência da fase 7: Guerreiro (frente, tanque), Caçador e Mago (atrás), conjunto da hunt equipado e, opcionalmente, talentos gastos. */
-function buildReference(engine: GameEngine, huntId: string, level: number, talents: boolean) {
+export function buildReference(engine: GameEngine, huntId: string, level: number, talents: boolean) {
   const [a, b, c] = engine.getSnapshot().characters;
   for (const [ch, node] of [[a, 'guerreiro'], [b, 'cacador'], [c, 'mago']] as const) { ch.profile.level = level; engine.evolve(ch.id, node, { force: true }); }
   const chars = engine.getSnapshot().characters;
@@ -122,7 +123,14 @@ export function daysToLevel(xpNeeded: number, xpPerHour: number, activeHoursPerD
   return xpNeeded / (xpPerHour * activeHoursPerDay);
 }
 
-export interface RunMetrics { huntId: string; level: number; minutes: number; distance: number; kills: number; bossKills: number; defeats: number; xpPerHour: number; goldPerHour: number; potionCostPerHour: number; minHpFraction: number; deepestChunk: number; encounters: number }
+export interface RunMetrics { huntId: string; level: number; minutes: number; distance: number; kills: number; bossKills: number; defeats: number; xpPerHour: number; goldPerHour: number; potionCostPerHour: number; minHpFraction: number; deepestChunk: number; encounters: number; feel: GameFeel }
+/** Métricas de "game feel": ritmo dos encontros, TTK, tempo andando × lutando, comportamento da IA e eficiência do dano. Medianas em segundos. */
+export interface GameFeel { combatShare: number; walkShare: number; commonS: number; heavyS: number; bossS: number; ttkCommonS: number; ttkEliteS: number; ttkBossS: number; firstAttackS: number; switchesPerMin: number; dodgesPerMin: number; peelsPerMin: number; retreatsPerMin: number; roamPerMin: number; overkillShare: number; shotLossShare: number }
+const median = (xs: number[]) => { if (!xs.length) return 0; const a = [...xs].sort((x, y) => x - y), m = a.length >> 1; return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2; };
+export function gameFeel(t: Telemetry): GameFeel {
+  const by = (k: string) => median(t.encounters.filter(e => e.kind === k).map(e => e.seconds)), min = Math.max(1e-6, t.totalS / 60);
+  return { combatShare: t.combatS / (t.totalS || 1), walkShare: t.walkS / (t.totalS || 1), commonS: by('common'), heavyS: by('heavy'), bossS: by('boss'), ttkCommonS: median(t.ttk.common), ttkEliteS: median(t.ttk.elite), ttkBossS: median(t.ttk.boss), firstAttackS: median(t.firstAttack), switchesPerMin: t.switches / min, dodgesPerMin: t.dodge / min, peelsPerMin: t.peel / min, retreatsPerMin: t.retreat / min, roamPerMin: t.roam / min, overkillShare: t.overkill / (t.damage || 1), shotLossShare: t.shotsLost / (t.shotsFired || 1) };
+}
 /** Harness do corredor: roda `minutes` de jogo simulado com o grupo de referência e mede o ritmo (XP/h, ouro/h, poções, quedas, chefes). */
 export function simulateRun(huntId: string, options: { minutes?: number; level?: number; seed?: number; talents?: boolean } = {}): RunMetrics {
   const hunt = HUNT_BY_ID[huntId], level = options.level ?? hunt.recommendedLevel, minutes = options.minutes ?? 30;
@@ -148,6 +156,6 @@ export function simulateRun(huntId: string, options: { minutes?: number; level?:
       for (const c of s.characters) minHp = Math.min(minHp, c.hp / characterStats(c, s).maxHp);
     }
     const s = engine.getSnapshot(), a = s.analyzer, hours = a.activeMs / 3_600_000;
-    return { huntId, level, minutes, distance: Math.round(s.run?.deepest ?? 0), kills: Object.values(a.kills).reduce((x, y) => x + y, 0), bossKills: a.bosses, defeats: a.defeats, xpPerHour: hours ? a.xp / hours : 0, goldPerHour: hours ? a.gold / hours : 0, potionCostPerHour: hours ? a.suppliesValue / hours : 0, minHpFraction: minHp, deepestChunk: deepest, encounters: Math.max(0, (s.run?.lastTrigger ?? 0)) };
+    return { huntId, level, minutes, distance: Math.round(s.run?.deepest ?? 0), kills: Object.values(a.kills).reduce((x, y) => x + y, 0), bossKills: a.bosses, defeats: a.defeats, xpPerHour: hours ? a.xp / hours : 0, goldPerHour: hours ? a.gold / hours : 0, potionCostPerHour: hours ? a.suppliesValue / hours : 0, minHpFraction: minHp, deepestChunk: deepest, encounters: Math.max(0, (s.run?.lastTrigger ?? 0)), feel: gameFeel(engine.telemetry) };
   } finally { for (const undo of restore.reverse()) undo(); }
 }

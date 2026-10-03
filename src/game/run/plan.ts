@@ -1,4 +1,4 @@
-import { BOSS_EXTRAS } from '../data/balance';
+import { BOSS_EXTRAS, COMMON_DEPTH_HP_CAP } from '../data/balance';
 import { HUNT_BY_ID } from '../data/hunts';
 import { MONSTERS } from '../data/monsters';
 import { extrasTableFor, limitExtra, reinforcementIds, rollExtra, tierOfExtra, type WaveTier } from '../systems/waves';
@@ -42,7 +42,11 @@ export const toWorld = (f: Frame, c: number, r: number) => ({ x: f.ox + f.ax * c
 const cellKey = (cx: number, cy: number) => (cx + 1048576) * 2097152 + (cy + 1048576);
 
 /** Escala de HP e ataque dos monstros pela profundidade: a run é infinita, então a dificuldade sobe sempre (números provisórios, ajustados no balanceamento). */
-export const depthScale = (index: number) => ({ hp: 1 + index * .03, atk: 1 + index * .02 });
+export const depthScale = (index: number, kind: 'common' | 'elite' | 'boss' = 'elite') => ({
+  // o HP do comum sobe com a profundidade só até um teto (nunca vira esponja); elite e chefe seguem a escala linear
+  hp: kind === 'common' ? 1 + COMMON_DEPTH_HP_CAP * (1 - Math.exp(-index * .03 / COMMON_DEPTH_HP_CAP)) : 1 + index * .03,
+  atk: 1 + index * .02,
+});
 
 /** Quantos monstros-núcleo tem um encontro, por profundidade (índice do chunk). */
 const baseCount = (index: number) => 3 + Math.min(5, Math.floor(index / 6));

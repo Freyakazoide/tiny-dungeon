@@ -6,12 +6,13 @@ import { MONSTERS } from '../data/monsters';
 import { defaultLookFor, isValidLook, normalizeLook, type Look } from '../art/look';
 import { goalOfflineTargets, isGoalId, trainRingId, gateSkillOf, GOAL_NODES } from '../rpg/goals';
 import { DEFAULT_HUNT, HUNT_BY_ID, HUNTS, huntScale, huntWaves } from '../data/hunts';
-import { RUN_CONFIG, WAVE_CONFIG } from '../data/balance';
+import { encounterKind, newTelemetry, type Telemetry } from './telemetry';
+import { KIND_HP, RUN_CONFIG, RUN_FLOW, WAVE_CONFIG } from '../data/balance';
 import { reinforcementIds } from '../systems/waves';
 import { RunPlan, bossPowerFor, BOSS_HP_MUL, depthScale, CHUNK_LEN } from '../run/plan';
-import { BOSS_ENRAGE, BOSS_PHASES, FOE_ATTACK, foeRole, hasWindup, type FoeRole, type WindupRole } from '../run/foes';
-import { createRun, dist, foesInReach, freeNear, heroesInReach, placeHero, placeParty, radiusOf, reachOf, stepRun } from '../run/world';
-import { lateWaveBonus, batchToSpawn, composeExtras, drawFromBag, extrasTableFor, limitExtra, newBag, rollExtra, splitBatches, tierOfExtra, TIER_NAMES, waveRewards } from '../systems/waves';
+import { BOSS_ENRAGE, BOSS_PHASES, FOE_ATTACK, bestAim, foeRole, hasWindup, type FoeRole, type WindupRole } from '../run/foes';
+import { allCovered, attackOrder, createRun, dist, foesInReach, freeNear, heroesInReach, placeHero, placeParty, radiusOf, reachOf, stepRun } from '../run/world';
+import { monsterKind, lateWaveBonus, batchToSpawn, composeExtras, drawFromBag, extrasTableFor, limitExtra, newBag, rollExtra, splitBatches, tierOfExtra, TIER_NAMES, waveRewards } from '../systems/waves';
 import { SPELLS, spellById } from '../data/spells';
 import { itemById } from '../data/items';
 import { CHARMS } from '../data/charms';
@@ -117,35 +118,42 @@ export class GameEngine {
   }
   /** Modo corredor ligado e com run em andamento. */
   private runOn(){return RUN_CONFIG.enabled&&!!this.state.run;}
+  /** Telemetria de game feel (lida pelo balance harness; reiniciada em start()). */
+  telemetry:Telemetry=newTelemetry();
   private planCache?:{key:string;plan:RunPlan};
   /** Plano do corredor (puro, regenerado da semente e da hunt; nada dele vai para o save). */
   private plan():RunPlan{const run=this.state.run!,key=`${run.seed}:${this.state.huntId}`;if(this.planCache?.key!==key)this.planCache={key,plan:new RunPlan({seed:run.seed,huntId:this.state.huntId})};return this.planCache.plan;}
   private makeMonster(defId:string,index:number,chunk?:number,at?:{x:number;y:number}):MonsterRuntime{
-    const scale=chunk!==undefined?depthScale(chunk):{hp:1,atk:1},def=MONSTERS[defId],power=chunk!==undefined&&def.boss?BOSS_HP_MUL[bossPowerFor(this.state.run!.seed,chunk)]:1;
-    const hp=Math.round(def.hp*runtime.monsterHp*huntScale(this.state.huntId).hp*scale.hp*power);
+    const kind=monsterKind(defId),scale=chunk!==undefined?depthScale(chunk,kind):{hp:1,atk:1},def=MONSTERS[defId],power=chunk!==undefined&&def.boss?BOSS_HP_MUL[bossPowerFor(this.state.run!.seed,chunk)]:1;
+    // no corredor o HP também segue a categoria (comum mais frágil, chefe mais longo e mecânico)
+    const hp=Math.round(def.hp*runtime.monsterHp*huntScale(this.state.huntId).hp*scale.hp*power*(chunk!==undefined?KIND_HP[kind]:1));
     const m:MonsterRuntime={uid:`${this.state.cycle}-${this.state.wave}-${index}-${this.nextUid()}`,defId,hp,maxHp:hp,cooldown:1/Math.max(.1,def.speed),alive:true};
-    if(at){m.x=at.x;m.y=at.y;m.atkMul=scale.atk;m.rewardMul=(1+(chunk??0)*.025)*RUN_CONFIG.reward*(HUNT_BY_ID[this.state.huntId]?.rewardScale??1);}return m;
+    if(at){const depth=(1+(chunk??0)*.025)*(HUNT_BY_ID[this.state.huntId]?.rewardScale??1);m.x=at.x;m.y=at.y;m.atkMul=scale.atk;m.xpMul=depth*RUN_CONFIG.xpReward;m.goldMul=depth*RUN_CONFIG.goldReward;}return m;
   }
   /** Encontro do corredor: registra a wave (tier, mensagem, mecânicas de início de wave) como as waves antigas faziam. */
   private startEncounter(_chunk:number,enc:{extra:number;tier:string;boss:boolean;monsters:string[];ambush?:number}){
+    {const elite=reinforcementIds(this.state.huntId).elite,common=reinforcementIds(this.state.huntId).common;this.telemetry.open={kind:encounterKind(enc,elite!==common&&enc.monsters.includes(elite)),t0:this.state.run?.clock??0,hit:false};}
     this.mech.onWaveStart();this.state.lastExtra=enc.extra;this.state.waveInfo={extra:enc.extra,total:enc.monsters.length,goldStart:this.state.analyzer.gold};
     const name=enc.boss?`Chefe: ${MONSTERS[enc.monsters[0]].name}`:'Encontro';
     this.state.message=(enc.extra>0&&!enc.boss?`${name} — ${TIER_NAMES[tierOfExtra(enc.extra)]} (${enc.monsters.length} inimigos)`:name)+(enc.ambush?' — EMBOSCADA pelas costas!':'');
     this.emit({type:'wave',text:this.state.message});
   }
   private tickRun(dt:number){
+    const anchor0=this.state.run!.anchor,tel=this.telemetry;
     stepRun(this.state,this.plan(),dt,{
       trigger:(chunk,enc)=>this.startEncounter(chunk,enc),
-      spawn:(chunk,ids,at,ambush)=>{const base=this.state.monsters.length,fresh=ids.map((id,i)=>this.makeMonster(id,base+i,chunk,at[i]));if(ambush)for(const f of fresh)f.ambush=true;const credit=this.mech.takePending();if(credit>0)for(const f of fresh)f.hp=Math.max(Math.round(f.maxHp*.4),f.hp-Math.round(credit));this.state.monsters.push(...fresh);},
+      note:ev=>{if(ev==='switch')tel.switches++;else tel[ev]++;},
+      spawn:(chunk,ids,at,ambush)=>{if(tel.open&&tel.open.spawnedAt===undefined)tel.open.spawnedAt=this.state.run?.clock??0;const base=this.state.monsters.length,fresh=ids.map((id,i)=>this.makeMonster(id,base+i,chunk,at[i]));if(ambush)for(const f of fresh)f.ambush=true;const credit=this.mech.takePending();if(credit>0)for(const f of fresh)f.hp=Math.max(Math.round(f.maxHp*.4),f.hp-Math.round(credit));this.state.monsters.push(...fresh);},
     });
     this.tickWindups(dt);this.tickShots(dt);this.tickTraps();this.tickBossPhases();
-    const run=this.state.run!;
+    const run=this.state.run!;tel.totalS+=dt;if(livingMonsters(this.state).length)tel.combatS+=dt;if(run.anchor>anchor0)tel.walkS+=dt;
     if(run.open&&!livingMonsters(this.state).length&&!run.queue.length)this.completeEncounter();
     if(this.state.monsters.length>24)this.state.monsters=this.state.monsters.filter(m=>m.alive);
   }
   /** Encontro do corredor varrido: bônus de wave grande, cura leve; o chefe fecha um "ciclo" (e aplica a hunt agendada). */
   private completeEncounter(){
     const run=this.state.run!,boss=!!this.plan().chunk(run.lastTrigger).encounter?.boss;run.open=false;this.waveBonus();
+    {const o=this.telemetry.open;if(o){this.telemetry.encounters.push({kind:o.kind,seconds:(run.clock??0)-o.t0});delete this.telemetry.open;}}
     for(const id of this.state.team){const c=this.state.characters.find(x=>x.id===id);if(c&&c.hp>0){const st=characterStats(c,this.state);c.hp=Math.min(st.maxHp,c.hp+st.maxHp*.12);c.mana=Math.min(st.maxMana,c.mana+st.maxMana*.18);}}
     this.reviveFallen();
     this.state.monsters=this.state.monsters.filter(m=>m.alive);
@@ -160,8 +168,8 @@ export class GameEngine {
       m.cooldown-=dt;
       if(m.cooldown>0)continue;
       const all=livingTeam(this.state);if(!all.length){this.defeat();return;}
-      const role:FoeRole=MONSTERS[m.defId].boss&&(m.phase??0)>=2?'boss':foeRole(m.defId);
-      if(this.runOn()&&hasWindup(role)){if(this.beginWindup(m,role,all))m.cooldown+=1/this.attackRate(m);else m.cooldown=Math.max(0,m.cooldown);continue;}
+      const role:FoeRole=MONSTERS[m.defId].boss&&(m.phase??0)>=2?'boss':MONSTERS[m.defId].boss&&(m.phase??0)===1?'slam':foeRole(m.defId);
+      if(this.runOn()&&hasWindup(role)){const began=this.beginWindup(m,role,all);if(began==='windup'){m.cooldown+=1/this.attackRate(m);continue;}if(began===false){m.cooldown=Math.max(0,m.cooldown);continue;}}
       const pool=this.runOn()?heroesInReach(this.state,m,all):all;
       if(!pool.length){m.cooldown=Math.max(0,m.cooldown);continue;}
       if(this.runOn()&&m.slot&&all.some(x=>x.id===m.slot!.hero)&&!pool.some(x=>x.id===m.slot!.hero)){m.cooldown=Math.max(0,m.cooldown);continue;}
@@ -181,14 +189,32 @@ export class GameEngine {
     const thorns=talentValue(target,'thorns');if(thorns>0&&m.alive&&dealt>0)this.hit(target,m,Math.max(1,Math.round(dealt*thorns)));
     this.mech.afterDamaged(target,m,dealt);if(dealt>0)this.mech.afterMonsterAttack(m);
   }
-  /** Começa um golpe avisado: o brutamonte mira o herói da vaga dele; atiradores e magos miram a backline ao alcance. Falso se não há alvo. */
-  private beginWindup(m:MonsterRuntime,role:WindupRole,all:Character[]){
-    const run=this.state.run!,cfg=FOE_ATTACK[role];if((run.windups??[]).some(w=>w.src===m.uid))return false;
-    const me={x:m.x!,y:m.y!};let target:Character|undefined;
-    if(role==='brute'){target=m.slot?all.find(x=>x.id===m.slot!.hero):undefined;if(!target||!heroesInReach(this.state,m,all).includes(target))return false;}
-    else if(role==='boss'){const reach=heroesInReach(this.state,m,all);if(!reach.length)return false;target=reach.reduce((b,h)=>dist(run.pos[h.id],me)<dist(run.pos[b.id],me)?h:b);}
-    else{const near=all.filter(h=>run.pos[h.id]&&dist(run.pos[h.id],me)<=cfg.range),back=near.filter(h=>h.row==='back'),pool=back.length?back:near;if(!pool.length)return false;target=pool.reduce((b,h)=>dist(run.pos[h.id],me)<dist(run.pos[b.id],me)?h:b);}
-    const p=run.pos[target.id];(run.windups??=[]).push({id:`w${this.nextUid()}`,src:m.uid,x:p.x,y:p.y,r:cfg.r,t:cfg.windup,total:cfg.windup,mult:cfg.mult,role});return true;
+  /**
+   * Começa um golpe avisado. O brutamonte alterna golpe simples e golpe em área e, havendo 2+ heróis ao alcance, mira o ponto que pega mais; atiradores e magos
+   * miram a backline ao alcance (o mago, o ponto que pega mais heróis); o chefe das fases avançadas escolhe entre pancada grande e golpe em área (só com 2+ heróis
+   * dentro) e alterna os ataques. Devolve 'windup' (círculo criado), 'basic' (bate normalmente, sem aviso) ou false (sem alvo).
+   */
+  private beginWindup(m:MonsterRuntime,role:WindupRole,all:Character[]):'windup'|'basic'|false{
+    const run=this.state.run!;if((run.windups??[]).some(w=>w.src===m.uid))return false;
+    const me={x:m.x!,y:m.y!},cand=(hs:Character[])=>hs.filter(h=>run.pos[h.id]).map(h=>({pt:run.pos[h.id],back:h.row==='back'}));
+    let used:WindupRole=role,aim:{x:number;y:number}|undefined;
+    if(role==='brute'){
+      const target=m.slot?all.find(x=>x.id===m.slot!.hero):undefined,reach=heroesInReach(this.state,m,all);if(!target||!reach.includes(target))return false;
+      const best=bestAim(cand(reach),FOE_ATTACK.brute.r,me);
+      if(best&&best.hits>=2)aim=best.pt;else{const n=m.combo??0;m.combo=n+1;if(n%2===1)return 'basic';aim=run.pos[target.id];}
+    }else if(role==='slam'||role==='boss'){
+      const reach=heroesInReach(this.state,m,all);if(!reach.length)return role==='slam'?'basic':false;
+      const n=m.combo??0,cluster=bestAim(cand(reach),FOE_ATTACK.slam.r,me);
+      if(role==='slam'){if(!cluster||cluster.hits<2)return 'basic';used='slam';aim=cluster.pt;}
+      else{m.combo=n+1;if(n%2===0){used='boss';aim=bestAim(cand(reach),FOE_ATTACK.boss.r,me)!.pt;}else if(cluster&&cluster.hits>=2){used='slam';aim=cluster.pt;}else return 'basic';}
+    }else{
+      // atiradores e magos não enchem a tela de círculos: no máximo `maxRangedWindups` ao mesmo tempo e um espaçamento mínimo entre inícios (o grupo tem tempo de sair de cada um)
+      const live=(run.windups??[]).filter(w=>w.role==='archer'||w.role==='caster');if(live.length>=RUN_FLOW.maxRangedWindups||live.some(w=>w.total-w.t<RUN_FLOW.windupSpacing))return false;
+      const cfg=FOE_ATTACK[role],near=all.filter(h=>run.pos[h.id]&&dist(run.pos[h.id],me)<=cfg.range);if(!near.length)return false;
+      if(role==='archer'){const back=near.filter(h=>h.row==='back'),pool=back.length?back:near;aim=run.pos[pool.reduce((b,h)=>dist(run.pos[h.id],me)<dist(run.pos[b.id],me)?h:b).id];}
+      else aim=bestAim(cand(near),cfg.r,me)!.pt;
+    }
+    const cfg=FOE_ATTACK[used];(run.windups??=[]).push({id:`w${this.nextUid()}`,src:m.uid,x:aim.x,y:aim.y,r:cfg.r,t:cfg.windup,total:cfg.windup,mult:cfg.mult,role:used});return 'windup';
   }
   /** Avança os golpes avisados: atordoar/congelar/matar quem vai bater cancela; ao zerar, causa dano a todos que ainda estão dentro do círculo. */
   private tickWindups(dt:number){
@@ -218,7 +244,7 @@ export class GameEngine {
   }
   private fireShot(c:Character,target:MonsterRuntime,damage:number,crit:boolean){
     const run=this.state.run!,me=run.pos[c.id];if(!me||target.x===undefined)return;
-    const d=dist(me,{x:target.x,y:target.y!})||1;(run.shots??=[]).push({id:`s${this.nextUid()}`,hero:c.id,x:me.x,y:me.y,vx:(target.x-me.x)/d,vy:(target.y!-me.y)/d,left:RUN_CONFIG.rangedReach+1.5,dmg:damage,crit});
+    const d=dist(me,{x:target.x,y:target.y!})||1;this.telemetry.shotsFired++;(run.shots??=[]).push({id:`s${this.nextUid()}`,hero:c.id,x:me.x,y:me.y,vx:(target.x-me.x)/d,vy:(target.y!-me.y)/d,left:RUN_CONFIG.rangedReach+1.5,dmg:damage,crit});
   }
   /** Voo dos projéteis: avança em passos curtos; para no primeiro monstro vivo que toca (acerta) ou no primeiro obstáculo/parede (perde). */
   private tickShots(dt:number){
@@ -231,7 +257,7 @@ export class GameEngine {
         const m=livingMonsters(this.state).find(f=>f.x!==undefined&&dist({x:sh.x,y:sh.y},{x:f.x,y:f.y!})<=radiusOf(f)+.25);
         if(m){const hero=this.state.characters.find(x=>x.id===sh.hero);if(hero){this.mctx='basic';this.hit(hero,m,sh.dmg,sh.crit);this.mctx='';}alive=false;}
       }
-      if(alive&&sh.left>0)keep.push(sh);
+      if(alive&&sh.left>0)keep.push(sh);else if(alive)this.telemetry.shotsLost++;
     }
     run.shots=keep;
   }
@@ -253,7 +279,7 @@ export class GameEngine {
       if(next<0)continue;
       m.phase=next+1;const common=reinforcementIds(this.state.huntId).common,plan=this.plan(),boss={x:m.x,y:m.y!};
       const at=Array.from({length:BOSS_ENRAGE.adds},(_,i)=>freeNear(plan,{x:boss.x+Math.cos(i*Math.PI+1)*2.2,y:boss.y+Math.sin(i*Math.PI+1)*2.2}));
-      const fresh=at.map((p,i)=>this.makeMonster(common,this.state.monsters.length+i,run.lastTrigger,p));this.state.monsters.push(...fresh);
+      const fresh=at.map((p,i)=>this.makeMonster(common,this.state.monsters.length+i,run.lastTrigger,p));if(m.phase===2)for(const f of fresh)f.ambush=true;this.state.monsters.push(...fresh);
       const name=MONSTERS[m.defId].name;this.state.message=m.phase===1?`${name} invoca ajudantes!`:`${name} se enfurece e invoca ajudantes!`;
       this.emit({type:'wave',text:this.state.message});
     }
@@ -295,7 +321,7 @@ export class GameEngine {
     if(this.state.reinforceS<WAVE_CONFIG.intervalS)return;
     this.spawnBatch(batchToSpawn(livingMonsters(this.state).length,this.state.wavePending.length,this.state.reinforceS));
   }
-  start(){if(this.state.status!=='idle'||!this.state.team.length)return;this.mech.reset();if(!livingTeam(this.state).length)for(const id of this.state.team){const c=this.state.characters.find(x=>x.id===id);if(c){const stats=characterStats(c,this.state);c.hp=stats.maxHp;c.mana=stats.maxMana;c.effects=[];}}if(RUN_CONFIG.enabled){if(!this.state.run)createRun(this.state);this.state.monsters=[];placeParty(this.state,this.plan());}else if(!this.state.monsters.length||!livingMonsters(this.state).length)this.spawnWave();this.state.status='running';if(!this.state.analyzer.activeMs)this.state.analyzer.startedAt=Date.now();this.state.message='Hunt iniciada.';this.emit();}
+  start(){if(this.state.status!=='idle'||!this.state.team.length)return;this.telemetry=newTelemetry();this.mech.reset();if(!livingTeam(this.state).length)for(const id of this.state.team){const c=this.state.characters.find(x=>x.id===id);if(c){const stats=characterStats(c,this.state);c.hp=stats.maxHp;c.mana=stats.maxMana;c.effects=[];}}if(RUN_CONFIG.enabled){if(!this.state.run)createRun(this.state);this.state.monsters=[];placeParty(this.state,this.plan());}else if(!this.state.monsters.length||!livingMonsters(this.state).length)this.spawnWave();this.state.status='running';if(!this.state.analyzer.activeMs)this.state.analyzer.startedAt=Date.now();this.state.message='Hunt iniciada.';this.emit();}
   pause(){if(this.state.status==='idle'||this.state.status==='paused')return;this.pausedFrom=this.state.status;this.state.status='paused';this.state.message='Hunt pausada — cooldowns congelados.';this.emit();}
   resume(){if(this.state.status!=='paused')return;this.state.status=this.pausedFrom;this.state.message='Hunt retomada.';this.emit();}
   end(){if(this.state.status==='idle')return;delete this.state.pendingHunt;this.state.status='idle';this.state.transitionMs=0;this.state.wave=0;this.state.monsters=[];this.state.wavePending=[];delete this.state.run;this.state.message='Expedição encerrada. Recompensas preservadas.';this.emit();}
@@ -348,7 +374,7 @@ export class GameEngine {
     if(spell){this.noCd=false;this.cast(c,spell);c.cooldowns[spell.id]=this.noCd?0:spell.cooldown*(1-this.cooldownTalent(c))*(spell.id==='plasma_beam'?1-passiveBonus(c.profile.classPath,'plasmaCooldown'):1);c.cooldowns.basic=.35;} else if(!inRun||foesInReach(this.state,c,reachOf(c)).length)this.basicAttack(c);
   }
   /** Alvos de uma magia ofensiva: no corredor, só quem está ao alcance (do mais perto); nas waves antigas, todos. */
-  private foesFor(c:Character){return this.runOn()?foesInReach(this.state,c,RUN_CONFIG.spellReach):livingMonsters(this.state);}
+  private foesFor(c:Character){return this.runOn()?attackOrder(this.state,c,RUN_CONFIG.spellReach):livingMonsters(this.state);}
   private cooldownTalent(c:Character){return Math.min(.5,talentValue(c,'cdr')+passiveBonus(c.profile.classPath,'cooldown')+this.mech.buffCdr(c));}
   /** Melhor bônus de talento entre os membros da equipe (ouro, drop e venda são do grupo: não empilham por personagem). */
   private teamBest(code:string){return this.state.team.reduce((best,id)=>{const c=this.state.characters.find(x=>x.id===id);return c?Math.max(best,talentValue(c,code)):best;},0);}
@@ -363,7 +389,7 @@ export class GameEngine {
   }
   /** Multiplicador de crítico: base + talento, no máximo ×4,0. */
   private critMultiplier(c:Character,base=1.65){return Math.min(4,base+talentValue(c,'critdmg'));}
-  private basicAttack(c:Character){const target=this.runOn()?foesInReach(this.state,c,reachOf(c))[0]:livingMonsters(this.state)[0];if(!target)return;const stats=characterStats(c,this.state);const crit=Math.random()<stats.crit||this.mech.forceCritNow(c)||this.mech.critReady(c);const weapon=itemById(c.equipment.weapon??'');const skill=weapon?.trains??CLASSES[c.classId].weaponSkill;const skillBonus=1+(c.profile.proficiencies[skill].level+gearLevels(c,skill))*PROFICIENCY_LEVEL_DAMAGE;const styleBonus=skill==='melee'?talentValue(c,'melee'):skill==='ranged'?talentValue(c,'ranged'):0;const raw=Math.round(this.talentDamage(c,target,physicalDamage(stats.attack*skillBonus,MONSTERS[target.defId].defense,crit,this.critMultiplier(c))*(1+styleBonus))*((target.statuses?.frozen??0)>0?1+STATUS.frozenPhysicalBonus:1))+Math.round(this.mech.basicExtra(c));const damage=meleeInBackRow(c)?Math.max(1,Math.round(raw*MELEE_BACK_ROW_DAMAGE)):raw;c.profile.trainingFocus=skill;this.deliverBasic(c,target,damage,crit,skill);const after=this.mech.onBasic(c,target,damage);c.cooldowns.basic=after.haste?.05:1/Math.max(.2,stats.attackSpeed*(1+this.mech.aspdBonus(c)));this.emit({type:'attack',source:c.id,target:target.uid,value:damage,text:crit?'CRÍTICO':'',...(this.runOn()&&skill==='ranged'?{shot:true}:{fx:basicFx(skill)})});if(after.repeat&&!this.repeating&&this.state.status==='running'){this.repeating=true;try{this.basicAttack(c);}finally{this.repeating=false;}}}
+  private basicAttack(c:Character){const weaponSkillNow=itemById(c.equipment.weapon??'')?.trains??CLASSES[c.classId].weaponSkill,order=this.runOn()?attackOrder(this.state,c,reachOf(c),weaponSkillNow==='ranged'):undefined,target=order?order[0]:livingMonsters(this.state)[0];if(!target)return;if(order&&weaponSkillNow==='ranged'&&allCovered(this.state,order))return;const stats=characterStats(c,this.state);const crit=Math.random()<stats.crit||this.mech.forceCritNow(c)||this.mech.critReady(c);const weapon=itemById(c.equipment.weapon??'');const skill=weapon?.trains??CLASSES[c.classId].weaponSkill;const skillBonus=1+(c.profile.proficiencies[skill].level+gearLevels(c,skill))*PROFICIENCY_LEVEL_DAMAGE;const styleBonus=skill==='melee'?talentValue(c,'melee'):skill==='ranged'?talentValue(c,'ranged'):0;const raw=Math.round(this.talentDamage(c,target,physicalDamage(stats.attack*skillBonus,MONSTERS[target.defId].defense,crit,this.critMultiplier(c))*(1+styleBonus))*((target.statuses?.frozen??0)>0?1+STATUS.frozenPhysicalBonus:1))+Math.round(this.mech.basicExtra(c));const damage=meleeInBackRow(c)?Math.max(1,Math.round(raw*MELEE_BACK_ROW_DAMAGE)):raw;c.profile.trainingFocus=skill;this.deliverBasic(c,target,damage,crit,skill);const after=this.mech.onBasic(c,target,damage);c.cooldowns.basic=after.haste?.05:1/Math.max(.2,stats.attackSpeed*(1+this.mech.aspdBonus(c)));this.emit({type:'attack',source:c.id,target:target.uid,value:damage,text:crit?'CRÍTICO':'',...(this.runOn()&&skill==='ranged'?{shot:true}:{fx:basicFx(skill)})});if(after.repeat&&!this.repeating&&this.state.status==='running'){this.repeating=true;try{this.basicAttack(c);}finally{this.repeating=false;}}}
   private cast(c:Character,s:NonNullable<ReturnType<typeof spellById>>){const mo=this.mech.onCast(c,s.id,s.kind==='damage',!!s.element&&s.element===elementFocus(c),s.target==='allEnemies');this.mel=s.element;c.mana-=mo.free?0:this.mech.castCost(c,s.mana,s);this.noCd=mo.noCd;this.trainCast(c,s);const stats=characterStats(c,this.state);if(s.kind==='damage'){const pool=this.foesFor(c),aimed=(s.target==='allEnemies'?pool:pool.slice(0,1)).map(m=>m.uid);this.emit({type:'attack',source:c.id,target:aimed[0],targets:aimed,text:s.name,fx:spellFx(s)});this.mctx='spell';this.castDamage(c,s,stats.magicPower+stats.attack*.45,stats.crit);if(mo.again)this.castDamage(c,s,stats.magicPower+stats.attack*.45,stats.crit);this.mctx='';return;}const allies=s.target==='allAllies'||(s.kind==='buff'&&this.mech.buffsTeam(c))?livingTeam(this.state):s.target==='ally'?[livingTeam(this.state).sort((a,b)=>a.hp/characterStats(a,this.state).maxHp-b.hp/characterStats(b,this.state).maxHp)[0]]:[c];const healingMultiplier=(1+talentValue(c,'heal'))*this.mech.healMult(c,s.target==='allAllies');const buffPower=1+talentValue(c,'buffpow'),buffTime=1+talentValue(c,'buffdur'),shieldPower=1+talentValue(c,'shield');for(const ally of allies.filter(Boolean)){const received=1+talentValue(ally,'healrec');if(s.kind==='heal'){const before=ally.hp,wanted=Math.round(healAmount(stats.magicPower,s.power)*healingMultiplier*received);ally.hp=Math.min(characterStats(ally,this.state).maxHp,ally.hp+wanted);const amount=ally.hp-before;this.mech.afterHeal(c,ally,wanted,amount,s.target==='ally');this.mech.afterHealApplied(c,ally,amount);this.state.analyzer.healing+=amount;addCounter(c.profile,'healingDone',amount);this.emit({type:'heal',source:c.id,target:ally.id,value:amount,text:s.name});}else{addCounter(c.profile,'buffsApplied');ally.effects.push({id:`${s.id}-${this.nextUid()}`,type:s.kind==='regen'?'regen':s.kind==='shield'?'shield':s.power>.25?'buffAttack':'buffDefense',value:s.kind==='regen'?Math.round(healAmount(stats.magicPower,s.power)*healingMultiplier*received*this.mech.regenMult(c)):s.kind==='shield'?s.power*shieldPower:s.power*buffPower,remaining:(s.duration??5)*(s.kind==='regen'?1:s.kind==='shield'?(s.target==='allAllies'?this.mech.shieldDurMult(c):1):buffTime*this.mech.buffDuration(c,1)),source:c.id});if(s.kind==='shield'&&s.target==='self'&&ally===c)this.mech.shieldShared(c,s.power*shieldPower);}}if(s.kind==='buff'){this.mech.onBuffCast(c);this.mech.buffMana(c);}}
   /** Dano de magia: talentos, foco, afinidade elemental, crítico do Arcanista, status (Combustão/Congelado/Atordoado) e barreira do Criomante. */
   private castDamage(c:Character,s:NonNullable<ReturnType<typeof spellById>>,power:number,critStat:number){
@@ -425,8 +451,8 @@ export class GameEngine {
   }
   private spellProficiency(c:Character,s:NonNullable<ReturnType<typeof spellById>>):ProficiencyId{const weapon=itemById(c.equipment.weapon??'')?.trains??CLASSES[c.classId].weaponSkill;if(s.kind==='heal'||s.kind==='regen'||weapon==='magic')return 'magic';return s.kind==='shield'?'defense':weapon;}
   private creditHealing(sourceId:string|undefined,amount:number){const healer=this.state.characters.find(x=>x.id===sourceId);if(healer)addCounter(healer.profile,'healingDone',amount);}
-  private hit(c:Character,target:GameState['monsters'][number],damage:number,crit=false,skipMech=false){if(!target.alive)return;const ctxBasic=this.mctx==='basic',ctxSpell=this.mctx==='spell';if(!skipMech){const o=this.mech.outgoing(c,target,{crit,basic:ctxBasic,spell:ctxSpell,element:ctxSpell?this.mel:undefined});damage=Math.round(damage*o.mult);crit=o.crit;}if(crit){addCounter(c.profile,'crits');if(MONSTERS[target.defId].boss)addCounter(c.profile,'bossCrits');}const fury=this.state.equippedCharms.includes('fury')?1.08:1;damage=Math.round(damage*fury);target.hp=Math.max(0,target.hp-damage);this.state.analyzer.damage+=damage;this.state.analyzer.byCharacter[c.id]=(this.state.analyzer.byCharacter[c.id]??0)+damage;this.state.analyzer.byMonster[target.defId]=(this.state.analyzer.byMonster[target.defId]??0)+damage;this.emit({type:'damage',source:c.id,target:target.uid,value:damage});const steal=talentValue(c,'lifesteal');if(steal>0&&c.hp>0){const stats=characterStats(c,this.state),healed=Math.min(stats.maxHp-c.hp,damage*steal);if(healed>0){c.hp+=healed;this.state.analyzer.healing+=healed;}}if(!skipMech)this.mech.afterHit(c,target,damage,crit,{basic:ctxBasic,spell:ctxSpell,element:ctxSpell?this.mel:undefined});if(target.hp<=0&&target.alive)this.kill(target,c,crit);}
-  private kill(target:GameState['monsters'][number],killer?:Character,crit=false){target.alive=false;this.mech.onKill(killer,target,crit);const def=MONSTERS[target.defId];this.state.analyzer.kills[def.id]=(this.state.analyzer.kills[def.id]??0)+1;if(def.boss)this.state.analyzer.bosses++;const xpMult=this.state.equippedCharms.includes('wisdom')?1.12:1;const rw=target.rewardMul??1,xp=Math.round(def.xp*xpMult*runtime.xpScale*rw);this.state.analyzer.xp+=xp;const gold=Math.round(randomInt(def.gold[0],def.gold[1])*(1+this.teamBest('gold'))*rw);{const stat=this.huntStat();stat.xp+=xp;stat.gold+=gold;if(def.boss)stat.bossKills++;}for(const c of this.state.team.map(id=>this.state.characters.find(x=>x.id===id)).filter(Boolean) as Character[]){gainExperience(c,Math.round(xp*(1+talentValue(c,'xp'))));addCounter(c.profile,'goldEarned',gold);if(def.boss)addCounter(c.profile,'bossKills');}this.state.gold+=gold;this.state.analyzer.gold+=gold;const drops=rollLoot(this.state,def,Math.random,1+this.teamBest('drop'));this.dropGear(def);const entry=this.state.codex[def.id]??={kills:0,discoveredLoot:[],claimed:[]};entry.kills++;for(const d of drops)if(!entry.discoveredLoot.includes(d.itemId))entry.discoveredLoot.push(d.itemId);this.state.codex[def.id]=entry;this.checkMilestones(entry);this.emit({type:'death',target:target.uid,text:`+${xp} XP · ${gold} ouro`});if(drops.length)this.emit({type:'drop',text:drops.map(d=>`${d.quantity}× ${itemById(d.itemId)?.name}`).join(', ')});if(!this.runOn()&&!livingMonsters(this.state).length){if(this.state.wavePending?.length)this.spawnBatch(Math.min(WAVE_CONFIG.batch,this.state.wavePending.length));else this.completeWave();}}
+  private hit(c:Character,target:GameState['monsters'][number],damage:number,crit=false,skipMech=false){if(!target.alive)return;const ctxBasic=this.mctx==='basic',ctxSpell=this.mctx==='spell';if(!skipMech){const o=this.mech.outgoing(c,target,{crit,basic:ctxBasic,spell:ctxSpell,element:ctxSpell?this.mel:undefined});damage=Math.round(damage*o.mult);crit=o.crit;}if(crit){addCounter(c.profile,'crits');if(MONSTERS[target.defId].boss)addCounter(c.profile,'bossCrits');}const fury=this.state.equippedCharms.includes('fury')?1.08:1;damage=Math.round(damage*fury);{const tel=this.telemetry,clk=this.state.run?.clock;if(clk!==undefined){tel.damage+=damage;tel.overkill+=Math.max(0,damage-target.hp);if(!tel.firstHit.has(target.uid))tel.firstHit.set(target.uid,clk);const o=tel.open;if(o&&!o.hit&&o.spawnedAt!==undefined){o.hit=true;tel.firstAttack.push(clk-o.spawnedAt);}}}target.hp=Math.max(0,target.hp-damage);this.state.analyzer.damage+=damage;this.state.analyzer.byCharacter[c.id]=(this.state.analyzer.byCharacter[c.id]??0)+damage;this.state.analyzer.byMonster[target.defId]=(this.state.analyzer.byMonster[target.defId]??0)+damage;this.emit({type:'damage',source:c.id,target:target.uid,value:damage});const steal=talentValue(c,'lifesteal');if(steal>0&&c.hp>0){const stats=characterStats(c,this.state),healed=Math.min(stats.maxHp-c.hp,damage*steal);if(healed>0){c.hp+=healed;this.state.analyzer.healing+=healed;}}if(!skipMech)this.mech.afterHit(c,target,damage,crit,{basic:ctxBasic,spell:ctxSpell,element:ctxSpell?this.mel:undefined});if(target.hp<=0&&target.alive)this.kill(target,c,crit);}
+  private kill(target:GameState['monsters'][number],killer?:Character,crit=false){target.alive=false;{const t0=this.telemetry.firstHit.get(target.uid);if(t0!==undefined&&this.state.run)this.telemetry.ttk[monsterKind(target.defId)].push((this.state.run.clock??0)-t0);this.telemetry.firstHit.delete(target.uid);}this.mech.onKill(killer,target,crit);const def=MONSTERS[target.defId];this.state.analyzer.kills[def.id]=(this.state.analyzer.kills[def.id]??0)+1;if(def.boss)this.state.analyzer.bosses++;const xpMult=this.state.equippedCharms.includes('wisdom')?1.12:1;const rwXp=target.xpMul??target.rewardMul??1,rwGold=target.goldMul??target.rewardMul??1,xp=Math.round(def.xp*xpMult*runtime.xpScale*rwXp);this.state.analyzer.xp+=xp;const gold=Math.round(randomInt(def.gold[0],def.gold[1])*(1+this.teamBest('gold'))*rwGold);{const stat=this.huntStat();stat.xp+=xp;stat.gold+=gold;if(def.boss)stat.bossKills++;}for(const c of this.state.team.map(id=>this.state.characters.find(x=>x.id===id)).filter(Boolean) as Character[]){gainExperience(c,Math.round(xp*(1+talentValue(c,'xp'))));addCounter(c.profile,'goldEarned',gold);if(def.boss)addCounter(c.profile,'bossKills');}this.state.gold+=gold;this.state.analyzer.gold+=gold;const drops=rollLoot(this.state,def,Math.random,1+this.teamBest('drop'));this.dropGear(def);const entry=this.state.codex[def.id]??={kills:0,discoveredLoot:[],claimed:[]};entry.kills++;for(const d of drops)if(!entry.discoveredLoot.includes(d.itemId))entry.discoveredLoot.push(d.itemId);this.state.codex[def.id]=entry;this.checkMilestones(entry);this.emit({type:'death',target:target.uid,text:`+${xp} XP · ${gold} ouro`});if(drops.length)this.emit({type:'drop',text:drops.map(d=>`${d.quantity}× ${itemById(d.itemId)?.name}`).join(', ')});if(!this.runOn()&&!livingMonsters(this.state).length){if(this.state.wavePending?.length)this.spawnBatch(Math.min(WAVE_CONFIG.batch,this.state.wavePending.length));else this.completeWave();}}
   private checkMilestones(entry:GameState['codex'][string]){for(const [i,n] of [10,50,200].entries())if(entry.kills>=n&&!entry.claimed.includes(n)){entry.claimed.push(n);this.state.charmPoints+=i+1;for(const charm of CHARMS)if(charm.milestone<=n&&!this.state.unlockedCharms.includes(charm.id))this.state.unlockedCharms.push(charm.id);}}
   /** Wave grande (Horda/Invasão): rolagens extras de equipamento e, na Invasão, ouro extra. Vale só se a wave foi realmente varrida. */
   private waveBonus(){

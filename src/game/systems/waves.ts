@@ -32,6 +32,13 @@ export function reinforcementIds(huntId: string): { common: string; elite: strin
   return { common, elite };
 }
 
+/** Categoria estrutural do monstro: chefe, elite (o elite da hunt dele) ou comum. Os multiplicadores de HP e as durações-alvo de encontro seguem por aqui. */
+export type MonsterKind = 'common' | 'elite' | 'boss';
+export function monsterKind(defId: string): MonsterKind {
+  const def = MONSTERS[defId]; if (!def) return 'common'; if (def.boss) return 'boss';
+  return def.hunt && reinforcementIds(def.hunt).elite === defId && reinforcementIds(def.hunt).common !== defId ? 'elite' : 'common';
+}
+
 /** `count` reforços: 85% o comum da hunt, 15% o elite; nunca chefe. */
 export function composeExtras(huntId: string, count: number, rng: Rng = Math.random): string[] {
   const { common, elite } = reinforcementIds(huntId);

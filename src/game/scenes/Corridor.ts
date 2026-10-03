@@ -14,9 +14,11 @@ import { lookKey, type Look } from '../art/look';
 import { TOMBSTONE_TEXTURE, TRAP_TEXTURE, cellTexture, characterTexture, characterWalkAnim, ensureLookTextures, monsterTexture, obstacleTexture, type CellKind } from '../art/textures';
 import type { FxKind } from '../systems/spellFx';
 import { CHUNK_LEN, RunPlan } from '../run/plan';
-import { aggroGroups, freeNear, radiusOf, RADIUS, ringPoint } from '../run/world';
+import { newCamera, stepCamera, relevantFoes, safeArea } from '../run/camera';
+import { aggroGroups, freeNear, homePoint, radiusOf, RADIUS, ringPoint } from '../run/world';
+import { perp } from '../run/geom';
 import { playAttackFx } from './effects';
-import { dominantDirection, type ArenaPoint } from './movement';
+import { dominantDirection, stableDirection, type ArenaPoint } from './movement';
 
 /**
  * Cena do corredor procedural. O mundo é uma grade de células de 64 px (x, y em células, y para baixo) e o mapa tem curvas de verdade: a
@@ -38,7 +40,8 @@ export class Game extends Scene {
   private unsubscribeFx?: () => void;
   private plan?: RunPlan;
   private planKey = '';
-  private cam = { x: 0, y: 0, init: false };
+  private cam = newCamera();
+  private camView = { w: 20, h: 11 };
   private title!: Phaser.GameObjects.Text;
   private status!: Phaser.GameObjects.Text;
   private banner!: Phaser.GameObjects.Container;
@@ -46,6 +49,7 @@ export class Game extends Scene {
   private bannerUntil = 0;
   private visualPaused = false;
   private debug?: Phaser.GameObjects.Graphics;
+  private debugLabels: GameObjects.Text[] = [];
   private telegraph?: Phaser.GameObjects.Graphics;
   private shotsG?: Phaser.GameObjects.Graphics;
   /** a cena foi desligada/destruída: nada mais deve tocar nos objetos dela */
@@ -60,7 +64,7 @@ export class Game extends Scene {
     const bg = this.add.rectangle(0, 0, 470, 58, 0x0a0d12, .86).setStrokeStyle(2, 0xd1ad58, .8);
     this.bannerText = this.add.text(0, 0, '', { fontFamily: 'Georgia', fontSize: '19px', color: '#f1d796', align: 'center', stroke: '#050608', strokeThickness: 4 }).setOrigin(.5);
     this.banner = this.add.container(0, 0, [bg, this.bannerText]).setScrollFactor(0).setDepth(101).setVisible(false);
-    this.input.keyboard?.on('keydown-F3', (e: KeyboardEvent) => { e.preventDefault(); if (this.debug) { this.debug.destroy(); this.debug = undefined; } else this.debug = this.add.graphics().setDepth(60); });
+    this.input.keyboard?.on('keydown-F3', (e: KeyboardEvent) => { e.preventDefault(); if (this.debug) { this.debug.destroy(); this.debug = undefined; this.debugLabels.forEach(t => t.destroy()); this.debugLabels = []; } else this.debug = this.add.graphics().setDepth(60); });
     this.telegraph = this.add.graphics().setDepth(3);
     this.shotsG = this.add.graphics().setDepth(40);
     this.layoutHud();
@@ -71,7 +75,7 @@ export class Game extends Scene {
     if (import.meta.env.DEV) { (window as unknown as { __scene?: unknown }).__scene = this; (window as unknown as { __fx?: unknown }).__fx = (kind: FxKind, a: ArenaPoint, b: ArenaPoint) => playAttackFx(this, kind, a, b); }
     // Fechar o jogo (ex.: "apagar tudo" volta à criação e desmonta a arena) destrói a cena sem passar por 'shutdown': solta as
     // inscrições nos dois eventos, senão o estado novo mandaria escrever em textos já destruídos.
-    const cleanup = () => { this.dead = true; this.unsubscribe?.(); this.unsubscribeFx?.(); this.heroes.clear(); this.enemies.clear(); this.tiles.clear(); this.props.clear(); this.floatLanes.clear(); this.debug = undefined; };
+    const cleanup = () => { this.dead = true; this.unsubscribe?.(); this.unsubscribeFx?.(); this.heroes.clear(); this.enemies.clear(); this.tiles.clear(); this.props.clear(); this.floatLanes.clear(); this.debug = undefined; this.debugLabels = []; };
     this.events.once('shutdown', cleanup); this.events.once('destroy', cleanup);
     this.renderState();
     EventBus.emit('current-scene-ready', this);
@@ -85,7 +89,7 @@ export class Game extends Scene {
   update(_time: number, delta: number) {
     if (this.dead) return;
     gameStore.advance(delta, runtime.huntSpeed);
-    this.drawWorld(gameStore.getSnapshot());
+    this.drawWorld(gameStore.getSnapshot(), delta);
     this.drawTelegraphs(gameStore.getSnapshot());
     this.drawShots(gameStore.getSnapshot());
     if (this.debug) this.drawDebug(gameStore.getSnapshot());
@@ -107,14 +111,19 @@ export class Game extends Scene {
     return freeNear(plan, { x: base.x, y: base.y + off });
   }
 
+  private livingHeroPoints(state: GameState) {
+    return state.team.map(id => state.characters.find(c => c.id === id)).filter((c): c is Character => !!c && c.hp > 0).map((c, i) => state.run?.pos[c.id] ?? this.heroPos(state, c, i));
+  }
   /** Câmera e blocos do que aparece na tela: chão, parede (com tocha) e pedra de preenchimento; obstáculos por cima. */
-  private drawWorld(state: GameState) {
+  private drawWorld(state: GameState, delta = 16) {
     const plan = this.planFor(state), anchor = state.run?.anchor ?? 4, cam = this.cameras.main, { width, height } = this.scale;
     plan.ensure(plan.indexAt(anchor));
-    const here = plan.pathPoint(anchor), fwd = plan.forwardAt(anchor), tx = px(here.x + fwd.x * 2.5), ty = px(here.y + fwd.y * 2.5);
-    if (!this.cam.init) { this.cam.x = tx; this.cam.y = ty; this.cam.init = true; }
-    const k = Math.min(1, .07 * Math.max(1, Math.min(runtime.huntSpeed, 8))); this.cam.x += (tx - this.cam.x) * k; this.cam.y += (ty - this.cam.y) * k;
-    cam.setScroll(Math.round(this.cam.x - width / 2), Math.round(this.cam.y - height / 2));
+    // câmera: segue a ação (heróis vivos + inimigos relevantes) misturada com a âncora, com suavização e safe screen area (ver run/camera.ts)
+    const here = plan.pathPoint(anchor), fwd = plan.forwardAt(anchor), heroes = this.livingHeroPoints(state), foes = state.monsters.filter(m => m.alive && m.x !== undefined).map(m => ({ x: m.x!, y: m.y! }));
+    this.camView = { w: width / CELL_PX, h: height / CELL_PX };
+    const inCombat = relevantFoes(heroes, foes).length > 0 || !!state.run?.windups?.length;
+    stepCamera(this.cam, { anchor: here, fwd, heroes, foes, inCombat, view: this.camView, dt: delta / 1000, speed: runtime.huntSpeed });
+    cam.setScroll(Math.round(px(this.cam.x) - width / 2), Math.round(px(this.cam.y) - height / 2));
     const huntId = state.huntId, x0 = Math.floor(cam.scrollX / CELL_PX) - 1, x1 = Math.ceil((cam.scrollX + width) / CELL_PX) + 1, y0 = Math.floor(cam.scrollY / CELL_PX) - 1, y1 = Math.ceil((cam.scrollY + height) / CELL_PX) + 1;
     const keep = new Set<string>(), propKeep = new Set<string>();
     for (let cx = x0; cx <= x1; cx++) for (let cy = y0; cy <= y1; cy++) {
@@ -162,16 +171,36 @@ export class Game extends Scene {
     const team = state.team.map(id => state.characters.find(c => c.id === id)).filter((c): c is Character => !!c && c.hp > 0), colors = [0xf0c24b, 0x5fd0ff, 0xb48cff, 0x7be08a];
     const colorOf = (id: string) => colors[Math.max(0, team.findIndex(c => c.id === id)) % colors.length];
     const rank = aggroGroups(team);
+    const sa = safeArea({ x: this.cam.x, y: this.cam.y }, this.camView); g.lineStyle(2, 0x6ee7a8, .55).strokeRect(px(sa.x0), px(sa.y0), px(sa.x1 - sa.x0), px(sa.y1 - sa.y0));   // safe screen area
     team.forEach(c => {
       const p = run.pos[c.id]; if (!p) return; const col = colorOf(c.id), tier = rank.findIndex(gr => gr.includes(c));
       g.lineStyle(2, col, .95).strokeCircle(px(p.x), px(p.y), px(RADIUS.unit));
       for (let k = 0; k < 8; k++) { const q = ringPoint(p, k); g.lineStyle(1, col, tier === 0 ? .8 : .35).strokeCircle(px(q.x), px(q.y), px(RADIUS.unit)); }
     });
+    this.drawDebugAi(state, team, colorOf);
     for (const m of state.monsters) {
       if (!m.alive || m.x === undefined || m.y === undefined) continue;
       g.lineStyle(2, 0xff5a4a, .95).strokeCircle(px(m.x), px(m.y), px(radiusOf(m)));
       if (m.slot) { const col = colorOf(m.slot.hero), hp = run.pos[m.slot.hero]; g.lineStyle(2, col, .9).lineBetween(px(m.x), px(m.y), px(m.slot.x), px(m.slot.y)); if (hp) g.lineStyle(1, col, .5).lineBetween(px(m.slot.x), px(m.slot.y), px(hp.x), px(hp.y)); g.fillStyle(col, 1).fillCircle(px(m.slot.x), px(m.slot.y), 4); }
     }
+  }
+
+  /** F3 (IA): por herói o estado, o alvo (linha), o destino guardado, o ponto de descanso e a zona de roam; no grupo, o alvo principal (anel vermelho) e o de peel (anel ciano). */
+  private drawDebugAi(state: GameState, team: Character[], colorOf: (id: string) => number) {
+    const g = this.debug!, run = state.run!, plan = this.plan; if (!plan) return;
+    const side = perp(plan.forwardAt(run.anchor)), foeOf = (uid?: string) => uid ? state.monsters.find(m => m.alive && m.uid === uid && m.x !== undefined) : undefined;
+    const ring = (uid: string | undefined, color: number, extra: number) => { const m = foeOf(uid); if (m) g.lineStyle(3, color, .95).strokeCircle(px(m.x!), px(m.y!), px(radiusOf(m) + extra)); };
+    ring(run.focus?.primaryId, 0xff3b30, .35); ring(run.focus?.peelId, 0x30d5ff, .6);
+    team.forEach((c, i) => {
+      const p = run.pos[c.id], ai = run.ai?.[c.id]; if (!p) return; const col = colorOf(c.id), home = homePoint(plan, run.anchor, team, c, side);
+      g.lineStyle(1, col, .5).strokeCircle(px(home.x), px(home.y), px(.35)); g.lineStyle(1, col, .25).strokeCircle(px(home.x), px(home.y), px(c.isTank ? 5 : c.row === 'back' ? 5.5 : 6));
+      if (ai?.dest) { g.lineStyle(1, col, .7).lineBetween(px(p.x), px(p.y), px(ai.dest.x), px(ai.dest.y)); g.fillStyle(col, .9).fillRect(px(ai.dest.x) - 3, px(ai.dest.y) - 3, 6, 6); }
+      const t = foeOf(ai?.targetId); if (t) g.lineStyle(1, 0xff5a4a, .55).lineBetween(px(p.x), px(p.y), px(t.x!), px(t.y!));
+      let label = this.debugLabels[i]; if (!label) { label = this.add.text(0, 0, '', { fontSize: '10px', color: '#ffffff', backgroundColor: '#000000aa' }).setDepth(61); this.debugLabels[i] = label; }
+      const lock = ai && ai.targetLockUntil > (run.clock ?? 0) ? '🔒' : '';
+      label.setText(`${c.name} ${ai?.state ?? '-'}${lock}${run.focus?.primaryId && ai?.targetId === run.focus.primaryId ? ' ★' : ''}`).setPosition(px(p.x) - 24, px(p.y) - 34).setVisible(true);
+    });
+    for (let i = team.length; i < this.debugLabels.length; i++) this.debugLabels[i].setVisible(false);
   }
 
   private renderState() {
@@ -192,9 +221,11 @@ export class Game extends Scene {
       else if (c.hp > 0 && v.dead) { v.dead = false; v.walking = true; this.setDirection(v, 'down', false); v.last = undefined; }
       const moved = v.last ? Math.hypot(pos.x - v.last.x, pos.y - v.last.y) > .004 : false;
       v.container.setPosition(px(pos.x), px(pos.y)).setDepth(6 + pos.y / 1000);
-      const foe = state.monsters.filter(m => m.alive && m.x !== undefined).sort((a, b) => Math.hypot(a.x! - pos.x, a.y! - pos.y) - Math.hypot(b.x! - pos.x, b.y! - pos.y))[0];
+      // parado, olha para o alvo da IA (travado por ~1 s) e só vira de lado depois de 0,6 s olhando para o outro lado (nada de virar esquerda/direita toda hora)
+      const aiTarget = state.run?.ai?.[c.id]?.targetId, locked = aiTarget ? state.monsters.find(m => m.alive && m.uid === aiTarget && m.x !== undefined) : undefined;
+      const foe = locked ?? state.monsters.filter(m => m.alive && m.x !== undefined).sort((a, b) => Math.hypot(a.x! - pos.x, a.y! - pos.y) - Math.hypot(b.x! - pos.x, b.y! - pos.y))[0];
       const fwd = this.plan?.forwardAt(state.run?.anchor ?? 4) ?? { x: -1, y: 0 };
-      const dir: CharacterDirection = moved && v.last ? dominantDirection({ x: px(v.last.x), y: px(v.last.y) }, { x: px(pos.x), y: px(pos.y) }, v.direction) : foe ? dominantDirection({ x: px(pos.x), y: px(pos.y) }, { x: px(foe.x!), y: px(foe.y!) }, v.direction) : dominantDirection({ x: 0, y: 0 }, fwd, 'left');
+      const dir: CharacterDirection = moved && v.last ? dominantDirection({ x: px(v.last.x), y: px(v.last.y) }, { x: px(pos.x), y: px(pos.y) }, v.direction) : foe ? this.holdFacing(v, stableDirection({ x: px(pos.x), y: px(pos.y) }, { x: px(foe.x!), y: px(foe.y!) }, v.direction)) : dominantDirection({ x: 0, y: 0 }, fwd, 'left');
       if (!v.dead) this.setDirection(v, dir, moved && c.hp > 0);
       v.last = { x: pos.x, y: pos.y };
     });
@@ -227,6 +258,13 @@ export class Game extends Scene {
     const body = this.add.sprite(0, CELL_PX * .36, characterTexture(look, 'left', 1)).setOrigin(.5, 1).setScale(ART_SCALE);
     const name = this.add.text(0, CELL_PX * .36 + 13, '', { fontSize: '11px', color: '#fff', stroke: '#090b0e', strokeThickness: 4, align: 'center' }).setOrigin(.5);
     return { container: this.add.container(0, 0, [body, name]), look, key: lookKey(look), body, name, direction: 'left', walking: false };
+  }
+  /** Quem está parado só troca a direção para onde olha depois de 0,6 s pedindo a mesma troca. */
+  private holdFacing(view: HeroView, want: CharacterDirection): CharacterDirection {
+    const now = this.time.now, v = view as HeroView & { faceWant?: CharacterDirection; faceSince?: number };
+    if (want === view.direction) { v.faceWant = undefined; return want; }
+    if (v.faceWant !== want) { v.faceWant = want; v.faceSince = now; }
+    return now - (v.faceSince ?? now) >= 600 ? want : view.direction;
   }
   private setDirection(view: HeroView, direction: CharacterDirection, walking: boolean) {
     if (view.direction === direction && view.walking === walking) return;
