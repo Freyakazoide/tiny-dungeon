@@ -9,7 +9,7 @@ import { DEFAULT_HUNT, HUNT_BY_ID, HUNTS, huntScale, huntWaves } from '../data/h
 import { RUN_CONFIG, WAVE_CONFIG } from '../data/balance';
 import { reinforcementIds } from '../systems/waves';
 import { RunPlan, bossPowerFor, BOSS_HP_MUL, depthScale, CHUNK_LEN } from '../run/plan';
-import { BOSS_ENRAGE, BOSS_PHASES, FOE_ATTACK, foeRole, hasWindup, type FoeRole, type WindupRole } from '../run/foes';
+import { BOSS_ENRAGE, BOSS_PHASES, FOE_ATTACK, bestAim, foeRole, hasWindup, type FoeRole, type WindupRole } from '../run/foes';
 import { allCovered, attackOrder, createRun, dist, foesInReach, freeNear, heroesInReach, placeHero, placeParty, radiusOf, reachOf, stepRun } from '../run/world';
 import { lateWaveBonus, batchToSpawn, composeExtras, drawFromBag, extrasTableFor, limitExtra, newBag, rollExtra, splitBatches, tierOfExtra, TIER_NAMES, waveRewards } from '../systems/waves';
 import { SPELLS, spellById } from '../data/spells';
@@ -160,8 +160,8 @@ export class GameEngine {
       m.cooldown-=dt;
       if(m.cooldown>0)continue;
       const all=livingTeam(this.state);if(!all.length){this.defeat();return;}
-      const role:FoeRole=MONSTERS[m.defId].boss&&(m.phase??0)>=2?'boss':foeRole(m.defId);
-      if(this.runOn()&&hasWindup(role)){if(this.beginWindup(m,role,all))m.cooldown+=1/this.attackRate(m);else m.cooldown=Math.max(0,m.cooldown);continue;}
+      const role:FoeRole=MONSTERS[m.defId].boss&&(m.phase??0)>=2?'boss':MONSTERS[m.defId].boss&&(m.phase??0)===1?'slam':foeRole(m.defId);
+      if(this.runOn()&&hasWindup(role)){const began=this.beginWindup(m,role,all);if(began==='windup'){m.cooldown+=1/this.attackRate(m);continue;}if(began===false){m.cooldown=Math.max(0,m.cooldown);continue;}}
       const pool=this.runOn()?heroesInReach(this.state,m,all):all;
       if(!pool.length){m.cooldown=Math.max(0,m.cooldown);continue;}
       if(this.runOn()&&m.slot&&all.some(x=>x.id===m.slot!.hero)&&!pool.some(x=>x.id===m.slot!.hero)){m.cooldown=Math.max(0,m.cooldown);continue;}
@@ -181,14 +181,30 @@ export class GameEngine {
     const thorns=talentValue(target,'thorns');if(thorns>0&&m.alive&&dealt>0)this.hit(target,m,Math.max(1,Math.round(dealt*thorns)));
     this.mech.afterDamaged(target,m,dealt);if(dealt>0)this.mech.afterMonsterAttack(m);
   }
-  /** Começa um golpe avisado: o brutamonte mira o herói da vaga dele; atiradores e magos miram a backline ao alcance. Falso se não há alvo. */
-  private beginWindup(m:MonsterRuntime,role:WindupRole,all:Character[]){
-    const run=this.state.run!,cfg=FOE_ATTACK[role];if((run.windups??[]).some(w=>w.src===m.uid))return false;
-    const me={x:m.x!,y:m.y!};let target:Character|undefined;
-    if(role==='brute'){target=m.slot?all.find(x=>x.id===m.slot!.hero):undefined;if(!target||!heroesInReach(this.state,m,all).includes(target))return false;}
-    else if(role==='boss'){const reach=heroesInReach(this.state,m,all);if(!reach.length)return false;target=reach.reduce((b,h)=>dist(run.pos[h.id],me)<dist(run.pos[b.id],me)?h:b);}
-    else{const near=all.filter(h=>run.pos[h.id]&&dist(run.pos[h.id],me)<=cfg.range),back=near.filter(h=>h.row==='back'),pool=back.length?back:near;if(!pool.length)return false;target=pool.reduce((b,h)=>dist(run.pos[h.id],me)<dist(run.pos[b.id],me)?h:b);}
-    const p=run.pos[target.id];(run.windups??=[]).push({id:`w${this.nextUid()}`,src:m.uid,x:p.x,y:p.y,r:cfg.r,t:cfg.windup,total:cfg.windup,mult:cfg.mult,role});return true;
+  /**
+   * Começa um golpe avisado. O brutamonte alterna golpe simples e golpe em área e, havendo 2+ heróis ao alcance, mira o ponto que pega mais; atiradores e magos
+   * miram a backline ao alcance (o mago, o ponto que pega mais heróis); o chefe das fases avançadas escolhe entre pancada grande e golpe em área (só com 2+ heróis
+   * dentro) e alterna os ataques. Devolve 'windup' (círculo criado), 'basic' (bate normalmente, sem aviso) ou false (sem alvo).
+   */
+  private beginWindup(m:MonsterRuntime,role:WindupRole,all:Character[]):'windup'|'basic'|false{
+    const run=this.state.run!;if((run.windups??[]).some(w=>w.src===m.uid))return false;
+    const me={x:m.x!,y:m.y!},cand=(hs:Character[])=>hs.filter(h=>run.pos[h.id]).map(h=>({pt:run.pos[h.id],back:h.row==='back'}));
+    let used:WindupRole=role,aim:{x:number;y:number}|undefined;
+    if(role==='brute'){
+      const target=m.slot?all.find(x=>x.id===m.slot!.hero):undefined,reach=heroesInReach(this.state,m,all);if(!target||!reach.includes(target))return false;
+      const best=bestAim(cand(reach),FOE_ATTACK.brute.r,me);
+      if(best&&best.hits>=2)aim=best.pt;else{const n=m.combo??0;m.combo=n+1;if(n%2===1)return 'basic';aim=run.pos[target.id];}
+    }else if(role==='slam'||role==='boss'){
+      const reach=heroesInReach(this.state,m,all);if(!reach.length)return role==='slam'?'basic':false;
+      const n=m.combo??0,cluster=bestAim(cand(reach),FOE_ATTACK.slam.r,me);
+      if(role==='slam'){if(!cluster||cluster.hits<2)return 'basic';used='slam';aim=cluster.pt;}
+      else{m.combo=n+1;if(n%2===0){used='boss';aim=bestAim(cand(reach),FOE_ATTACK.boss.r,me)!.pt;}else if(cluster&&cluster.hits>=2){used='slam';aim=cluster.pt;}else return 'basic';}
+    }else{
+      const cfg=FOE_ATTACK[role],near=all.filter(h=>run.pos[h.id]&&dist(run.pos[h.id],me)<=cfg.range);if(!near.length)return false;
+      if(role==='archer'){const back=near.filter(h=>h.row==='back'),pool=back.length?back:near;aim=run.pos[pool.reduce((b,h)=>dist(run.pos[h.id],me)<dist(run.pos[b.id],me)?h:b).id];}
+      else aim=bestAim(cand(near),cfg.r,me)!.pt;
+    }
+    const cfg=FOE_ATTACK[used];(run.windups??=[]).push({id:`w${this.nextUid()}`,src:m.uid,x:aim.x,y:aim.y,r:cfg.r,t:cfg.windup,total:cfg.windup,mult:cfg.mult,role:used});return 'windup';
   }
   /** Avança os golpes avisados: atordoar/congelar/matar quem vai bater cancela; ao zerar, causa dano a todos que ainda estão dentro do círculo. */
   private tickWindups(dt:number){
@@ -253,7 +269,7 @@ export class GameEngine {
       if(next<0)continue;
       m.phase=next+1;const common=reinforcementIds(this.state.huntId).common,plan=this.plan(),boss={x:m.x,y:m.y!};
       const at=Array.from({length:BOSS_ENRAGE.adds},(_,i)=>freeNear(plan,{x:boss.x+Math.cos(i*Math.PI+1)*2.2,y:boss.y+Math.sin(i*Math.PI+1)*2.2}));
-      const fresh=at.map((p,i)=>this.makeMonster(common,this.state.monsters.length+i,run.lastTrigger,p));this.state.monsters.push(...fresh);
+      const fresh=at.map((p,i)=>this.makeMonster(common,this.state.monsters.length+i,run.lastTrigger,p));if(m.phase===2)for(const f of fresh)f.ambush=true;this.state.monsters.push(...fresh);
       const name=MONSTERS[m.defId].name;this.state.message=m.phase===1?`${name} invoca ajudantes!`:`${name} se enfurece e invoca ajudantes!`;
       this.emit({type:'wave',text:this.state.message});
     }

@@ -20,6 +20,8 @@ export interface HeroAi {
   thinkAt: number;
   /** a última decisão foi limitada pela zona de roam (para contar só a transição) */
   roamHit?: boolean;
+  /** golpe avisado do qual está saindo e o ponto de saída escolhido (mantido até sair, sem trocar de lado a cada tick) */
+  evadeId?: string;
 }
 /** Foco do grupo: alvo principal (todos os DPS tendem a ele) e alvo de peel (invasor da backline). */
 export interface PartyFocus { primaryId?: string; primaryUntil: number; peelId?: string; peelUntil: number }
@@ -237,9 +239,19 @@ export function tankShouldLeave(hero: { pt: Pt; hp: number; maxHp: number }, zon
   return d.ratio >= C.tankLeaveLethal || (low && d.ratio >= C.tankLeaveLow) || (d.count >= 2 && d.ratio >= C.tankLeaveStacked) || (d.boss && d.ratio >= C.tankLeaveBoss);
 }
 /** Deve esquivar de golpes avisados? Todo mundo menos o tanque, que decide pelo risco (`tankShouldLeave`). */
-export function shouldEvade(hero: { role: Role; pt: Pt; hp: number; maxHp: number }, zones: StrikeZone[]): boolean {
-  if (!zones.some(z => dist(hero.pt, z) <= z.r + .2)) return false;
+export function shouldEvade(hero: { role: Role; pt: Pt; hp: number; maxHp: number }, zones: StrikeZone[], pad = .2): boolean {
+  if (!zones.some(z => dist(hero.pt, z) <= z.r + pad)) return false;
   return hero.role === 'tank' ? tankShouldLeave(hero, zones) : true;
+}
+/** Para antes de atravessar um círculo avisado: devolve o ponto até onde dá para ir de `from` em direção a `to` sem tocar a margem de nenhum círculo. */
+export function stopBeforeZones(from: Pt, to: Pt, zones: { x: number; y: number; r: number }[], margin = .5): Pt {
+  let t = 1; const dx = to.x - from.x, dy = to.y - from.y, len2 = dx * dx + dy * dy; if (len2 < 1e-9) return to;
+  for (const z of zones) {
+    const R = z.r + margin, fx = from.x - z.x, fy = from.y - z.y; if (fx * fx + fy * fy <= R * R) continue;   // já dentro da margem: a esquiva cuida
+    const b = fx * dx + fy * dy, c = fx * fx + fy * fy - R * R, disc = b * b - len2 * c; if (disc < 0) continue;
+    const t0 = (-b - Math.sqrt(disc)) / len2; if (t0 > 0 && t0 < t) t = Math.max(0, t0 - .03);
+  }
+  return t >= 1 ? to : { x: from.x + dx * t, y: from.y + dy * t };
 }
 /** Golpes que o herói já percebeu (cada um reage com atraso próprio: ninguém prevê o que ainda não foi telegrafado e ninguém reage no mesmo frame). */
 export const noticedZones = (heroId: string, zones: StrikeZone[]) => { const delay = reactDelay(heroId); return zones.filter(z => z.age >= delay); };

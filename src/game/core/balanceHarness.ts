@@ -45,7 +45,7 @@ export const mulberry32 = (seed: number) => () => { seed |= 0; seed = seed + 0x6
 const percentile = (values: number[], q: number) => { if (!values.length) return 0; const sorted = [...values].sort((a, b) => a - b); return sorted[Math.min(sorted.length - 1, Math.ceil(q * sorted.length) - 1)]; };
 
 /** Grupo de referência da fase 7: Guerreiro (frente, tanque), Caçador e Mago (atrás), conjunto da hunt equipado e, opcionalmente, talentos gastos. */
-function buildReference(engine: GameEngine, huntId: string, level: number, talents: boolean) {
+export function buildReference(engine: GameEngine, huntId: string, level: number, talents: boolean) {
   const [a, b, c] = engine.getSnapshot().characters;
   for (const [ch, node] of [[a, 'guerreiro'], [b, 'cacador'], [c, 'mago']] as const) { ch.profile.level = level; engine.evolve(ch.id, node, { force: true }); }
   const chars = engine.getSnapshot().characters;

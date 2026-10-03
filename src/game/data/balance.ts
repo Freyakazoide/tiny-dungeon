@@ -102,7 +102,9 @@ export const AI_CONFIG = {
   /** o destino guardado só muda se o novo ficar a mais de `destEps` do atual (ou ao fim de `destHold`) */
   destEps: .7, destHold: .45,
   /** atraso até um herói perceber um golpe avisado (cada um com o seu, entre os dois valores) */
-  reactMin: .08, reactMax: .26,
+  reactMin: .05, reactMax: .2,
+  /** esquiva: o herói corre `evadeSpeed` × a velocidade de combate até sair do círculo */
+  evadeSpeed: 1.3,
   /** inimigo abaixo desta fração de vida é prioridade de execução */
   executeHp: .2,
   /** o alvo principal do grupo é mantido por este tempo */

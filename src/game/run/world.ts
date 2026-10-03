@@ -7,14 +7,14 @@ import { livingMonsters, livingTeam } from '../systems/combat';
 import { characterStats } from '../systems/progression';
 import type { Character, GameState, MonsterRuntime, RunState } from '../core/types';
 import { BAND, RunPlan, type Encounter, type Pt } from './plan';
-import { BOSS_ENRAGE, FOE_ATTACK, foeRole, isRanged } from './foes';
-import { dist, fits, lineClear, perp, RADIUS, type Body } from './geom';
+import { BOSS_ENRAGE, FOE_ATTACK, foeRole, isRanged, isRunnerNow } from './foes';
+import { dist, distToSegment, fits, hash01, lineClear, perp, RADIUS, type Body } from './geom';
 import { AI_CONFIG } from '../data/balance';
 import { runtime } from '../rpg/runtime';
 import { huntScale } from '../data/hunts';
 import { monsterKind } from '../systems/waves';
 import { physicalDamage } from '../systems/combat';
-import { buildFoeInfos, chooseHeroTarget, choosePeelTarget, choosePrimaryTarget, commitDest, incomingByFoe, lockFor, newHeroAi, noticedZones, setState, shouldEvade, type AiConfig, type FoeView, type HeroView, type PartyCtx, type Role, type StrikeZone } from './ai';
+import { buildFoeInfos, chooseHeroTarget, choosePeelTarget, choosePrimaryTarget, commitDest, incomingByFoe, lockFor, newHeroAi, noticedZones, setState, shouldEvade, stopBeforeZones, type AiConfig, type FoeView, type HeroView, type PartyCtx, type Role, type StrikeZone } from './ai';
 import { desiredHeroPosition } from './position';
 
 /**
@@ -227,7 +227,7 @@ export function aggroGroups(team: Character[]): Character[][] {
  */
 function assignSlots(plan: RunPlan, foes: MonsterRuntime[], team: Character[], run: RunState) {
   const groups = aggroGroups(team), pos = (h: Character) => posOf(run, h);
-  const roleOf = (m: MonsterRuntime) => m.ambush ? 'runner' : foeRole(m.defId);
+  const roleOf = (m: MonsterRuntime) => isRunnerNow(m) ? 'runner' : foeRole(m.defId);
   const usable = foes.filter(m => !MONSTERS[m.defId].boss && !isRanged(roleOf(m)));
   for (const m of foes) if (MONSTERS[m.defId].boss || isRanged(roleOf(m))) delete m.slot;
   const claimed = new Set<string>(), key = (id: string, k: number) => `${id}#${k}`;
@@ -272,18 +272,67 @@ function orbitTarget(m: MonsterRuntime, slot: NonNullable<MonsterRuntime['slot']
   const a = here + Math.sign(diff) * .8, r = R.ringRadius + 1;
   return { x: c.x + Math.cos(a) * r, y: c.y + Math.sin(a) * r };
 }
-/** Atirador/mago: fica a ~85% do alcance do alvo (de preferência da backline), do lado de onde veio; se o alvo chegar perto demais, recua. */
-export function shootPoint(m: MonsterRuntime, team: Character[], run: RunState): Pt {
-  const cfg = FOE_ATTACK[foeRole(m.defId) as 'archer' | 'caster'], back = team.filter(h => h.row === 'back'), pool = back.length ? back : team;
-  const prey = pool.reduce((b, h) => dist(posOf(run, h), { x: m.x!, y: m.y! }) < dist(posOf(run, b), { x: m.x!, y: m.y! }) ? h : b, pool[0]), p = posOf(run, prey);
-  const dx = m.x! - p.x, dy = m.y! - p.y, d = Math.hypot(dx, dy) || 1, want = cfg.range * .85;
-  return Math.abs(d - want) < .6 ? { x: m.x!, y: m.y! } : { x: p.x + dx / d * want, y: p.y + dy / d * want };
+/**
+ * Atirador/mago: fica a ~85% do alcance da presa (backline primeiro; o mago prefere quem tem mais heróis em volta, para o golpe em área pegar mais),
+ * do lado de onde veio. Faixa de conforto de ±0,9 (não anda por pouco); recua quando um herói chega perto demais; se a linha de tiro está bloqueada
+ * por obstáculo dá um passo para o lado.
+ */
+export function shootPoint(m: MonsterRuntime, team: Character[], run: RunState, plan?: RunPlan): Pt {
+  const role = foeRole(m.defId) as 'archer' | 'caster', cfg = FOE_ATTACK[role], me = { x: m.x!, y: m.y! }, back = team.filter(h => h.row === 'back'), pool = back.length ? back : team;
+  const crowd = (h: Character) => role === 'caster' ? team.filter(o => dist(posOf(run, o), posOf(run, h)) <= cfg.r + .6).length : 1;
+  const prey = pool.reduce((b, h) => (crowd(h) * 1.2 - dist(posOf(run, h), me) * .1) > (crowd(b) * 1.2 - dist(posOf(run, b), me) * .1) ? h : b, pool[0]), p = posOf(run, prey);
+  // recuo: um herói perto demais empurra o atirador para trás (um passo curto, sem sair do alcance da backline, com intervalo para o grupo alcançá-lo)
+  const clock = run.clock ?? 0, kite = role === 'archer' ? 2.8 : 3.4, close = team.reduce((b, h) => dist(posOf(run, h), me) < dist(posOf(run, b), me) ? h : b, team[0]), dc = dist(posOf(run, close), me);
+  if (m.kite) { if (clock < m.kite.until && dist(me, m.kite) > .3) return m.kite; delete m.kite; m.kiteAt = clock + 2.5; }
+  if (dc < kite && clock >= (m.kiteAt ?? 0)) {
+    const base = Math.atan2(me.y - posOf(run, close).y, me.x - posOf(run, close).x);
+    for (const len of [kite + .6, 2]) for (const da of [0, .6, -.6, 1.2, -1.2]) {
+      const q = { x: me.x + Math.cos(base + da) * len, y: me.y + Math.sin(base + da) * len };
+      if ((!plan || fits(plan, q.x, q.y, RADIUS.unit)) && dist(q, p) <= cfg.range - .3) { m.kite = { ...q, until: clock + 1.8 }; return q; }
+    }
+  }
+  const dx = me.x - p.x, dy = me.y - p.y, d = Math.hypot(dx, dy) || 1, want = cfg.range * .85;
+  if (Math.abs(d - want) < .9) {
+    if (plan && d <= cfg.range && !lineClear(plan, me, p)) {
+      const nx = -dy / d, ny = dx / d;
+      for (const k of [1.6, -1.6, 3.2, -3.2]) { const q = { x: me.x + nx * k, y: me.y + ny * k }; if (fits(plan, q.x, q.y, RADIUS.unit) && lineClear(plan, q, p)) return q; }
+    }
+    return me;
+  }
+  return { x: p.x + dx / d * want, y: p.y + dy / d * want };
+}
+/**
+ * Corredor (runner): vai para a vaga da backline contornando a frontline pelo lado livre em vez de empurrar o tanque em linha reta. Escolhe o lado uma vez
+ * (e mantém), e se ficar sem progresso por ~3 s desiste da backline e luta com quem o bloqueia (`gaveUp`: volta a disputar as vagas normais).
+ */
+export function flankTarget(plan: RunPlan, m: MonsterRuntime, goal: Pt, team: Character[], run: RunState, dt: number): Pt {
+  const me = { x: m.x!, y: m.y! }, d = dist(me, goal), prog = m.prog ??= { best: d, t: 0, hero: m.slot?.hero };
+  if (prog.hero !== m.slot?.hero) { prog.best = d; prog.t = 0; prog.hero = m.slot?.hero; }
+  if (d < prog.best - .35) { prog.best = d; prog.t = 0; } else if (d > 1.8) prog.t += dt;
+  if (prog.t > 3 && d > 1.8) { m.gaveUp = true; delete m.slot; return goal; }
+  if (d < 2.2 || d > 16) { delete m.flank; return goal; }
+  const ux = (goal.x - me.x) / d, uy = (goal.y - me.y) / d;
+  const blockers = team.filter(h => h.row === 'front' || h.isTank).map(h => posOf(run, h)).filter(b => (b.x - me.x) * ux + (b.y - me.y) * uy > -.2 && dist(me, b) < d && distToSegment(b, me, goal) < 1.55);
+  if (!blockers.length) { delete m.flank; return goal; }
+  const b = blockers.reduce((x, y) => dist(me, y) < dist(me, x) ? y : x), nx = -uy, ny = ux;
+  const spot = (sgn: number): Pt => ({ x: b.x + nx * sgn * 1.9, y: b.y + ny * sgn * 1.9 });
+  const ok = (sgn: number) => fits(plan, spot(sgn).x, spot(sgn).y, RADIUS.unit);
+  const pick = (m.flank && ok(m.flank)) ? m.flank : ok(1) && ok(-1) ? (dist(me, spot(1)) <= dist(me, spot(-1)) ? 1 : -1) : ok(1) ? 1 : ok(-1) ? -1 : 0;
+  if (!pick) return goal;
+  m.flank = pick as 1 | -1; return spot(pick);
 }
 /** Onde espera quem ficou sem vaga: numa fila de raio crescente em volta do primeiro grupo de aggro, do lado de onde o monstro vem. */
 export function holdPoint(m: MonsterRuntime, team: Character[], run: RunState, rank: number): Pt {
   const center = posOf(run, aggroGroups(team)[0][0]), dx = m.x! - center.x, dy = m.y! - center.y, d = Math.hypot(dx, dy) || 1;
   const r = R.ringRadius + 1.1 + Math.floor(rank / 5) * .85;
   return { x: center.x + dx / d * r, y: center.y + dy / d * r };
+}
+
+/** Chefe: segue o tanque; da 2ª fase, em pulsos de ~3 s a cada ~11 s, vai atrás da backline (pressiona quem está atrás da frontline). */
+function bossGoal(f: MonsterRuntime, team: Character[], run: RunState, tankAt: Pt): Pt {
+  if ((f.phase ?? 0) < 2) return tankAt;
+  const back = team.filter(h => h.row === 'back'); if (!back.length || ((run.clock ?? 0) + hash01(f.uid) * 11) % 11 >= 3) return tankAt;
+  const me = { x: f.x!, y: f.y! }; return posOf(run, back.reduce((b, h) => dist(posOf(run, h), me) < dist(posOf(run, b), me) ? h : b, back[0]));
 }
 
 const navT = new WeakMap<object, number>();
@@ -296,8 +345,10 @@ export function stepRun(state: GameState, plan: RunPlan, dt: number, hooks: Worl
   const foes = livingMonsters(state).filter(m => m.x !== undefined);
   const tank = team.find(c => c.isTank) ?? team[0], tankAt = posOf(run, tank), fwd = plan.forwardAt(run.anchor), side = perp(fwd);
   const here = plan.pathPoint(run.anchor);
-  // 1) o grupo só anda quando todos estão perto da âncora e não há inimigo por perto
-  if (team.every(c => dist(posOf(run, c), here) <= R.rear + 4) && !foes.some(f => f.ambush || dist({ x: f.x!, y: f.y! }, tankAt) < R.engage)) { run.anchor += R.walk * dt; run.deepest = Math.max(run.deepest, run.anchor); }
+  // 1) o grupo só anda quando todos estão perto da âncora e não há inimigo por perto; se o tanque já está no limite da zona e o alvo
+  //    segue fora de alcance (atirador que não se aproxima), a formação avança devagar para arrastar o tanque atrás dele
+  const tankAi = run.ai?.[tank.id], pulled = !!tankAi && tankAi.state === 'engage' && !!tankAi.roamHit && !foes.some(f => f.ambush);
+  if (team.every(c => dist(posOf(run, c), here) <= R.rear + 4) && (pulled || !foes.some(f => f.ambush || dist({ x: f.x!, y: f.y! }, tankAt) < R.engage))) { run.anchor += R.walk * (pulled ? .3 : 1) * dt; run.deepest = Math.max(run.deepest, run.anchor); }
   // 2) encontros do chunk em que o grupo está
   const idx = plan.indexAt(run.anchor), chunk = plan.chunk(idx), enc = chunk.encounter;
   if (enc && run.lastTrigger < idx && run.anchor >= chunk.start + enc.at) { run.lastTrigger = idx; run.open = true; const behind = enc.ambush ? enc.monsters.slice(-enc.ambush) : undefined;
@@ -327,9 +378,9 @@ export function stepRun(state: GameState, plan: RunPlan, dt: number, hooks: Worl
     if ((f.statuses?.frozen ?? 0) > 0 || (f.statuses?.stunned ?? 0) > 0) continue;
     const boss = !!MONSTERS[f.defId].boss, speed = R.foeSpeed * (boss ? .75 : MONSTERS[f.defId].speed > 1 ? 1 : .85) * ((f.phase ?? 0) >= 2 ? BOSS_ENRAGE.speed : 1) * dt;
     let target: Pt, stop = 0;
-    if (f.slot) target = orbitTarget(f, f.slot, team, run);
-    else if (boss) { target = tankAt; stop = 1.9; }
-    else if (isRanged(foeRole(f.defId))) { target = shootPoint(f, team, run); stop = .1; }
+    if (f.slot) { target = orbitTarget(f, f.slot, team, run); if (isRunnerNow(f)) target = flankTarget(plan, f, target, team, run, dt); }
+    else if (boss) { target = bossGoal(f, team, run, tankAt); stop = 1.9; }
+    else if (isRanged(foeRole(f.defId))) { target = shootPoint(f, team, run, plan); stop = .1; }
     else { target = holdPoint(f, team, run, waiting.indexOf(f)); stop = .1; }
     if (dist(body.pt, target) > .12 + stop) moveToward(plan, body, target.x, target.y, speed, bodies);
     f.x = body.pt.x; f.y = body.pt.y;
@@ -347,7 +398,7 @@ const weaponIsRanged = (c: Character) => weaponSkill(c) === 'ranged';
 const hasAoe = (c: Character) => c.spellSlots.some(id => { const sp = spellById(id); return !!sp && sp.kind === 'damage' && sp.target === 'allEnemies' && sp.level <= c.profile.level; });
 /** Dano bruto de uma pancada do monstro (antes da armadura do alvo). */
 const foeRaw = (state: GameState, m: MonsterRuntime) => MONSTERS[m.defId].attack * (m.atkMul ?? 1) * runtime.monsterAtk * huntScale(state.huntId).atk;
-const roleOfFoe = (m: MonsterRuntime): FoeView['role'] => m.ambush ? 'runner' : MONSTERS[m.defId].boss && (m.phase ?? 0) >= 2 ? 'boss' : foeRole(m.defId);
+const roleOfFoe = (m: MonsterRuntime): FoeView['role'] => isRunnerNow(m) ? 'runner' : MONSTERS[m.defId].boss && (m.phase ?? 0) >= 2 ? 'boss' : foeRole(m.defId);
 
 /** Monta as visões (heróis e inimigos) e o contexto do grupo: alvo principal e peel já atualizados com suas travas. */
 export function buildPartyCtx(state: GameState, plan: RunPlan, env: Pick<StepEnv, 'team' | 'living' | 'fwd' | 'side'>, extra?: { stats?: Map<string, ReturnType<typeof characterStats>> }): { ctx: PartyCtx; views: Map<string, HeroView>; foeById: Map<string, MonsterRuntime>; homeOf: (c: Character) => Pt } {
@@ -372,8 +423,9 @@ export function buildPartyCtx(state: GameState, plan: RunPlan, env: Pick<StepEnv
 }
 
 /** Golpes avisados em cima do herói, com o dano que cada um tiraria dele (armadura incluída) e há quanto tempo foram avisados. */
-function strikeZones(state: GameState, hero: HeroView, foeById: Map<string, MonsterRuntime>): StrikeZone[] {
-  return (state.run!.windups ?? []).map(w => { const m = foeById.get(w.src); return { x: w.x, y: w.y, r: w.r, dmg: physicalDamage(m ? foeRaw(state, m) : 0, hero.defense) * w.mult, boss: w.role === 'boss', age: w.total - w.t }; });
+function strikeZones(state: GameState, hero: HeroView, foeById: Map<string, MonsterRuntime>, dt: number): StrikeZone[] {
+  // `age + dt`: o motor desconta o tempo do golpe depois deste passo, então o herói já enxerga o tick que está começando
+  return (state.run!.windups ?? []).map(w => { const m = foeById.get(w.src); return { x: w.x, y: w.y, r: w.r, dmg: physicalDamage(m ? foeRaw(state, m) : 0, hero.defense) * w.mult, boss: w.role === 'boss' || w.role === 'slam', age: w.total - w.t + dt }; });
 }
 
 /**
@@ -391,10 +443,11 @@ function stepHeroes(state: GameState, plan: RunPlan, dt: number, hooks: WorldHoo
   for (const id of Object.keys(ais)) if (!views.has(id)) delete ais[id];
   for (const c of team) {
     const view = views.get(c.id)!, body = heroBody.get(c.id)!, me = body.pt, ai = ais[c.id] ??= newHeroAi();
-    const zones = noticedZones(c.id, strikeZones(state, view, foeById)), evade = shouldEvade(view, zones);
+    const zones = noticedZones(c.id, strikeZones(state, view, foeById, dt)), pad = ai.state === 'evade' ? .65 : .2, evade = shouldEvade(view, zones, pad);
     const targetGone = !!ai.targetId && !foeById.has(ai.targetId);
     const jitter = AI_CONFIG.thinkEvery * (.8 + .4 * (team.indexOf(c) % 3) / 2);
-    if (clock - ai.thinkAt >= jitter || !ai.dest || targetGone || evade) {
+    const evading = ai.state === 'evade' && (evade || clock < ai.stateUntil);   // saindo de um golpe: não repensa até sair
+    if (!evading && (clock - ai.thinkAt >= jitter || !ai.dest || targetGone || evade)) {
       ai.thinkAt = clock;
       const choice = chooseHeroTarget(ctx, view, ai);
       if (choice.id !== ai.targetId) { if (ai.targetId && choice.id) hooks.note?.('switch', c.id); ai.targetId = choice.id; ai.targetLockUntil = choice.id ? clock + lockFor(c.id, choice.id) : 0; }
@@ -412,7 +465,9 @@ function stepHeroes(state: GameState, plan: RunPlan, dt: number, hooks: WorldHoo
       if (clipped && !ai.roamHit) hooks.note?.('roam', c.id); ai.roamHit = clipped;
       // todos menos o tanque (que decide pelo risco) ficam fora dos círculos avisados já percebidos (por último: a segurança vale mais que a zona)
       if (view.role !== 'tank') for (const w of zones) if (dist({ x: tx, y: ty }, w) < w.r + SAFE) { const q = pushOut(plan, { x: tx, y: ty }, w, me); tx = q.x; ty = q.y; }
+      if (view.role !== 'tank' && zones.length) ({ x: tx, y: ty } = stopBeforeZones(me, { x: tx, y: ty }, zones));
       ({ x: tx, y: ty } = avoidTrap(plan, { x: tx, y: ty }));
+      if (!fits(plan, tx, ty, RADIUS.unit)) ({ x: tx, y: ty } = freeNear(plan, { x: tx, y: ty }));   // nunca um destino dentro de parede
       const hold = state2 === 'retreat' ? AI_CONFIG.retreatHold : state2 === 'reposition' ? AI_CONFIG.repositionHold : 0;
       if (state2 === 'attack' && target && ai.targetId === ctx.focus.peelId && view.role !== 'healer') state2 = 'peel';
       const was = ai.state;
@@ -422,10 +477,12 @@ function stepHeroes(state: GameState, plan: RunPlan, dt: number, hooks: WorldHoo
     // esquiva: quem percebeu um golpe em cima de si sai pela saída livre mais curta (a cada tick, não espera a próxima decisão)
     let dest = ai.dest!;
     if (evade) {
-      const w = zones.find(z => dist(me, z) <= z.r + .2)!, out = escapePoint(plan, body, w, bodies) ?? pushOut(plan, me, w, me);
-      if (out) { dest = commitDest(ai, avoidTrap(plan, out), clock, true); if (setState(ai, 'evade', clock, AI_CONFIG.evadeHold)) hooks.note?.('dodge', c.id); }
+      const w = zones.find(z => dist(me, z) <= z.r + pad)! as StrikeZone & { id?: string }, key = `${Math.round(w.x * 100)},${Math.round(w.y * 100)}`;
+      const keep = ai.evadeId === key && ai.dest && dist(ai.dest, w) >= w.r + .45 && dist(me, ai.dest) > .1;   // já escolheu o lado: continua até sair
+      const out = keep ? ai.dest! : escapePoint(plan, body, w, bodies) ?? pushOut(plan, me, w, me);
+      if (out) { ai.evadeId = key; dest = commitDest(ai, keep ? out : avoidTrap(plan, out), clock, true); if (setState(ai, 'evade', clock, AI_CONFIG.evadeHold)) hooks.note?.('dodge', c.id); }
     } else if (ai.state === 'evade' && clock >= ai.stateUntil) { ai.state = 'recoverPosition'; ai.thinkAt = -1; }
-    const speed = (engaged ? R.heroSpeed : R.travel) * dt;
+    const speed = (ai.state === 'evade' ? R.heroSpeed * AI_CONFIG.evadeSpeed : engaged ? R.heroSpeed : R.travel) * dt;
     if (dist(me, dest) > .08) moveToward(plan, body, dest.x, dest.y, speed, bodies);
   }
 }
